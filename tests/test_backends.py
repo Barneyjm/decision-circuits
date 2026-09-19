@@ -50,7 +50,7 @@ def test_any_object_with_answer_is_a_backend():
 
     assert isinstance(Mine(), Backend)
     out = circuit().run(Mine(), "hello")
-    assert out["gates_evaluated_by"] == "client" and out["gates"]["rush"]["value"] is True
+    assert out["gates_evaluated_by"] == "client" and out["gates"]["rush"]["value"] is True and out["model"] is None
     assert out["gates"]["route"]["outcome"] == "abstain"  # uniform -> confidence 0 < 0.2
 
 

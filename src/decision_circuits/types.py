@@ -23,6 +23,7 @@ Answers (what a System One server returns, and what a backend must produce):
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, Protocol, TypedDict, runtime_checkable
@@ -128,3 +129,38 @@ def answer_from_probabilities(question: Mapping[str, Any], probabilities: Mappin
         return {"type": "choice", "choice": best, "probabilities": dist, "confidence": conf}
     expected = sum(i * p for i, p in enumerate(ps))
     return {"type": "score", "score": expected, "probabilities": dist, "confidence": conf}
+
+
+def to_jsonable(x: Any) -> Any:
+    """Turn a state made of SDK objects into plain JSON-able data.
+
+    Chat messages from agent frameworks (objects with `type` and
+    `content`) become `{"type", "content"[, "tool_calls"]}`, which is
+    what a judgment needs and drops the metadata a full dump would
+    carry. Pydantic-style objects use `model_dump(mode="json")`.
+    Anything else that json can't encode becomes its `str`. Backends
+    call this on the state before sending it, so a circuit can be run
+    on raw framework objects."""
+    if x is None or isinstance(x, str | int | float | bool):
+        return x
+    if isinstance(x, Mapping):
+        return {str(k): to_jsonable(v) for k, v in x.items()}
+    if isinstance(x, list | tuple):
+        return [to_jsonable(v) for v in x]
+    if hasattr(x, "content") and hasattr(x, "type"):
+        out = {"type": x.type, "content": to_jsonable(x.content)}
+        calls = getattr(x, "tool_calls", None)
+        if calls:
+            out["tool_calls"] = to_jsonable(calls)
+        return out
+    dump = getattr(x, "model_dump", None)
+    if callable(dump):
+        try:
+            return dump(mode="json")
+        except (TypeError, ValueError):
+            pass
+    try:
+        json.dumps(x)
+        return x
+    except TypeError:
+        return str(x)

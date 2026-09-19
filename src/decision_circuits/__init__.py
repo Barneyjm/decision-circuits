@@ -30,6 +30,7 @@ from decision_circuits.dsl import (
     Not,
     Or,
     Q,
+    RunOutput,
     Threshold,
     argmax,
     majority,
@@ -38,8 +39,8 @@ from decision_circuits.dsl import (
     to_mermaid,
     verify,
 )
-from decision_circuits.gates import Gate, GateResult, evaluate_gates
-from decision_circuits.types import Answer, Answers, Backend, Question, answer_from_probabilities, normalized_confidence, option_keys
+from decision_circuits.gates import Gate, GateResult, GateResultDict, evaluate_gates, result_key
+from decision_circuits.types import Answer, Answers, Backend, Question, answer_from_probabilities, normalized_confidence, option_keys, to_jsonable
 
 __version__ = "0.3.0"
 
@@ -55,10 +56,12 @@ __all__ = [
     "Gate",
     "GateDef",
     "GateResult",
+    "GateResultDict",
     "Not",
     "Or",
     "Q",
     "Question",
+    "RunOutput",
     "Threshold",
     "__version__",
     "answer_from_probabilities",
@@ -69,6 +72,8 @@ __all__ = [
     "option_keys",
     "order",
     "render_mermaid",
+    "result_key",
+    "to_jsonable",
     "to_mermaid",
     "verify",
 ]

@@ -40,9 +40,20 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
-from decision_circuits.gates import Gate, evaluate_gates
+from decision_circuits.gates import Gate, GateResultDict, evaluate_gates
+from decision_circuits.types import Answers, Backend
+
+
+class RunOutput(TypedDict):
+    """What `Circuit.run` returns."""
+
+    model: str | None
+    answers: Answers
+    gates: dict[str, GateResultDict]
+    gates_evaluated_by: str  # "client" (here) or "server" (a server that evaluates circuits)
+
 
 # ---------------------------------------------------------------- expressions
 
@@ -188,8 +199,8 @@ class GateDef:
 class Circuit:
     questions: dict[str, dict[str, Any]] = field(default_factory=dict)
     gates: list[GateDef] = field(default_factory=list)
-    model: str | None = None  # None: the backend or server picks; set for HTTP servers that require it
-    _server_gates: bool | None = field(default=None, repr=False, compare=False)
+    model: str | None = None  # None: the backend picks
+    _compiled: dict[str, dict[str, Any]] | None = field(default=None, repr=False, compare=False)
 
     # questions ---------------------------------------------------------
     def noul(self, qid: str, instructions: Any, true: str | None = None, false: str | None = None) -> Circuit:
@@ -225,6 +236,7 @@ class Circuit:
         if band is not None:
             g.band(band)
         self.gates.append(g)
+        self._compiled = None
         return g
 
     # rendering ---------------------------------------------------------
@@ -236,7 +248,14 @@ class Circuit:
     def compile(self) -> dict[str, dict[str, Any]]:
         """Lower the expression trees to the server's flat `gates` map.
         Sub-expressions become auto-named helper gates (`_name_N`) so
-        every intermediate probability shows up in the trace."""
+        every intermediate probability shows up in the trace. Cached
+        until the next `gate()`; GateDef policy edits after that call
+        `gate` again or clear `_compiled`."""
+        if self._compiled is None:
+            self._compiled = self._compile()
+        return {k: dict(v) for k, v in self._compiled.items()}
+
+    def _compile(self) -> dict[str, dict[str, Any]]:
         out: dict[str, dict[str, Any]] = {}
         counter = itertools.count(1)
 
@@ -291,57 +310,32 @@ class Circuit:
         return out
 
     def request(self, state: Any) -> dict[str, Any]:
+        """The wire request: TypeSafe's body plus a `gates` block."""
         return {"state": state, "model": self.model or "s1-proto", "questions": dict(self.questions), "gates": self.compile()}
 
-    def evaluate(self, answers: dict[str, Any]) -> dict[str, Any]:
+    def evaluate(self, answers: Answers) -> dict[str, GateResultDict]:
         """Evaluate the compiled gates locally against answers already in hand."""
         res = evaluate_gates({k: Gate.from_dict(v) for k, v in self.compile().items()}, answers)
         return {k: v.to_dict() for k, v in res.items() if not k.startswith("_")}
 
-    def run(self, client: Any, state: Any, url: str = "/v1/systemone", headers: dict[str, str] | None = None, gates: str = "auto") -> dict[str, Any]:
-        """Answer the questions and evaluate the gates.
+    def run(self, backend: Backend, state: Any, *, model: str | None = None) -> RunOutput:
+        """Answer the questions with `backend` and evaluate the gates.
 
-        `client` is either a backend (anything with `.answer(state,
-        questions, model=...)`, see `decision_circuits.backends`) or an
-        HTTP client with `.post(url, json=..., headers=...)` returning
-        `.json()` (httpx, requests, FastAPI TestClient) pointed at a
-        System One server.
-
-        With a backend the gates are always evaluated here. With an HTTP
-        client, `gates="auto"` sends the compiled gates and lets the
-        server evaluate them if it can; a server that rejects the extra
-        field (TypeSafe today) or returns answers only gets a second
-        request without gates, and they are evaluated here. The outcome
-        is cached per Circuit so later calls make one request.
-        `"server"` requires server evaluation; `"client"` never sends
-        gates. `gates_evaluated_by` in the result says which happened."""
-        if hasattr(client, "answer") and not hasattr(client, "post"):
-            answers = client.answer(state, self.questions, model=self.model)
-            return {"model": self.model or getattr(client, "model", None), "answers": answers, "gates": self.evaluate(answers), "gates_evaluated_by": "client"}
-        if gates not in ("auto", "server", "client"):
-            raise ValueError("gates must be 'auto', 'server', or 'client'")
-        body: dict[str, Any] | None = None
-        try_server = gates == "server" or (gates == "auto" and self._server_gates is not False)
-        if try_server:
-            r = client.post(url, json=self.request(state), headers=headers)
-            body = r.json()
-            ok = getattr(r, "status_code", 200) < 400 and "gates" in body
-            if ok:
-                self._server_gates = True
-                body["gates"] = {k: v for k, v in body["gates"].items() if not k.startswith("_")}
-                body["gates_evaluated_by"] = "server"
-                return body
-            if gates == "server":
-                raise RuntimeError(f"server did not evaluate gates: {str(body)[:200]}")
-            self._server_gates = False
-        req = {k: v for k, v in self.request(state).items() if k != "gates"}
-        r = client.post(url, json=req, headers=headers)
-        body = r.json()
-        if "answers" not in body:
-            raise RuntimeError(f"unexpected response: {str(body)[:200]}")
-        body["gates"] = self.evaluate(body["answers"])
-        body["gates_evaluated_by"] = "client"
-        return body
+        A backend is anything with `answer(state, questions, model=...)`
+        (see `decision_circuits.backends`; `SystemOne` wraps any System
+        One HTTP server, TypeSafe's Jev included). A backend may also
+        implement `answer_with_gates(state, questions, gates, model=...)`
+        to let a server evaluate the circuit itself; `SystemOne` does,
+        and falls back to answering when the server rejects gates."""
+        model = model or self.model
+        with_gates = getattr(backend, "answer_with_gates", None)
+        if callable(with_gates):
+            answers, gates = with_gates(state, self.questions, self.compile(), model=model)
+            if gates is not None:
+                return {"model": model, "answers": answers, "gates": {k: v for k, v in gates.items() if not k.startswith("_")}, "gates_evaluated_by": "server"}
+        else:
+            answers = backend.answer(state, self.questions, model=model)
+        return {"model": model, "answers": answers, "gates": self.evaluate(answers), "gates_evaluated_by": "client"}
 
 
 # ---------------------------------------------------------------- rendering

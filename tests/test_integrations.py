@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from decision_circuits import Circuit, Q, answer_from_probabilities
-from decision_circuits.integrations import decide, explain, tool_state
+from decision_circuits import Circuit, Q, answer_from_probabilities, result_key
+from decision_circuits.integrations import CircuitPolicy, tool_state
 
 
 def guard_circuit() -> Circuit:
@@ -46,22 +46,35 @@ TABLE = {
 # --- policy ------------------------------------------------------------------
 
 
-def test_decide_and_explain():
-    c = guard_circuit()
+def test_policy_judges_and_explains():
     be = ScriptedBackend(TABLE)
+    policy = CircuitPolicy(guard_circuit(), be, gate="block")
     for tool, expected in [("delete_file", "block"), ("read_file", "allow"), ("send_email", "ask")]:
-        r = c.evaluate(be.answer(tool_state(tool, {}), c.questions))
-        assert decide(r, "block") == expected, tool
-    r = c.evaluate(be.answer(tool_state("send_email", {}), c.questions))
-    assert decide(r, "block", {"escalate": "block"}) == "block"
-    assert "gate `block`" in explain(r, "block") and "escalate" in explain(r, "block")
+        assert policy.judge(tool_state(tool, {})).action == expected, tool
+    j = policy.judge(tool_state("send_email", {}))
+    assert "gate `block`" in j.reason and "escalate" in j.reason and j.output["gates"]["block"]["outcome"] == "escalate"
+    assert policy.last is j
+    strict = CircuitPolicy(guard_circuit(), be, gate="block", actions={"escalate": "block"})
+    assert strict.judge(tool_state("send_email", {})).action == "block"
+    with pytest.raises(KeyError):
+        CircuitPolicy(guard_circuit(), be, gate="nope").judge(tool_state("read_file", {}))
 
 
-def test_decide_categorical_and_fallback():
-    results = {"route": {"value": "billing", "outcome": "decided", "p": 0.9}}
-    assert decide(results, "route", {"billing": "allow"}) == "allow"
-    assert decide(results, "route") == "block"  # unlisted value never silently allows
-    assert decide(results, "route", uncertain_fallback="ask") == "ask"
+def test_policy_categorical_and_fallback():
+    c = Circuit()
+    c.choice("route", "Where?", {"billing": None, "risky": None})
+    from decision_circuits import argmax
+
+    c.gate("route", argmax("route"))
+
+    class BE:
+        def answer(self, state, questions, *, model=None):
+            return {"route": answer_from_probabilities(questions["route"], [0.9, 0.1])}
+
+    assert result_key({"value": "billing", "outcome": "decided", "p": 0.9, "confidence": 0.5, "uncertain": False, "trace": []}) == "billing"
+    assert CircuitPolicy(c, BE(), gate="route", actions={"billing": "allow"}).judge("x").action == "allow"
+    assert CircuitPolicy(c, BE(), gate="route").judge("x").action == "block"  # unlisted value never silently allows
+    assert CircuitPolicy(c, BE(), gate="route", uncertain_fallback="ask").judge("x").action == "ask"
 
 
 # --- LangChain ---------------------------------------------------------------
@@ -128,7 +141,7 @@ def test_langchain_tool_guard_blocks_and_allows():
     assert blocked.status == "error" and "blocked by a decision circuit" in blocked.content and "p=0.90" in blocked.content
     assert be.states[0]["tool_call"] == {"name": "delete_file", "args": {"path": "b"}}
     assert "Delete a file permanently" in be.states[0]["tool_description"]
-    assert guard.last_results["gates"]["block"]["value"] is True
+    assert guard.policy.last.output["gates"]["block"]["value"] is True
 
 
 def test_langchain_tool_guard_asks_via_interrupt_and_resumes():

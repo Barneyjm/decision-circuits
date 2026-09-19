@@ -1,6 +1,7 @@
 import pytest
 
 from decision_circuits import Circuit, G, Q, argmax, majority, order, verify
+from decision_circuits.backends import SystemOne
 
 ANSWERS = {
     "pii": {"type": "noul", "noul": 0.92},
@@ -98,21 +99,22 @@ def _circuit():
 
 def test_run_sends_gates_and_uses_server_evaluation_when_present():
     client = _FakeClient({"urgent": {"type": "noul", "noul": 0.9}, "dept": ANSWERS["dept"]}, with_gates=True)
-    out = _circuit().run(client, "Card charged twice, please refund today.", headers={"Authorization": "Bearer k"})
+    out = _circuit().run(SystemOne("/v1/systemone", api_key="k", client=client), "Card charged twice, please refund today.")
     url, body, headers = client.calls[0]
-    assert url == "/v1/systemone" and headers == {"Authorization": "Bearer k"}
+    assert url == "/v1/systemone" and headers["Authorization"] == "Bearer k"
     assert set(body["questions"]) == {"urgent", "dept"} and set(body["gates"]) == {"rush", "route"}
-    assert set(out["gates"]) == {"rush"}  # helper gates hidden; server's result kept as-is
+    assert set(out["gates"]) == {"rush"} and out["gates_evaluated_by"] == "server"  # helper gates hidden; server's result kept as-is
 
 
 def test_run_evaluates_gates_locally_when_server_returns_answers_only():
     client = _FakeClient({"urgent": {"type": "noul", "noul": 0.9}, "dept": ANSWERS["dept"]}, with_gates=False)
     c = _circuit()
-    out = c.run(client, "Card charged twice.", url="https://api.typesafe.ai/v1/systemone", headers={"Authorization": "Bearer k"})
+    jev = SystemOne("https://api.typesafe.ai/v1/systemone", api_key="k", client=client)
+    out = c.run(jev, "Card charged twice.")
     assert out["gates"]["rush"]["value"] is True and out["gates"]["route"]["value"] == "billing"
     assert out["gates_evaluated_by"] == "client"
     assert len(client.calls) == 2 and "gates" not in client.calls[1][1]
-    c.run(client, "Again.", url="https://api.typesafe.ai/v1/systemone")
+    c.run(jev, "Again.")
     assert len(client.calls) == 3  # remembered: one request the second time
 
 

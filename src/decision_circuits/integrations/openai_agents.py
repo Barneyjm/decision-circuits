@@ -2,7 +2,7 @@
 
 Three factories, one per guardrail kind the SDK offers:
 
-    from agents import Agent
+    from agents import Agent, function_tool
     from decision_circuits.integrations.openai_agents import (
         circuit_input_guardrail, circuit_output_guardrail, circuit_tool_guardrail)
 
@@ -15,8 +15,8 @@ Three factories, one per guardrail kind the SDK offers:
     )
 
 Input and output guardrails trip (raise the SDK's tripwire exception)
-when the gate's action is `block`; `output_info` carries the full gate
-results for tracing. The SDK has no "ask a human" path for these, so
+unless the gate's action is `allow`; `output_info` carries the full
+judgment for tracing. The SDK has no "ask a human" path for these, so
 an uncertain gate trips too unless `actions` says otherwise.
 
 Tool guardrails have a middle option: `block` rejects the call and
@@ -24,11 +24,15 @@ returns `reject_message` to the model as the tool result; `ask` does the
 same with a message saying a human must approve, which is the closest
 the SDK offers; `allow` runs the tool.
 
+All guardrails are async and run the backend in a worker thread, so a
+slow classifier never blocks the event loop.
+
 Requires `openai-agents>=0.22` (`pip install "decision-circuits[openai-agents]"`).
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from typing import Any
 
@@ -39,91 +43,65 @@ except ImportError as e:  # pragma: no cover
     raise ImportError("decision_circuits.integrations.openai_agents needs openai-agents>=0.22: pip install 'decision-circuits[openai-agents]'") from e
 
 from decision_circuits.dsl import Circuit
-from decision_circuits.integrations._policy import Action, RunOutput, decide, explain, tool_state
+from decision_circuits.integrations._policy import Action, CircuitPolicy, Judgment, tool_state
 from decision_circuits.types import Backend
 
 
-def _run(circuit: Circuit, backend: Backend, state: Any, model: str | None) -> RunOutput:
-    answers = backend.answer(state, circuit.questions, model=model or circuit.model)
-    return {"answers": answers, "gates": circuit.evaluate(answers)}
+def _info(j: Judgment) -> dict[str, Any]:
+    return {"action": j.action, "reason": j.reason, **j.output}
 
 
-def _input_text(input: Any) -> Any:
-    if isinstance(input, str):
-        return input
-    return [item if isinstance(item, str | Mapping) else getattr(item, "__dict__", str(item)) for item in input]
+def _run_guardrail(
+    kind: str, circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None, name: str | None, **decorator_kw: Any
+) -> Any:
+    """Shared body of the input and output guardrails: the state is
+    {"input"|"output": ..., "agent": name}; trip unless allowed."""
+    policy = CircuitPolicy(circuit, backend, gate=gate, actions=actions)
+    decorate = input_guardrail if kind == "input" else output_guardrail
+
+    async def guard(ctx: RunContextWrapper[Any], agent: Agent[Any], payload: Any) -> GuardrailFunctionOutput:
+        j = await asyncio.to_thread(policy.judge, {kind: payload, "agent": agent.name})
+        return GuardrailFunctionOutput(output_info=_info(j), tripwire_triggered=j.action != "allow")
+
+    return decorate(guard, name=name or f"circuit_{kind}_{gate}", **decorator_kw)
 
 
 def circuit_input_guardrail(
-    circuit: Any,
-    backend: Any,
-    *,
-    gate: str,
-    actions: Mapping[Any, Action] | None = None,
-    model: str | None = None,
-    name: str | None = None,
-    run_in_parallel: bool = True,
+    circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None, name: str | None = None, run_in_parallel: bool = True
 ) -> InputGuardrail[Any]:
-    """Trip when the circuit's gate blocks (or is uncertain) on the run input."""
-
-    def guard(ctx: RunContextWrapper[Any], agent: Agent[Any], input: str | list[Any]) -> GuardrailFunctionOutput:
-        out = _run(circuit, backend, {"input": _input_text(input), "agent": getattr(agent, "name", None)}, model)
-        action = decide(out["gates"], gate, actions)
-        return GuardrailFunctionOutput(output_info={**out, "action": action, "reason": explain(out["gates"], gate)}, tripwire_triggered=action != "allow")
-
-    guard.__name__ = name or f"circuit_input_{gate}"
-    return input_guardrail(guard, name=name, run_in_parallel=run_in_parallel)
+    """Trip unless the circuit's gate allows the run input."""
+    return _run_guardrail("input", circuit, backend, gate=gate, actions=actions, name=name, run_in_parallel=run_in_parallel)
 
 
 def circuit_output_guardrail(
-    circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None, model: str | None = None, name: str | None = None
+    circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None, name: str | None = None
 ) -> OutputGuardrail[Any]:
-    """Trip when the circuit's gate blocks (or is uncertain) on the agent's final output."""
-
-    def guard(ctx: RunContextWrapper[Any], agent: Agent[Any], output: Any) -> GuardrailFunctionOutput:
-        out = _run(
-            circuit,
-            backend,
-            {
-                "output": _input_text(output) if isinstance(output, str | list) else getattr(output, "__dict__", str(output)),
-                "agent": getattr(agent, "name", None),
-            },
-            model,
-        )
-        action = decide(out["gates"], gate, actions)
-        return GuardrailFunctionOutput(output_info={**out, "action": action, "reason": explain(out["gates"], gate)}, tripwire_triggered=action != "allow")
-
-    guard.__name__ = name or f"circuit_output_{gate}"
-    return output_guardrail(guard, name=name)
+    """Trip unless the circuit's gate allows the agent's final output."""
+    return _run_guardrail("output", circuit, backend, gate=gate, actions=actions, name=name)
 
 
 def circuit_tool_guardrail(
-    circuit: Any,
-    backend: Any,
+    circuit: Circuit,
+    backend: Backend,
     *,
     gate: str,
     actions: Mapping[Any, Action] | None = None,
-    model: str | None = None,
     name: str | None = None,
     reject_message: str = "This tool call was blocked by a decision circuit and was not executed. {reason}",
     ask_message: str = "This tool call needs human approval before it can run; a decision circuit could not decide. {reason}",
 ) -> ToolInputGuardrail[Any]:
     """Guard one tool's calls: allow, reject with a message, or ask (as a reject that says so)."""
+    policy = CircuitPolicy(circuit, backend, gate=gate, actions=actions)
 
-    def guard(data: ToolInputGuardrailData) -> ToolGuardrailFunctionOutput:
+    async def guard(data: ToolInputGuardrailData) -> ToolGuardrailFunctionOutput:
         ctx = data.context
-        state = tool_state(ctx.tool_name, ctx.tool_arguments, extra={"agent": getattr(data.agent, "name", None)})
-        out = _run(circuit, backend, state, model)
-        action = decide(out["gates"], gate, actions)
-        reason = explain(out["gates"], gate)
-        info = {**out, "action": action, "reason": reason}
-        if action == "allow":
-            return ToolGuardrailFunctionOutput.allow(output_info=info)
-        template = reject_message if action == "block" else ask_message
-        return ToolGuardrailFunctionOutput.reject_content(template.format(reason=reason), output_info=info)
+        j = await asyncio.to_thread(policy.judge, tool_state(ctx.tool_name, ctx.tool_arguments, agent=data.agent.name))
+        if j.action == "allow":
+            return ToolGuardrailFunctionOutput.allow(output_info=_info(j))
+        template = reject_message if j.action == "block" else ask_message
+        return ToolGuardrailFunctionOutput.reject_content(template.format(reason=j.reason), output_info=_info(j))
 
-    guard.__name__ = name or f"circuit_tool_{gate}"
-    return tool_input_guardrail(guard, name=name)
+    return tool_input_guardrail(guard, name=name or f"circuit_tool_{gate}")
 
 
 __all__ = ["circuit_input_guardrail", "circuit_output_guardrail", "circuit_tool_guardrail"]

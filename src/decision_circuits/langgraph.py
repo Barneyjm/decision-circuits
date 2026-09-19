@@ -27,14 +27,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from decision_circuits.gates import result_key
+
 
 def as_node(
     circuit: Any, backend: Any, state_key: str = "input", out_key: str = "circuit", model: str | None = None
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     def node(state: dict[str, Any]) -> dict[str, Any]:
-        item = state[state_key]
-        answers = backend.answer(item, circuit.questions, model=model or circuit.model)
-        return {out_key: {"answers": answers, "gates": circuit.evaluate(answers)}}
+        out = circuit.run(backend, state[state_key], model=model)
+        return {out_key: {"answers": out["answers"], "gates": out["gates"]}}
 
     node.__name__ = f"circuit_{out_key}"
     return node
@@ -44,12 +45,7 @@ def route_on(gate: str, out_key: str = "circuit") -> Callable[[dict[str, Any]], 
     """Edge key for a gate: str(value) when decided, else the outcome."""
 
     def router(state: dict[str, Any]) -> str:
-        r = state[out_key]["gates"][gate]
-        if r["outcome"] == "decided":
-            return str(r["value"])
-        if r["outcome"] == "default":
-            return str(r["value"])
-        return str(r["outcome"])
+        return str(result_key(state[out_key]["gates"][gate]))
 
     router.__name__ = f"route_on_{gate}"
     return router

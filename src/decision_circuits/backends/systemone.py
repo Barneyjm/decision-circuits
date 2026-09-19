@@ -18,7 +18,7 @@ import urllib.request
 from collections.abc import Mapping
 from typing import Any
 
-from decision_circuits.types import Answers
+from decision_circuits.types import Answers, to_jsonable
 
 
 class SystemOneError(RuntimeError):
@@ -46,12 +46,13 @@ class SystemOne:
         if api_key:
             self.headers["Authorization"] = f"Bearer {api_key}"
         self.last_response: dict[str, Any] | None = None  # full body of the last call (usage, model)
+        self._server_gates: bool | None = None  # learned on first use: does this server evaluate gates?
 
     def _post(self, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         if self.client is not None:
             r = self.client.post(self.url, json=body, headers=self.headers)
             return getattr(r, "status_code", 200), r.json()
-        data = json.dumps(body).encode()
+        data = json.dumps(body, default=to_jsonable).encode()
         req = urllib.request.Request(self.url, data=data, headers=self.headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
@@ -64,8 +65,28 @@ class SystemOne:
             return e.code, payload
 
     def answer(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Answers:
-        status, body = self._post({"state": state, "model": model or self.model, "questions": dict(questions)})
+        status, body = self._post({"state": to_jsonable(state), "model": model or self.model, "questions": dict(questions)})
         if status >= 400 or "answers" not in body:
             raise SystemOneError(status, body)
         self.last_response = body
         return body["answers"]
+
+    def answer_with_gates(
+        self, state: Any, questions: Mapping[str, Any], gates: Mapping[str, Any], *, model: str | None = None
+    ) -> tuple[Answers, dict[str, Any] | None]:
+        """Send the circuit's gates too. A server that evaluates circuits
+        (s1proto) returns `gates`; one that rejects the extra field or
+        ignores it (TypeSafe today) gets the plain request instead, and
+        the answer is (answers, None) so the circuit evaluates locally.
+        Which kind the server is gets remembered after the first call."""
+        if self._server_gates is not False:
+            status, body = self._post({"state": to_jsonable(state), "model": model or self.model, "questions": dict(questions), "gates": dict(gates)})
+            if status < 400 and "answers" in body and "gates" in body:
+                self._server_gates = True
+                self.last_response = body
+                return body["answers"], body["gates"]
+            self._server_gates = False
+            if status < 400 and "answers" in body:  # ignored the field; no second request needed
+                self.last_response = body
+                return body["answers"], None
+        return self.answer(state, questions, model=model), None

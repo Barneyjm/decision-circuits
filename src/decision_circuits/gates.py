@@ -34,7 +34,7 @@ silently resolved.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
 OPS = ("threshold", "not", "and", "or", "majority", "argmax", "verify", "order")
 POLICIES = ("abstain", "escalate", "default")
@@ -92,6 +92,17 @@ class Gate:
     model_dump = to_dict
 
 
+class GateResultDict(TypedDict):
+    """`GateResult.to_dict()`: one gate's result as plain data."""
+
+    value: Any
+    p: float | None
+    confidence: float | None
+    uncertain: bool
+    outcome: str
+    trace: list[str]
+
+
 @dataclass
 class GateResult:
     value: Any
@@ -101,10 +112,19 @@ class GateResult:
     outcome: str = "decided"
     trace: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+    def to_dict(self) -> GateResultDict:
+        return asdict(self)  # type: ignore[return-value]
 
     model_dump = to_dict
+
+
+def result_key(result: GateResultDict | GateResult) -> Any:
+    """What a gate result routes on: its value when it decided (or fell
+    back to its default), otherwise its outcome ("abstain" or "escalate").
+    Used by every integration so an actions table and a graph edge map
+    agree on the key for a given result."""
+    r = result.to_dict() if isinstance(result, GateResult) else result
+    return r["value"] if r["outcome"] in ("decided", "default") else r["outcome"]
 
 
 def _noul_p(answers: dict[str, Any], results: dict[str, GateResult], ref: str) -> tuple[float, str, bool]:

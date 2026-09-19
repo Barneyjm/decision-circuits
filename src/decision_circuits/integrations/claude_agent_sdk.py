@@ -29,65 +29,54 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
+from typing import Any
 
 try:
-    import claude_agent_sdk  # noqa: F401
+    from claude_agent_sdk import HookCallback, HookContext, PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
+    from claude_agent_sdk.types import CanUseTool, HookInput, SyncHookJSONOutput
 except ImportError as e:  # pragma: no cover
-    raise ImportError("decision_circuits.integrations.claude_agent_sdk needs claude-agent-sdk: pip install 'decision-circuits[claude]'") from e
-from typing import Any, cast
-
-from claude_agent_sdk import HookCallback, HookContext, PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
-from claude_agent_sdk.types import CanUseTool, PreToolUseHookInput, SyncHookJSONOutput
+    raise ImportError("decision_circuits.integrations.claude_agent_sdk needs claude-agent-sdk>=0.2: pip install 'decision-circuits[claude]'") from e
 
 from decision_circuits.dsl import Circuit
-from decision_circuits.integrations._policy import Action, RunOutput, decide, explain, tool_state
+from decision_circuits.integrations._policy import Action, CircuitPolicy, tool_state
 from decision_circuits.types import Backend
 
-
-def _run(circuit: Circuit, backend: Backend, state: Any, model: str | None) -> RunOutput:
-    answers = backend.answer(state, circuit.questions, model=model or circuit.model)
-    return {"answers": answers, "gates": circuit.evaluate(answers)}
+PERMISSION = {"allow": "allow", "block": "deny", "ask": "ask"}
 
 
 def circuit_pre_tool_use(
-    circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None, model: str | None = None, tools: set[str] | None = None
+    circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None, tools: set[str] | None = None
 ) -> HookCallback:
-    """A PreToolUse hook callback: `(input, tool_use_id, context) -> hook output`."""
+    """A PreToolUse hook: `(input, tool_use_id, context) -> hook output`.
+    `tools` limits which tool names are judged; others pass untouched."""
+    policy = CircuitPolicy(circuit, backend, gate=gate, actions=actions)
 
-    async def hook(input_data: PreToolUseHookInput, tool_use_id: str | None, context: HookContext) -> SyncHookJSONOutput:
+    async def hook(input_data: HookInput, tool_use_id: str | None, context: HookContext) -> SyncHookJSONOutput:
         tool_name = input_data.get("tool_name", "")
         if tools is not None and tool_name not in tools:
             return {}
-        state = tool_state(
-            tool_name, input_data.get("tool_input", {}), extra={"permission_mode": input_data.get("permission_mode"), "cwd": input_data.get("cwd")}
-        )
-        out = await asyncio.to_thread(_run, circuit, backend, state, model)
-        action = decide(out["gates"], gate, actions)
-        decision = {"allow": "allow", "block": "deny", "ask": "ask"}[action]
+        j = await asyncio.to_thread(policy.judge, tool_state(tool_name, input_data.get("tool_input", {})))
         return {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
-                "permissionDecision": decision,
-                "permissionDecisionReason": f"decision circuit: {explain(out['gates'], gate)}",
+                "permissionDecision": PERMISSION[j.action],
+                "permissionDecisionReason": f"decision circuit: {j.reason}",
             }
         }
 
-    hook.__name__ = f"circuit_pre_tool_use_{gate}"
-    return cast(HookCallback, hook)
+    return hook
 
 
-def circuit_can_use_tool(circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None, model: str | None = None) -> CanUseTool:
+def circuit_can_use_tool(circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None) -> CanUseTool:
     """A `can_use_tool` callback: `(tool_name, tool_input, context) -> PermissionResult`."""
+    policy = CircuitPolicy(circuit, backend, gate=gate, actions=actions)
 
     async def can_use_tool(tool_name: str, tool_input: dict[str, Any], context: ToolPermissionContext) -> PermissionResultAllow | PermissionResultDeny:
-        state = tool_state(tool_name, tool_input, extra={"description": getattr(context, "description", None)})
-        out = await asyncio.to_thread(_run, circuit, backend, state, model)
-        action = decide(out["gates"], gate, actions)
-        reason = explain(out["gates"], gate)
-        if action == "allow":
+        j = await asyncio.to_thread(policy.judge, tool_state(tool_name, tool_input, description=getattr(context, "description", None)))
+        if j.action == "allow":
             return PermissionResultAllow()
-        why = "blocked by a decision circuit" if action == "block" else "a decision circuit could not decide and no human approval path is available here"
-        return PermissionResultDeny(message=f"{why}: {reason}")
+        why = "blocked by a decision circuit" if j.action == "block" else "a decision circuit could not decide and no human approval path is available here"
+        return PermissionResultDeny(message=f"{why}: {j.reason}")
 
     return can_use_tool
 

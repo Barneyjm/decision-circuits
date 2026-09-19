@@ -40,6 +40,7 @@ Requires `langchain>=1.4` (`pip install "decision-circuits[langchain]"`).
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any
 
@@ -48,6 +49,7 @@ from typing_extensions import NotRequired
 try:
     from langchain.agents.middleware import Runtime
     from langchain.agents.middleware.types import AgentMiddleware, AgentState, ContextT, ModelRequest, ModelResponse, ResponseT, ToolCallRequest
+    from langchain.chat_models import init_chat_model
     from langchain_core.language_models import BaseChatModel
     from langchain_core.messages import HumanMessage, ToolMessage
     from langgraph.types import Command, interrupt
@@ -55,10 +57,12 @@ except ImportError as e:  # pragma: no cover
     raise ImportError("decision_circuits.integrations.langchain needs langchain>=1.4: pip install 'decision-circuits[langchain]'") from e
 
 from decision_circuits.dsl import Circuit
-from decision_circuits.integrations._policy import Action, GateResults, RunOutput, decide, explain, tool_state
+from decision_circuits.gates import result_key
+from decision_circuits.integrations._policy import Action, CircuitPolicy, Judgment, tool_state
 from decision_circuits.types import Backend
 
 RECENT_MESSAGES = 30
+STATE_KEY = "circuit"
 
 
 class CircuitState(AgentState):
@@ -67,29 +71,33 @@ class CircuitState(AgentState):
     circuit: NotRequired[dict[str, Any]]
 
 
-def _tool_names(tools: Sequence[Any] | None) -> frozenset[str] | None:
-    if tools is None:
-        return None
-    return frozenset((t if isinstance(t, str) else t.name).strip() for t in tools)
+def request_state(request: ToolCallRequest, recent_messages: int = RECENT_MESSAGES) -> dict[str, Any]:
+    """What a tool-call circuit sees: the call, the tool's description, recent messages."""
+    tc = request.tool_call
+    description = request.tool.description if request.tool is not None else None
+    return tool_state(tc["name"], tc["args"], description=description, messages=request.state.get("messages", [])[-recent_messages:])
+
+
+def _tool_message(request: ToolCallRequest, text: str) -> ToolMessage:
+    tc = request.tool_call
+    return ToolMessage(content=text, tool_call_id=tc["id"], name=tc["name"], status="error")
 
 
 class CircuitToolGuard(AgentMiddleware[AgentState[ResponseT], ContextT, ResponseT]):
     """Judge each tool call with a circuit before it runs: allow, block, or ask.
 
     Args:
-        circuit: the circuit; its questions see `tool_call`, `tool_description`,
-            and the last 30 `messages`.
+        circuit: its questions see `tool_call`, `tool_description`, and
+            the last `recent_messages` messages.
         backend: anything with `answer(state, questions, model=None)`.
         gate: the gate whose result decides.
         tools: tool names or instances to guard; None guards every tool.
-        actions: overrides for value/outcome -> "allow" | "block" | "ask".
+        actions: overrides for result key -> "allow" | "block" | "ask".
             Defaults: True block, False allow, abstain/escalate ask.
-        recent_messages: how much conversation the circuit sees.
-        model: passed to the backend.
 
     Classification failures propagate and the tool does not run (fail
     closed). Blocked calls return an error ToolMessage carrying the gate's
-    probability and trace; `last_results` keeps the full circuit output.
+    probability and trace; `policy.last` keeps the full judgment.
     """
 
     def __init__(
@@ -101,102 +109,54 @@ class CircuitToolGuard(AgentMiddleware[AgentState[ResponseT], ContextT, Response
         tools: Sequence[Any] | None = None,
         actions: Mapping[Any, Action] | None = None,
         recent_messages: int = RECENT_MESSAGES,
-        model: str | None = None,
     ) -> None:
-        self.circuit = circuit
-        self.backend = backend
-        self.gate = gate
-        self.guarded = _tool_names(tools)  # not `self.tools`: AgentMiddleware.tools registers extra tools
-        self.actions = dict(actions or {})
+        self.policy = CircuitPolicy(circuit, backend, gate=gate, actions=actions)
+        # not `self.tools`: AgentMiddleware.tools registers extra tools with the agent
+        self.guarded: frozenset[str] | None = None if tools is None else frozenset(t if isinstance(t, str) else t.name for t in tools)
         self.recent_messages = recent_messages
-        self.model = model
-        self.last_results: RunOutput | None = None
 
-    # judgment ----------------------------------------------------------
-    def _state(self, request: ToolCallRequest) -> dict[str, Any]:
+    def judge(self, request: ToolCallRequest) -> Judgment:
+        return self.policy.judge(request_state(request, self.recent_messages))
+
+    def _intercept(self, request: ToolCallRequest, judgment: Judgment) -> ToolMessage | None:
+        """The message to return instead of running the tool, or None to run it."""
         tc = request.tool_call
-        return tool_state(
-            tc["name"],
-            tc["args"],
-            description=getattr(request.tool, "description", None) if request.tool is not None else None,
-            messages=list(request.state.get("messages", []))[-self.recent_messages :],
-        )
-
-    def judge(self, request: ToolCallRequest) -> tuple[Action, GateResults]:
-        answers = self.backend.answer(self._state(request), self.circuit.questions, model=self.model or self.circuit.model)
-        results = self.circuit.evaluate(answers)
-        self.last_results = {"answers": answers, "gates": results}
-        return decide(results, self.gate, self.actions), results
-
-    # outcomes ----------------------------------------------------------
-    def _blocked(self, request: ToolCallRequest, results: GateResults) -> ToolMessage:
-        tc = request.tool_call
-        return ToolMessage(
-            content=f"The tool call `{tc['name']}` was blocked by a decision circuit and was not executed. {explain(results, self.gate)}",
-            tool_call_id=tc["id"],
-            name=tc["name"],
-            status="error",
-        )
-
-    def _ask(self, request: ToolCallRequest, results: GateResults) -> bool:
-        """Interrupt in HumanInTheLoopMiddleware's format; True if approved."""
-        tc = request.tool_call
-        response = interrupt(
-            {
-                "action_requests": [
-                    {"name": tc["name"], "args": tc["args"], "description": f"A decision circuit could not decide. {explain(results, self.gate)}"}
-                ],
-                "review_configs": [{"action_name": tc["name"], "allowed_decisions": ["approve", "reject"]}],
-            }
-        )
-        decisions = response.get("decisions", []) if isinstance(response, Mapping) else []
-        return bool(decisions) and decisions[0].get("type") == "approve"
-
-    def _rejected(self, request: ToolCallRequest) -> ToolMessage:
-        tc = request.tool_call
-        return ToolMessage(content=f"User rejected the tool call `{tc['name']}`. It was not executed.", tool_call_id=tc["id"], name=tc["name"], status="error")
+        if judgment.action == "block":
+            return _tool_message(request, f"The tool call `{tc['name']}` was blocked by a decision circuit and was not executed. {judgment.reason}")
+        if judgment.action == "ask":
+            # HumanInTheLoopMiddleware's request format, so existing approval UIs work.
+            response = interrupt(
+                {
+                    "action_requests": [{"name": tc["name"], "args": tc["args"], "description": f"A decision circuit could not decide. {judgment.reason}"}],
+                    "review_configs": [{"action_name": tc["name"], "allowed_decisions": ["approve", "reject"]}],
+                }
+            )
+            decisions = response.get("decisions", []) if isinstance(response, Mapping) else []
+            if not (decisions and decisions[0].get("type") == "approve"):
+                return _tool_message(request, f"User rejected the tool call `{tc['name']}`. It was not executed.")
+        return None
 
     def wrap_tool_call(self, request: ToolCallRequest, handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]]) -> ToolMessage | Command[Any]:
         if self.guarded is not None and request.tool_call["name"] not in self.guarded:
             return handler(request)
-        action, results = self.judge(request)
-        if action == "block":
-            return self._blocked(request, results)
-        if action == "ask" and not self._ask(request, results):
-            return self._rejected(request)
-        return handler(request)
+        return self._intercept(request, self.judge(request)) or handler(request)
 
     async def awrap_tool_call(
         self, request: ToolCallRequest, handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]]
     ) -> ToolMessage | Command[Any]:
         if self.guarded is not None and request.tool_call["name"] not in self.guarded:
             return await handler(request)
-        action, results = self.judge(request)
-        if action == "block":
-            return self._blocked(request, results)
-        if action == "ask" and not self._ask(request, results):
-            return self._rejected(request)
-        return await handler(request)
+        judgment = await asyncio.to_thread(self.judge, request)  # backend I/O off the event loop; interrupt() stays on it
+        return self._intercept(request, judgment) or await handler(request)
 
 
-def circuit_when(
-    circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None, model: str | None = None
-) -> Callable[[ToolCallRequest], bool]:
+def circuit_when(circuit: Circuit, backend: Backend, *, gate: str, actions: Mapping[Any, Action] | None = None) -> Callable[[ToolCallRequest], bool]:
     """A `when=` predicate for `HumanInTheLoopMiddleware(interrupt_on=...)`:
-    ask for approval when the circuit's gate says block or is uncertain."""
-
-    def when(request: ToolCallRequest) -> bool:
-        tc = request.tool_call
-        state = tool_state(
-            tc["name"],
-            tc["args"],
-            description=getattr(request.tool, "description", None) if request.tool is not None else None,
-            messages=list(request.state.get("messages", []))[-RECENT_MESSAGES:],
-        )
-        results = circuit.evaluate(backend.answer(state, circuit.questions, model=model or circuit.model))
-        return decide(results, gate, actions) != "allow"
-
-    return when
+    ask for approval when the circuit's gate says block or is uncertain.
+    Each call runs the circuit; do not stack it with a CircuitToolGuard
+    on the same tools or the backend is called twice per tool call."""
+    guard = CircuitToolGuard(circuit, backend, gate=gate, actions=actions)
+    return lambda request: guard.judge(request).action != "allow"
 
 
 class CircuitRouter(AgentMiddleware[CircuitState, ContextT, ResponseT]):
@@ -222,55 +182,40 @@ class CircuitRouter(AgentMiddleware[CircuitState, ContextT, ResponseT]):
         gate: str | None = None,
         models: Mapping[Any, BaseChatModel | str] | None = None,
         default_model: BaseChatModel | None = None,
-        model: str | None = None,
     ) -> None:
         self.circuit = circuit
         self.backend = backend
         self.gate = gate
-        self.models = dict(models or {})
+        self.models: dict[Any, BaseChatModel] = {k: init_chat_model(m) if isinstance(m, str) else m for k, m in (models or {}).items()}
         self.default_model = default_model
-        self.state_key = "circuit"
-        self.model = model
-        if self.models:
-            try:
-                from langchain.chat_models import init_chat_model
-            except ImportError:  # pragma: no cover
-                init_chat_model = None  # type: ignore[assignment]
-            for k, m in list(self.models.items()):
-                if isinstance(m, str) and init_chat_model is not None:
-                    self.models[k] = init_chat_model(m)
 
     @staticmethod
     def _latest_human(state: Mapping[str, Any]) -> Any:
-        for m in reversed(state.get("messages", [])):
-            if isinstance(m, HumanMessage):
-                return m.content
-        return ""
+        return next((m.content for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)), "")
 
     def before_agent(self, state: CircuitState, runtime: Runtime[ContextT]) -> dict[str, Any] | None:
-        answers = self.backend.answer(self._latest_human(state), self.circuit.questions, model=self.model or self.circuit.model)
-        return {self.state_key: {"answers": answers, "gates": self.circuit.evaluate(answers)}}
+        out = self.circuit.run(self.backend, self._latest_human(state))
+        return {STATE_KEY: {"answers": out["answers"], "gates": out["gates"]}}
 
     async def abefore_agent(self, state: CircuitState, runtime: Runtime[ContextT]) -> dict[str, Any] | None:
-        return self.before_agent(state, runtime)
+        return await asyncio.to_thread(self.before_agent, state, runtime)
 
-    def _pick(self, state: Mapping[str, Any]) -> BaseChatModel | None:
+    def _route(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         if not self.models or self.gate is None:
-            return None
-        r = state.get(self.state_key, {}).get("gates", {}).get(self.gate)
-        if r and r["outcome"] in ("decided", "default") and r["value"] in self.models:
-            return self.models[r["value"]]
-        return self.default_model
+            return request
+        r = request.state.get(STATE_KEY, {}).get("gates", {}).get(self.gate)
+        model = self.models.get(result_key(r), self.default_model) if r else self.default_model
+        return request.override(model=model) if model is not None else request
 
     def wrap_model_call(
         self, request: ModelRequest[ContextT], handler: Callable[[ModelRequest[ContextT]], ModelResponse[ResponseT]]
     ) -> ModelResponse[ResponseT]:
-        m = self._pick(request.state)
-        return handler(request.override(model=m) if m is not None else request)
+        return handler(self._route(request))
 
-    async def awrap_model_call(self, request: ModelRequest[ContextT], handler: Callable[[ModelRequest[ContextT]], Awaitable[ModelResponse[ResponseT]]]) -> Any:
-        m = self._pick(request.state)
-        return await handler(request.override(model=m) if m is not None else request)
+    async def awrap_model_call(
+        self, request: ModelRequest[ContextT], handler: Callable[[ModelRequest[ContextT]], Awaitable[ModelResponse[ResponseT]]]
+    ) -> ModelResponse[ResponseT]:
+        return await handler(self._route(request))
 
 
-__all__ = ["CircuitRouter", "CircuitToolGuard", "circuit_when"]
+__all__ = ["CircuitRouter", "CircuitState", "CircuitToolGuard", "circuit_when", "request_state"]
