@@ -20,7 +20,7 @@ ANSWERS = {
 
 
 def g(**kw):
-    return Gate.model_validate(kw)
+    return Gate.from_dict(kw)
 
 
 def test_threshold_and_not_and_and():

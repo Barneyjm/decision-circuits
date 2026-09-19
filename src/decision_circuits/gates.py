@@ -33,13 +33,19 @@ silently resolved.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
-from pydantic import BaseModel, Field
+OPS = ("threshold", "not", "and", "or", "majority", "argmax", "verify", "order")
+POLICIES = ("abstain", "escalate", "default")
+OUTCOMES = ("decided", "abstain", "escalate", "default")
 
 
-class Gate(BaseModel):
-    op: Literal["threshold", "not", "and", "or", "majority", "argmax", "verify", "order"]
+@dataclass
+class Gate:
+    """One gate in the wire format. `from_dict` validates a plain dict."""
+
+    op: str
     input: str | None = None
     inputs: list[str] | None = None
     check: str | None = None
@@ -47,17 +53,58 @@ class Gate(BaseModel):
     band: float = 0.1
     min_confidence: float = 0.0
     cutpoints: list[float] | None = None
-    on_uncertain: Literal["abstain", "escalate", "default"] = "abstain"
+    on_uncertain: str = "abstain"
     default: Any = None
 
+    def __post_init__(self) -> None:
+        if self.op not in OPS:
+            raise ValueError(f"unknown gate op {self.op!r}; expected one of {OPS}")
+        if self.on_uncertain not in POLICIES:
+            raise ValueError(f"on_uncertain must be one of {POLICIES}, got {self.on_uncertain!r}")
+        if self.op in ("threshold", "not", "argmax", "verify", "order") and not self.input:
+            raise ValueError(f"gate op {self.op!r} needs `input`")
+        if self.op in ("and", "or", "majority") and not self.inputs:
+            raise ValueError(f"gate op {self.op!r} needs `inputs`")
+        if self.op == "verify" and not self.check:
+            raise ValueError("gate op 'verify' needs `check`")
+        if self.op == "order" and self.cutpoints is None:
+            raise ValueError("gate op 'order' needs `cutpoints`")
+        self.tau = float(self.tau)
+        self.band = float(self.band)
+        self.min_confidence = float(self.min_confidence)
+        if self.cutpoints is not None:
+            self.cutpoints = [float(c) for c in self.cutpoints]
 
-class GateResult(BaseModel):
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Gate:
+        if not isinstance(d, dict):
+            raise TypeError(f"gate spec must be a dict, got {type(d).__name__}")
+        unknown = set(d) - {f for f in cls.__dataclass_fields__}
+        if unknown:
+            raise ValueError(f"unknown gate fields {sorted(unknown)}")
+        return cls(**d)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    # pydantic-style aliases, kept so callers written against 0.1 keep working
+    model_validate = from_dict
+    model_dump = to_dict
+
+
+@dataclass
+class GateResult:
     value: Any
     p: float | None = None
     confidence: float | None = None
     uncertain: bool = False
-    outcome: Literal["decided", "abstain", "escalate", "default"] = "decided"
-    trace: list[str] = Field(default_factory=list)
+    outcome: str = "decided"
+    trace: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    model_dump = to_dict
 
 
 def _noul_p(answers: dict[str, Any], results: dict[str, GateResult], ref: str) -> tuple[float, str, bool]:

@@ -39,11 +39,15 @@ from decision_circuits.dsl import (
     verify,
 )
 from decision_circuits.gates import Gate, GateResult, evaluate_gates
+from decision_circuits.types import Answer, Answers, Backend, Question, answer_from_probabilities, normalized_confidence, option_keys
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "And",
+    "Answer",
+    "Answers",
+    "Backend",
     "Categorical",
     "Circuit",
     "Expr",
@@ -54,11 +58,15 @@ __all__ = [
     "Not",
     "Or",
     "Q",
+    "Question",
     "Threshold",
     "__version__",
+    "answer_from_probabilities",
     "argmax",
     "evaluate_gates",
     "majority",
+    "normalized_confidence",
+    "option_keys",
     "order",
     "render_mermaid",
     "to_mermaid",

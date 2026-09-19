@@ -18,14 +18,17 @@ and a trace of every input that fed it.
 Background: [Attaining LLM Certainty with AI Decision Circuits](https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/).
 
 ```bash
-pip install decision-circuits
+pip install decision-circuits                 # no dependencies
+pip install "decision-circuits[openai]"       # OpenAI-compatible logprob backend (OpenAI, Fireworks, vLLM)
+pip install "decision-circuits[anthropic]"    # Claude backend
+pip install "decision-circuits[langchain]"    # LangChain runnable (LangGraph needs nothing extra)
 ```
 
 ## Example
 
 ```python
-import httpx
 from decision_circuits import Circuit, Q, G, argmax, order
+from decision_circuits.backends import SystemOne
 
 c = Circuit()
 c.noul(
@@ -45,23 +48,66 @@ c.gate("tier", order("urgency", [1.0, 2.0, 2.6]))
 c.gate("human", (Q("angry") | Q("urgency")[3]) >= 0.6, on_uncertain="escalate")
 c.gate("bill_hot", (G("route")["billing"] & G("tier")[3]).at(0.5))
 
-out = c.run(
-    httpx.Client(),
-    "Card charged twice, refund NOW, my card ends in 4412.",
-    url="https://api.typesafe.ai/v1/systemone",
-    headers={"Authorization": f"Bearer {TYPESAFE_API_KEY}"},
-)
+jev = SystemOne(api_key=TYPESAFE_API_KEY, model="jev-latest")  # standard library HTTP; no extra install
+out = c.run(jev, "Card charged twice, refund NOW, my card ends in 4412.")
 
 out["gates"]["redact"]
-# {"value": True, "p": 0.88, "outcome": "decided", "trace": [...]}
+# {"value": True, "p": 0.89, "outcome": "decided", "trace": ["pii p=0.89"]}
 out["gates"]["route"]
-# {"value": "billing", "p": 0.81, "outcome": "decided", ...}
+# {"value": "billing", "p": 1.0, "confidence": 1.0, "outcome": "decided", ...}
 ```
 
-`run` posts the circuit as a normal System One request. If the server
-evaluates gates itself, its results are used. If it returns answers
-only (TypeSafe today), the gates are evaluated on the client from the
-returned probabilities. `out["gates_evaluated_by"]` says which.
+## Backends
+
+A backend is anything with one method, `answer(state, questions, *,
+model=None)`, returning the System One `answers` map (see
+`decision_circuits.types`). The core package depends on nothing; each
+backend imports its SDK only when you construct it.
+
+| backend | install | how it gets probabilities |
+|---|---|---|
+| `SystemOne(url, api_key, model)` | none | Calls a System One server (TypeSafe's Jev, or [s1proto](https://github.com/Barneyjm/s1-proto)). Measured, calibrated distributions; the model is built for this. |
+| `OpenAILogprobs(model, base_url=...)` | `[openai]` | Prefill scoring: options are lettered, the next-token logprobs over the letters are the distribution. Works with OpenAI, Fireworks, Together, vLLM. Up to 20 options. |
+| `Anthropic(model, mode="stated")` | `[anthropic]` | One tool-use call returning a probability per option. Fast; the numbers are stated confidence, not calibrated. |
+| `Anthropic(model, mode="sampled", k=5)` | `[anthropic]` | k tool-use calls at temperature 1, one pick each; vote frequencies with add-one smoothing. An empirical distribution at k times the cost. |
+
+`c.run(client, url=..., headers=...)` also accepts a plain HTTP client
+(httpx, requests, a FastAPI TestClient). It sends the compiled gates so
+a server that evaluates circuits itself can; a server that rejects the
+extra field or returns answers only gets one retry without gates and
+the gates are evaluated here. `out["gates_evaluated_by"]` says which.
+
+**Calibration is the backend's, not the package's.** Gates threshold
+whatever probabilities they are given. A System One model is trained to
+be calibrated; a chat model's stated confidence usually is not. Check
+on a labeled sample before trusting a threshold, and prefer logprob or
+sampled modes over stated ones when it matters.
+
+## LangGraph and LangChain
+
+Gates become conditional edges, and the uncertain outcomes are edges
+like any other:
+
+```python
+from decision_circuits.langgraph import as_node, route_on
+
+graph.add_node("triage", as_node(c, jev, state_key="text"))
+graph.add_conditional_edges(
+    "triage",
+    route_on("route"),
+    {
+        "billing": "billing_agent",
+        "technical": "tech_agent",
+        "other": "general_agent",
+        "abstain": "human",
+    },
+)
+graph.add_conditional_edges("triage", route_on("human"), {"True": "human", "False": "continue", "escalate": "human"})
+```
+
+`as_node` writes `{"circuit": {"answers": ..., "gates": ...}}` into the
+graph state. `as_runnable(c, backend)` wraps the same function as a
+`RunnableLambda` when langchain-core is installed.
 
 ## The expression language
 
@@ -111,8 +157,8 @@ print(c.to_mermaid(results=out["gates"], answers=out["answers"]))
 
 ## Status
 
-Alpha. The wire format is TypeSafe's `POST /v1/systemone` request with
-an added `gates` block; the reference server that evaluates gates is
+Alpha. Core has no dependencies; Python 3.10+. The wire format is
+TypeSafe's `POST /v1/systemone` request with an added `gates` block; the reference server that evaluates gates is
 [s1proto](https://github.com/Barneyjm/s1-proto). The gate semantics
 (`and` as a product, `or` as noisy-or) assume independent questions;
 the trace records that assumption on every result so a reviewer can

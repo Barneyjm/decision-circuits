@@ -188,7 +188,7 @@ class GateDef:
 class Circuit:
     questions: dict[str, dict[str, Any]] = field(default_factory=dict)
     gates: list[GateDef] = field(default_factory=list)
-    model: str = "s1-proto"
+    model: str | None = None  # None: the backend or server picks; set for HTTP servers that require it
     _server_gates: bool | None = field(default=None, repr=False, compare=False)
 
     # questions ---------------------------------------------------------
@@ -291,23 +291,33 @@ class Circuit:
         return out
 
     def request(self, state: Any) -> dict[str, Any]:
-        return {"state": state, "model": self.model, "questions": dict(self.questions), "gates": self.compile()}
+        return {"state": state, "model": self.model or "s1-proto", "questions": dict(self.questions), "gates": self.compile()}
 
     def evaluate(self, answers: dict[str, Any]) -> dict[str, Any]:
         """Evaluate the compiled gates locally against answers already in hand."""
-        res = evaluate_gates({k: Gate.model_validate(v) for k, v in self.compile().items()}, answers)
-        return {k: v.model_dump() for k, v in res.items() if not k.startswith("_")}
+        res = evaluate_gates({k: Gate.from_dict(v) for k, v in self.compile().items()}, answers)
+        return {k: v.to_dict() for k, v in res.items() if not k.startswith("_")}
 
     def run(self, client: Any, state: Any, url: str = "/v1/systemone", headers: dict[str, str] | None = None, gates: str = "auto") -> dict[str, Any]:
-        """POST through any client with `.post(url, json=..., headers=...)`
-        returning `.json()` (httpx, requests, FastAPI TestClient).
+        """Answer the questions and evaluate the gates.
 
-        `gates="auto"` sends the compiled gates and lets the server
-        evaluate them if it can; a server that rejects the extra field
-        (TypeSafe today) or returns answers only gets a second request
-        without gates, and they are evaluated here. The outcome is cached
-        per Circuit so later calls make one request. `"server"` requires
-        server evaluation; `"client"` never sends gates."""
+        `client` is either a backend (anything with `.answer(state,
+        questions, model=...)`, see `decision_circuits.backends`) or an
+        HTTP client with `.post(url, json=..., headers=...)` returning
+        `.json()` (httpx, requests, FastAPI TestClient) pointed at a
+        System One server.
+
+        With a backend the gates are always evaluated here. With an HTTP
+        client, `gates="auto"` sends the compiled gates and lets the
+        server evaluate them if it can; a server that rejects the extra
+        field (TypeSafe today) or returns answers only gets a second
+        request without gates, and they are evaluated here. The outcome
+        is cached per Circuit so later calls make one request.
+        `"server"` requires server evaluation; `"client"` never sends
+        gates. `gates_evaluated_by` in the result says which happened."""
+        if hasattr(client, "answer") and not hasattr(client, "post"):
+            answers = client.answer(state, self.questions, model=self.model)
+            return {"model": self.model or getattr(client, "model", None), "answers": answers, "gates": self.evaluate(answers), "gates_evaluated_by": "client"}
         if gates not in ("auto", "server", "client"):
             raise ValueError("gates must be 'auto', 'server', or 'client'")
         body: dict[str, Any] | None = None
