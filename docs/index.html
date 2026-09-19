@@ -76,7 +76,7 @@
     padding: 34% 14% 10%; text-align: center; animation: surface 1.6s cubic-bezier(.2,.7,.2,1) both; }
   .die .answer { font-family: var(--serif); font-size: clamp(15px, 2.2vw, 22px); line-height: 1.1; color: var(--ice); transition: filter .5s; }
   .die .answer small { display: block; font-family: var(--sans); font-size: 11px; color: rgba(238,243,255,.75); margin-top: 4px; }
-  .hazy { filter: blur(3px); }
+  .hazy { filter: blur(1.6px); }
   .sphere-wrap { display: grid; justify-items: center; gap: 10px; width: 100%; max-width: 380px; }
   .sphere { cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; touch-action: manipulation; }
   .sphere:focus-visible { outline: 2px solid var(--die-edge); outline-offset: 8px; }
@@ -419,7 +419,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     const a = $('hero-answer'); if (!a) return;
     a.classList.toggle('hazy', uncertain);
     a.innerHTML = ''; a.append(uncertain ? 'Ask a person' : (value ? 'Yes' : 'No'));
-    const s = document.createElement('small'); s.textContent = 'redact · p ' + f2(p); a.append(s);
+    const s = document.createElement('small'); s.textContent = 'redact · p ' + f2(p) + (uncertain ? ' · too close to call' : ''); a.append(s);
   }
   function update() {
     const pii = +$('pii').value, business = +$('business').value, angry = +$('angry').value;
