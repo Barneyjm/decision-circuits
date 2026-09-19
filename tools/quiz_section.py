@@ -50,46 +50,54 @@ def state_html(it):
     return f'<pre class="state">{html.escape(json.dumps(st, ensure_ascii=False, indent=1))}</pre>'
 
 
-QUIZ_JS = r"""  // The quiz: one card at a time, on the clock. Answer, then see the label, the circuit model's answer and time, and a chat model's answer and time.
+QUIZ_JS = r"""  // The quiz: a carousel. Each card starts its clock when it slides in and stops it when you pick; the last card averages.
   const qz = __DATA__;
-  const cards = [...document.querySelectorAll('.qz')];
+  const track = $('track'), slides = [...track.children], cards = slides.filter(s => s.dataset.i !== undefined);
   const fmt = ms => ms == null ? '?' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
-  let ix = -1, you = 0, models = 0, llms = 0, yourMs = 0, circuitMs = 0, llmMs = 0, t0 = 0, tick = null;
-  cards.forEach(c => { c.hidden = true; });
-  function showCard(i) {
-    ix = i; const card = cards[i]; card.hidden = false; card.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    t0 = performance.now(); const clock = card.querySelector('.clock');
-    tick = setInterval(() => { clock.textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' s'; }, 100);
+  let at = 0, t0 = 0, tick = null;
+  const tally = { you: 0, circuit: 0, llm: 0, yourMs: 0, circuitMs: 0, llmMs: 0, n: 0 };
+  function goTo(i) {
+    at = i; track.style.transform = 'translateX(' + (-100 * i) + '%)';
+    track.style.height = slides[i].offsetHeight + 'px';
+    slides.forEach((s, j) => { s.setAttribute('aria-hidden', j === i ? 'false' : 'true'); });
+    const card = slides[i];
+    if (card.dataset.i !== undefined) {
+      t0 = performance.now(); const clock = card.querySelector('.clock');
+      clearInterval(tick); tick = setInterval(() => { clock.textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' s'; }, 100);
+    }
+    if (card.classList.contains('end')) finish();
   }
-  function summary(done) {
-    const n = ix + 1;
-    $('qz-score').textContent = 'You ' + you + '/' + n + ' in ' + fmt(yourMs) + ' · circuit models ' + models + '/' + n + ' in ' + fmt(circuitMs) + ' · chat model ' + llms + '/' + n + ' in ' + fmt(llmMs)
-      + (done ? (you > models ? '. You beat the models on answers.' : you === models ? '. Level on answers.' : '. The models win on answers.') + (yourMs < circuitMs ? ' And on time.' : ' The circuit was ' + Math.round(yourMs / Math.max(1, circuitMs)) + '× faster.') : '');
-  }
-  cards.forEach((card, i) => {
-    const d = qz[i];
+  cards.forEach(card => {
+    const d = qz[+card.dataset.i];
     card.querySelectorAll('.opts button').forEach(btn => btn.addEventListener('click', () => {
-      if (i !== ix) return;
-      clearInterval(tick); const took = performance.now() - t0; yourMs += took;
+      if (slides[at] !== card || btn.disabled) return;
+      clearInterval(tick); const took = performance.now() - t0;
       card.querySelector('.clock').textContent = (took / 1000).toFixed(1) + ' s';
-      const k = btn.dataset.k;
       card.querySelectorAll('.opts button').forEach(b => { b.disabled = true; if (b.dataset.k === d.ref) b.classList.add('right'); });
       btn.classList.add('you');
-      const youRight = k === d.ref, modelRight = d.pick === d.ref, llmRight = d.llm && d.llm.answer === d.ref;
-      you += youRight; models += modelRight; llms += llmRight; circuitMs += d.circuit_ms || 0; llmMs += (d.llm && d.llm.wall_ms) || 0;
-      let v = (youRight ? '<b>You got it</b>' : '<b>Not this one</b>') + ' in <span class="t">' + fmt(took) + '</span>. Label: <b>' + d.ref + '</b>.<br>'
-        + d.model + ': <b>' + d.pick + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server (' + fmt(d.rtt_ms) + ' round trip from a laptop).<br>';
+      const k = btn.dataset.k, youRight = k === d.ref, modelRight = d.pick === d.ref, llmRight = !!(d.llm && d.llm.answer === d.ref);
+      tally.n += 1; tally.you += youRight; tally.circuit += modelRight; tally.llm += llmRight; tally.yourMs += took; tally.circuitMs += d.circuit_ms || 0; tally.llmMs += (d.llm && d.llm.wall_ms) || 0;
+      let v = '<b>' + (youRight ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + fmt(took) + '</span>. Label: <b>' + d.ref + '</b>.<br>'
+        + d.model + ': <b>' + d.pick + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server, ' + fmt(d.rtt_ms) + ' round trip from a laptop.<br>';
       if (d.llm && d.llm.answer != null) {
         v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + d.llm.answer + '</b>' + (llmRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
           + (d.llm.transcribe_ms ? ' (' + fmt(d.llm.transcribe_ms) + ' of it transcribing: “' + d.llm.transcript + '”)' : '') + '.';
-      } else if (d.llm && d.llm.note) { v += 'Chat model: ' + d.llm.note + '.'; }
+      }
       card.querySelector('.verdict').innerHTML = v;
-      const next = card.querySelector('.next');
-      if (i + 1 < cards.length) { next.hidden = false; next.addEventListener('click', () => { next.hidden = true; showCard(i + 1); }, { once: true }); summary(false); }
-      else { summary(true); }
+      card.querySelector('.next').hidden = false;
     }));
+    card.querySelector('.next').addEventListener('click', () => goTo(at + 1));
   });
-  $('qz-start').addEventListener('click', () => { $('qzs').classList.add('live'); $('qz-score').textContent = ''; showCard(0); });
+  function finish() {
+    const n = tally.n || 1;
+    $('qz-final').textContent = 'You ' + tally.you + '/' + tally.n + ', circuit models ' + tally.circuit + '/' + tally.n + ', chat model ' + tally.llm + '/' + tally.n + '.';
+    const row = (who, right, ms) => '<tr><td>' + who + '</td><td class="n">' + right + '/' + tally.n + '</td><td class="n">' + fmt(ms / n) + '</td><td class="n">' + fmt(ms) + '</td></tr>';
+    $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th></tr>' + row('you', tally.you, tally.yourMs) + row('circuit models, server time', tally.circuit, tally.circuitMs) + row('chat model, wall time', tally.llm, tally.llmMs);
+  }
+  $('qz-start').addEventListener('click', () => goTo(1));
+  $('qz-again').addEventListener('click', () => location.reload());
+  goTo(0);
+  window.addEventListener('resize', () => { track.style.height = slides[at].offsetHeight + 'px'; });
 """
 
 
@@ -128,8 +136,26 @@ def main() -> None:
             f"      </article>"
         )
     page = PAGE.read_text()
+    intro = (
+        '      <article class="qz intro">\n'
+        '        <p class="ask">Eight questions from the benchmark, one at a time, on the clock.</p>\n'
+        '        <p class="blurb">Each card starts timing when it appears and stops when you pick. Then it shows what the circuit model answered and how long it took, and what a chat model answered and how long that took. The last card averages it all.</p>\n'
+        '        <button type="button" class="next" id="qz-start">Start the quiz</button>\n'
+        "      </article>"
+    )
+    end = (
+        '      <article class="qz end">\n'
+        '        <p class="ask" id="qz-final"></p>\n'
+        '        <div class="tbl"><table id="qz-table"></table></div>\n'
+        '        <button type="button" class="next" id="qz-again">Play again</button>\n'
+        "      </article>"
+    )
     page, n = re.subn(
-        r'(    <div class="qzs"[^>]*>\n).*?(\n    </div>\n  </section>)', lambda m: m.group(1) + "\n".join(cards) + m.group(2), page, count=1, flags=re.DOTALL
+        r'(    <div class="track" id="track">\n).*?(\n    </div>\n    </div>\n  </section>)',
+        lambda m: m.group(1) + "\n".join([intro, *cards]) + "\n" + end + m.group(2),
+        page,
+        count=1,
+        flags=re.DOTALL,
     )
     assert n == 1, "quiz cards block not found"
     js = QUIZ_JS.replace("__DATA__", json.dumps(data))

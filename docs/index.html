@@ -180,8 +180,12 @@
   .card dt { color: var(--mist); }
   .card dd { margin: 0; font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
   .card .blurb { font-size: 14px; color: var(--mist); margin: 0; }
-  .qzs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 14px; }
-  @media (max-width: 760px) { .qzs { grid-template-columns: 1fr; } }
+  .carousel { overflow: hidden; margin-top: 18px; max-width: 760px; border-radius: 16px; }
+  .track { display: flex; align-items: flex-start; transition: transform .45s cubic-bezier(.2,.7,.2,1), height .3s ease; }
+  @media (prefers-reduced-motion: reduce) { .track { transition: none; } }
+  .qz { flex: 0 0 100%; min-width: 0; box-sizing: border-box; }
+  .qz.intro .ask, .qz.end .ask { font-size: 22px; }
+  .qz .blurb { font-size: 15px; color: var(--mist); margin: 0; }
   .qz { background: linear-gradient(180deg, #0E2A72, var(--window-deep)); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
   .qz .src { font-size: 12.5px; color: var(--haze); margin: 0; }
   .qz .state, .qz .thread { font-size: 13.5px; background: rgba(0,0,0,.35); border-radius: 10px; padding: 10px 12px; margin: 0; max-height: 220px; overflow: auto; }
@@ -202,7 +206,6 @@
   .score { font-family: var(--serif); font-size: 18px; margin: 0 0 6px; }
   .score button, .qz .next { font: inherit; font-size: 15px; padding: 9px 18px; border-radius: 999px; border: 1px solid var(--die-edge); background: var(--die); color: var(--ice); cursor: pointer; }
   .score button:hover, .qz .next:hover { background: var(--die-edge); }
-  .qzs.live { grid-template-columns: 1fr; max-width: 720px; }
   .qz .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
   .qz .clock { font-family: var(--mono); font-size: 14px; color: var(--ice); font-variant-numeric: tabular-nums; }
   .qz .verdict { line-height: 1.5; }
@@ -288,9 +291,14 @@
   <section id="quiz">
     <h2>Think you're better than the model?</h2>
     <h3>Eight questions straight from the benchmark, on the clock.</h3>
-    <p>Real items from the text, vision, and audio grids and the article's water-utility calls, labels assigned by the code that built them. Each card times you from the moment it appears. After you answer you see the label, what the circuit model said and how long it took, and what a chat model said and how long that took.</p>
-    <p class="score" id="qz-score"><button type="button" id="qz-start">Start the quiz</button></p>
-    <div class="qzs" id="qzs">
+    <p>Real items from the text, vision, and audio grids and the article's water-utility calls, labels assigned by the code that built them. Chat-model times were measured here through the Claude CLI; audio went through a local Whisper first, because a chat model has to read a transcript.</p>
+    <div class="carousel" id="qzs">
+    <div class="track" id="track">
+      <article class="qz intro">
+        <p class="ask">Eight questions from the benchmark, one at a time, on the clock.</p>
+        <p class="blurb">Each card starts timing when it appears and stops when you pick. Then it shows what the circuit model answered and how long it took, and what a chat model answered and how long that took. The last card averages it all.</p>
+        <button type="button" class="next" id="qz-start">Start the quiz</button>
+      </article>
       <article class="qz" data-i="0">
         <p class="src">the article&#x27;s water-utility calls · answered by circuit-8b</p>
         <pre class="state">Hi, my water was shut off yesterday for repairs on my street, but it still hasn&#x27;t been turned back on. Can someone come restore my service?</pre>
@@ -363,6 +371,12 @@ We appreciate your patience while we migrate to the new billing system.</pre>
         <p class="verdict" aria-live="polite"></p>
         <button type="button" class="next" hidden>Next</button>
       </article>
+      <article class="qz end">
+        <p class="ask" id="qz-final"></p>
+        <div class="tbl"><table id="qz-table"></table></div>
+        <button type="button" class="next" id="qz-again">Play again</button>
+      </article>
+    </div>
     </div>
   </section>
 
@@ -584,46 +598,54 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
   $('sphere').addEventListener('click', askAgain);
 
   // quiz:start
-  // The quiz: one card at a time, on the clock. Answer, then see the label, the circuit model's answer and time, and a chat model's answer and time.
+  // The quiz: a carousel. Each card starts its clock when it slides in and stops it when you pick; the last card averages.
   const qz = [{"ref": "RESTORE", "model": "circuit-8b", "pick": "RESTORE", "p": 1.0, "circuit_ms": 55.2, "rtt_ms": 1400, "llm": {"answer": "RESTORE", "wall_ms": 1451, "api_ms": 650, "model": "claude-fable-5-1"}}, {"ref": "1", "model": "circuit-8b", "pick": "1", "p": 1.0, "circuit_ms": 70.0, "rtt_ms": 1183, "llm": {"answer": "1", "wall_ms": 3561, "api_ms": 1530, "model": "claude-haiku-4-5-20251001"}}, {"ref": "yes", "model": "circuit-8b", "pick": "yes", "p": 0.99, "circuit_ms": 45.1, "rtt_ms": 967, "llm": {"answer": "yes", "wall_ms": 3486, "api_ms": 1513, "model": "claude-haiku-4-5-20251001"}}, {"ref": "r2", "model": "circuit-8b", "pick": "r2", "p": 1.0, "circuit_ms": 75.8, "rtt_ms": 1564, "llm": {"answer": "r2", "wall_ms": 3576, "api_ms": 1567, "model": "claude-haiku-4-5-20251001"}}, {"ref": "100.52", "model": "circuit-vl-4b", "pick": "100.52", "p": 1.0, "circuit_ms": 157.9, "rtt_ms": 929, "llm": {"answer": "100.52", "wall_ms": 4257, "api_ms": 4208, "model": "claude-haiku-4-5-20251001"}}, {"ref": "South", "model": "circuit-vl-4b", "pick": "South", "p": 0.92, "circuit_ms": 165.4, "rtt_ms": 859, "llm": {"answer": "South", "wall_ms": 6000, "api_ms": 4030, "model": "claude-haiku-4-5-20251001"}}, {"ref": "billing", "model": "circuit-audio-7b", "pick": "metering", "p": 0.78, "circuit_ms": 108.7, "rtt_ms": 978, "llm": {"answer": "billing", "wall_ms": 2761, "transcribe_ms": 858, "llm_ms": 1902, "transcript": "Hi there, I need to set up a payment plan for my balance. What can you do about it?", "model": "whisper-small + claude", "note": "transcribed locally with Whisper, then the transcript read by a chat model"}}, {"ref": "4", "model": "circuit-audio-7b", "pick": "4", "p": 0.51, "circuit_ms": 118.7, "rtt_ms": 813, "llm": {"answer": "4", "wall_ms": 2331, "transcribe_ms": 832, "llm_ms": 1499, "transcript": "We're out of cheese, coffee, milk and juice.", "model": "whisper-small + claude", "note": "transcribed locally with Whisper, then the transcript read by a chat model"}}];
-  const cards = [...document.querySelectorAll('.qz')];
+  const track = $('track'), slides = [...track.children], cards = slides.filter(s => s.dataset.i !== undefined);
   const fmt = ms => ms == null ? '?' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
-  let ix = -1, you = 0, models = 0, llms = 0, yourMs = 0, circuitMs = 0, llmMs = 0, t0 = 0, tick = null;
-  cards.forEach(c => { c.hidden = true; });
-  function showCard(i) {
-    ix = i; const card = cards[i]; card.hidden = false; card.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    t0 = performance.now(); const clock = card.querySelector('.clock');
-    tick = setInterval(() => { clock.textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' s'; }, 100);
+  let at = 0, t0 = 0, tick = null;
+  const tally = { you: 0, circuit: 0, llm: 0, yourMs: 0, circuitMs: 0, llmMs: 0, n: 0 };
+  function goTo(i) {
+    at = i; track.style.transform = 'translateX(' + (-100 * i) + '%)';
+    track.style.height = slides[i].offsetHeight + 'px';
+    slides.forEach((s, j) => { s.setAttribute('aria-hidden', j === i ? 'false' : 'true'); });
+    const card = slides[i];
+    if (card.dataset.i !== undefined) {
+      t0 = performance.now(); const clock = card.querySelector('.clock');
+      clearInterval(tick); tick = setInterval(() => { clock.textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' s'; }, 100);
+    }
+    if (card.classList.contains('end')) finish();
   }
-  function summary(done) {
-    const n = ix + 1;
-    $('qz-score').textContent = 'You ' + you + '/' + n + ' in ' + fmt(yourMs) + ' · circuit models ' + models + '/' + n + ' in ' + fmt(circuitMs) + ' · chat model ' + llms + '/' + n + ' in ' + fmt(llmMs)
-      + (done ? (you > models ? '. You beat the models on answers.' : you === models ? '. Level on answers.' : '. The models win on answers.') + (yourMs < circuitMs ? ' And on time.' : ' The circuit was ' + Math.round(yourMs / Math.max(1, circuitMs)) + '× faster.') : '');
-  }
-  cards.forEach((card, i) => {
-    const d = qz[i];
+  cards.forEach(card => {
+    const d = qz[+card.dataset.i];
     card.querySelectorAll('.opts button').forEach(btn => btn.addEventListener('click', () => {
-      if (i !== ix) return;
-      clearInterval(tick); const took = performance.now() - t0; yourMs += took;
+      if (slides[at] !== card || btn.disabled) return;
+      clearInterval(tick); const took = performance.now() - t0;
       card.querySelector('.clock').textContent = (took / 1000).toFixed(1) + ' s';
-      const k = btn.dataset.k;
       card.querySelectorAll('.opts button').forEach(b => { b.disabled = true; if (b.dataset.k === d.ref) b.classList.add('right'); });
       btn.classList.add('you');
-      const youRight = k === d.ref, modelRight = d.pick === d.ref, llmRight = d.llm && d.llm.answer === d.ref;
-      you += youRight; models += modelRight; llms += llmRight; circuitMs += d.circuit_ms || 0; llmMs += (d.llm && d.llm.wall_ms) || 0;
-      let v = (youRight ? '<b>You got it</b>' : '<b>Not this one</b>') + ' in <span class="t">' + fmt(took) + '</span>. Label: <b>' + d.ref + '</b>.<br>'
-        + d.model + ': <b>' + d.pick + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server (' + fmt(d.rtt_ms) + ' round trip from a laptop).<br>';
+      const k = btn.dataset.k, youRight = k === d.ref, modelRight = d.pick === d.ref, llmRight = !!(d.llm && d.llm.answer === d.ref);
+      tally.n += 1; tally.you += youRight; tally.circuit += modelRight; tally.llm += llmRight; tally.yourMs += took; tally.circuitMs += d.circuit_ms || 0; tally.llmMs += (d.llm && d.llm.wall_ms) || 0;
+      let v = '<b>' + (youRight ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + fmt(took) + '</span>. Label: <b>' + d.ref + '</b>.<br>'
+        + d.model + ': <b>' + d.pick + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server, ' + fmt(d.rtt_ms) + ' round trip from a laptop.<br>';
       if (d.llm && d.llm.answer != null) {
         v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + d.llm.answer + '</b>' + (llmRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
           + (d.llm.transcribe_ms ? ' (' + fmt(d.llm.transcribe_ms) + ' of it transcribing: “' + d.llm.transcript + '”)' : '') + '.';
-      } else if (d.llm && d.llm.note) { v += 'Chat model: ' + d.llm.note + '.'; }
+      }
       card.querySelector('.verdict').innerHTML = v;
-      const next = card.querySelector('.next');
-      if (i + 1 < cards.length) { next.hidden = false; next.addEventListener('click', () => { next.hidden = true; showCard(i + 1); }, { once: true }); summary(false); }
-      else { summary(true); }
+      card.querySelector('.next').hidden = false;
     }));
+    card.querySelector('.next').addEventListener('click', () => goTo(at + 1));
   });
-  $('qz-start').addEventListener('click', () => { $('qzs').classList.add('live'); $('qz-score').textContent = ''; showCard(0); });
+  function finish() {
+    const n = tally.n || 1;
+    $('qz-final').textContent = 'You ' + tally.you + '/' + tally.n + ', circuit models ' + tally.circuit + '/' + tally.n + ', chat model ' + tally.llm + '/' + tally.n + '.';
+    const row = (who, right, ms) => '<tr><td>' + who + '</td><td class="n">' + right + '/' + tally.n + '</td><td class="n">' + fmt(ms / n) + '</td><td class="n">' + fmt(ms) + '</td></tr>';
+    $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th></tr>' + row('you', tally.you, tally.yourMs) + row('circuit models, server time', tally.circuit, tally.circuitMs) + row('chat model, wall time', tally.llm, tally.llmMs);
+  }
+  $('qz-start').addEventListener('click', () => goTo(1));
+  $('qz-again').addEventListener('click', () => location.reload());
+  goTo(0);
+  window.addEventListener('resize', () => { track.style.height = slides[at].offsetHeight + 'px'; });
   // quiz:end
   const show = new URLSearchParams(location.search).get('show');
   if (show !== null) { $('die').style.animation = 'none'; $('window').classList.remove('stir'); surfaceAnswer(answers[+show][0], answers[+show][1]); }
