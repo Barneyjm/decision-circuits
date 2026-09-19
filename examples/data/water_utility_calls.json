@@ -1,0 +1,504 @@
+{
+  "calls": [
+    {
+      "id": 1,
+      "type": "RESTORE",
+      "customer_input": "Hi, my water was shut off yesterday for repairs on my street, but it still hasn't been turned back on. Can someone come restore my service?"
+    },
+    {
+      "id": 2,
+      "type": "RESTORE",
+      "customer_input": "Our water was cut off due to construction and the crew left without turning it back on. We have small children and need water restored immediately."
+    },
+    {
+      "id": 3,
+      "type": "RESTORE",
+      "customer_input": "The water department shut off my water this morning to fix a leak, but it's been 8 hours and it's still not back on."
+    },
+    {
+      "id": 4,
+      "type": "ABATEMENT",
+      "customer_input": "There's water coming from the vacant property next door and it's flooding my basement. The house has been abandoned for years."
+    },
+    {
+      "id": 5,
+      "type": "ABATEMENT",
+      "customer_input": "I need to report an abandoned property that has a major leak. Water is pouring out and flooding the sidewalk."
+    },
+    {
+      "id": 6,
+      "type": "AMR (METERING)",
+      "customer_input": "I think my automatic meter reader is broken. My usage shows 10,000 gallons this month but I live alone and was on vacation for two weeks."
+    },
+    {
+      "id": 7,
+      "type": "AMR (METERING)",
+      "customer_input": "Can someone check my water meter? The digital display is completely blank and I can't read it."
+    },
+    {
+      "id": 8,
+      "type": "AMR (METERING)",
+      "customer_input": "My meter reading seems way off. There's no way I used that much water last month."
+    },
+    {
+      "id": 9,
+      "type": "BILLING",
+      "customer_input": "I just got my bill and it's $300 higher than normal! There must be some mistake."
+    },
+    {
+      "id": 10,
+      "type": "BILLING",
+      "customer_input": "I paid my water bill last week but it's still showing as unpaid online. Can you check if my payment was received?"
+    },
+    {
+      "id": 11,
+      "type": "BILLING",
+      "customer_input": "I need to set up a payment plan for my water bill. I lost my job and can't pay the full amount right now."
+    },
+    {
+      "id": 12,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "There's a pipe burst in my basement and water is gushing everywhere! I can't find the shutoff valve and water is filling up fast!"
+    },
+    {
+      "id": 13,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "A pipe just burst on my street and there's water shooting 10 feet in the air! The whole road is flooding!"
+    },
+    {
+      "id": 14,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "My water main broke and I can't shut it off. The valve seems to be stuck and water is pouring into my yard."
+    },
+    {
+      "id": 15,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "My tap water smells like rotten eggs. Is it safe to drink?"
+    },
+    {
+      "id": 16,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "The water from my faucet tastes metallic and has a strange odor. It just started happening yesterday."
+    },
+    {
+      "id": 17,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "There's something wrong with my water. It has a strong chlorine smell that's burning my nose when I shower."
+    },
+    {
+      "id": 18,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "There's a sinkhole forming in front of my house. It started small but it's getting bigger every day."
+    },
+    {
+      "id": 19,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "The street is caving in near the storm drain on my corner. I think there might be a broken pipe underneath."
+    },
+    {
+      "id": 20,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "I noticed a depression forming in my yard right above where I think the water line runs. The ground is sinking about 6 inches."
+    },
+    {
+      "id": 21,
+      "type": "CEMENT",
+      "customer_input": "The water department fixed a leak on my property two months ago but never came back to repair the sidewalk. There's still just gravel there."
+    },
+    {
+      "id": 22,
+      "type": "CEMENT",
+      "customer_input": "Your crew dug up my driveway to access a water line and left a big patch of dirt. When will someone come pour new concrete?"
+    },
+    {
+      "id": 23,
+      "type": "CEMENT",
+      "customer_input": "After the pipe repair last week, the temporary asphalt patch is already crumbling. We need a proper cement repair."
+    },
+    {
+      "id": 24,
+      "type": "CHOKED DRAIN",
+      "customer_input": "The storm drain on our street is completely blocked with debris and the whole block floods when it rains."
+    },
+    {
+      "id": 25,
+      "type": "CHOKED DRAIN",
+      "customer_input": "There's a drain that's clogged near the intersection of Maple and 5th. It's causing a huge puddle that cars can't avoid."
+    },
+    {
+      "id": 26,
+      "type": "CHOKED DRAIN",
+      "customer_input": "The sewer drain in front of my house is backed up. Water isn't draining and there's a terrible smell."
+    },
+    {
+      "id": 27,
+      "type": "CLAIMS",
+      "customer_input": "A water main broke and flooded my basement last week. I lost my washer, dryer, and everything stored down there. How do I file a claim?"
+    },
+    {
+      "id": 28,
+      "type": "CLAIMS",
+      "customer_input": "Your crew damaged my garden when they were digging to fix a pipe. I want to be compensated for the plants that were destroyed."
+    },
+    {
+      "id": 29,
+      "type": "CLAIMS",
+      "customer_input": "My car was parked on the street when your water line burst. The water damaged the engine and now it won't start. I need to file a claim."
+    },
+    {
+      "id": 30,
+      "type": "COMPOST",
+      "customer_input": "I heard the water department gives away free compost. How can I get some for my community garden?"
+    },
+    {
+      "id": 31,
+      "type": "COMPOST",
+      "customer_input": "When is the next compost giveaway? I missed the last one and really want some for my vegetable garden."
+    },
+    {
+      "id": 32,
+      "type": "RESTORE",
+      "customer_input": "I just paid my overdue bill and was told my water would be turned back on today, but it's still off. Can you help?"
+    },
+    {
+      "id": 33,
+      "type": "RESTORE",
+      "customer_input": "The water department was working on my neighbor's line and accidentally shut off my water too. It needs to be restored."
+    },
+    {
+      "id": 34,
+      "type": "ABATEMENT",
+      "customer_input": "There's a condemned building on my block with a major water leak. It's been running for days and nobody's doing anything about it."
+    },
+    {
+      "id": 35,
+      "type": "AMR (METERING)",
+      "customer_input": "I think my automatic meter might be double-counting. My bill says I'm using twice as much water as last year with no change in my habits."
+    },
+    {
+      "id": 36,
+      "type": "AMR (METERING)",
+      "customer_input": "My meter is making a strange buzzing noise. Is that normal or does it need to be replaced?"
+    },
+    {
+      "id": 37,
+      "type": "BILLING",
+      "customer_input": "I need an extension on my bill payment. Can I get an extra two weeks before it's considered late?"
+    },
+    {
+      "id": 38,
+      "type": "BILLING",
+      "customer_input": "I think I qualify for the senior citizen discount on my water bill. How do I apply for that?"
+    },
+    {
+      "id": 39,
+      "type": "BILLING",
+      "customer_input": "I got a notice saying my water will be shut off for non-payment, but I never received a bill in the first place!"
+    },
+    {
+      "id": 40,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "There's a fire hydrant that was hit by a car and now water is spraying everywhere. The whole street is flooded!"
+    },
+    {
+      "id": 41,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "A pipe just burst outside my restaurant and I can't shut it off. We have customers inside and water is coming in the front door!"
+    },
+    {
+      "id": 42,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "My water suddenly has a strong chemical smell and taste. It's making my children feel sick when they drink it."
+    },
+    {
+      "id": 43,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "There's something brown coming out of my faucet and the water smells like dirt. Is there a problem with the water supply?"
+    },
+    {
+      "id": 44,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "Part of my driveway is sinking in and I can hear water running underneath. I think there might be a leaking pipe causing erosion."
+    },
+    {
+      "id": 45,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "There's a huge depression forming in the middle of our street. Cars have to drive around it and it's getting deeper every day."
+    },
+    {
+      "id": 46,
+      "type": "CEMENT",
+      "customer_input": "After your crew fixed the water main, they filled in the hole with dirt but never repaved the street. It's been three weeks."
+    },
+    {
+      "id": 47,
+      "type": "CEMENT",
+      "customer_input": "The temporary patch your team put in my yard after fixing a pipe is washing away with the rain. When will it be permanently fixed?"
+    },
+    {
+      "id": 48,
+      "type": "CHOKED DRAIN",
+      "customer_input": "There's a storm drain at the end of my street that's completely blocked with leaves. Every time it rains the intersection floods."
+    },
+    {
+      "id": 49,
+      "type": "CHOKED DRAIN",
+      "customer_input": "The drain in the alley behind my house is clogged and causing sewage to back up. It smells horrible and is a health hazard."
+    },
+    {
+      "id": 50,
+      "type": "CLAIMS",
+      "customer_input": "Your maintenance crew broke my fence when they were accessing the water meter. I want to file a claim for the repair cost."
+    },
+    {
+      "id": 51,
+      "type": "CLAIMS",
+      "customer_input": "The water department's truck backed into my mailbox and destroyed it. How do I get reimbursed for the replacement?"
+    },
+    {
+      "id": 52,
+      "type": "COMPOST",
+      "customer_input": "I'm starting a school garden project and heard the water department provides free compost. Can we arrange a pickup?"
+    },
+    {
+      "id": 53,
+      "type": "RESTORE",
+      "customer_input": "My water was shut off for non-payment, but I just made a payment at the office. How soon can I get my service restored?"
+    },
+    {
+      "id": 54,
+      "type": "ABATEMENT",
+      "customer_input": "The fire department responded to a flooded basement at an empty house on my street. They said I should call you about getting the water shut off."
+    },
+    {
+      "id": 55,
+      "type": "AMR (METERING)",
+      "customer_input": "I'm getting estimated bills because my automatic meter reader isn't working. Can someone come replace it so I get accurate bills?"
+    },
+    {
+      "id": 56,
+      "type": "BILLING",
+      "customer_input": "I received two different bills for the same service period. Which one is correct and which should I pay?"
+    },
+    {
+      "id": 57,
+      "type": "BILLING",
+      "customer_input": "I'm selling my house next week. How do I transfer the water account to the new owners?"
+    },
+    {
+      "id": 58,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "My water heater just ruptured and water is pouring out. I can't find the main shutoff valve for my house!"
+    },
+    {
+      "id": 59,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "My water suddenly has a strong sulfur smell. Is this related to the construction work happening on our street?"
+    },
+    {
+      "id": 60,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "There's a soft spot in the road that cars keep sinking into. I think there might be a water leak underground causing it."
+    },
+    {
+      "id": 61,
+      "type": "CEMENT",
+      "customer_input": "The water department dug up my lawn to fix a pipe six months ago. They said they'd replace the sod but never did."
+    },
+    {
+      "id": 62,
+      "type": "CHOKED DRAIN",
+      "customer_input": "After yesterday's storm, the drain on our corner is totally blocked and there's standing water covering half the block."
+    },
+    {
+      "id": 63,
+      "type": "CLAIMS",
+      "customer_input": "Your water main break flooded my first floor and ruined all my hardwood flooring. I need to file a claim for damages."
+    },
+    {
+      "id": 64,
+      "type": "COMPOST",
+      "customer_input": "Do you still give away compost made from water treatment byproducts? I'd like some for my organic garden."
+    },
+    {
+      "id": 65,
+      "type": "RESTORE",
+      "customer_input": "There was emergency work on my street yesterday and they shut off our water. Everyone else's is back on except mine."
+    },
+    {
+      "id": 66,
+      "type": "ABATEMENT",
+      "customer_input": "There's an abandoned house on my block with broken pipes. Water has been running out of it for three days straight."
+    },
+    {
+      "id": 67,
+      "type": "AMR (METERING)",
+      "customer_input": "I got a notice saying my meter couldn't be read remotely. Do I need a new meter or is there something blocking the signal?"
+    },
+    {
+      "id": 68,
+      "type": "BILLING",
+      "customer_input": "I've been getting bills for a property I sold two years ago. How do I remove my name from this account?"
+    },
+    {
+      "id": 69,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "A construction crew just hit a water main on my street. Water is shooting up like a geyser and flooding everything!"
+    },
+    {
+      "id": 70,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "My water has started to taste like plastic. Is this related to the new pipes that were installed last month?"
+    },
+    {
+      "id": 71,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "I noticed the ground is sinking around a fire hydrant near my house. It looks like it might be undermined."
+    },
+    {
+      "id": 72,
+      "type": "CEMENT",
+      "customer_input": "Your crew fixed a water line and patched my sidewalk, but the cement is already cracking after just two weeks."
+    },
+    {
+      "id": 73,
+      "type": "CHOKED DRAIN",
+      "customer_input": "The storm drain on Oak Street is completely filled with construction debris. It's not draining at all when it rains."
+    },
+    {
+      "id": 74,
+      "type": "CLAIMS",
+      "customer_input": "During your repair work, a worker broke my sprinkler system. I had it fixed but want to be reimbursed for the cost."
+    },
+    {
+      "id": 75,
+      "type": "COMPOST",
+      "customer_input": "I run a community garden and we could use some compost. Does the water department still donate compost to community projects?"
+    },
+    {
+      "id": 76,
+      "type": "RESTORE",
+      "customer_input": "I just moved into a new apartment and need to get the water turned on. The landlord said to call you directly."
+    },
+    {
+      "id": 77,
+      "type": "ABATEMENT",
+      "customer_input": "There's a foreclosed home that has water pouring out from under the front door. It's creating ice on the sidewalk in this cold weather."
+    },
+    {
+      "id": 78,
+      "type": "AMR (METERING)",
+      "customer_input": "The digital display on my water meter is flashing an error code. What does 'ERR-4' mean?"
+    },
+    {
+      "id": 79,
+      "type": "BILLING",
+      "customer_input": "I want to sign up for electronic billing instead of paper bills. How do I make that change?"
+    },
+    {
+      "id": 80,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "I have a major pipe burst in my ceiling and water is pouring through the light fixtures! I can't find the water shutoff!"
+    },
+    {
+      "id": 81,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "My water has a strong earthy taste all of a sudden. Is this happening to other people in my neighborhood?"
+    },
+    {
+      "id": 82,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "There's a big depression forming in my front yard right over where I think the water line runs. The grass is sinking about a foot."
+    },
+    {
+      "id": 83,
+      "type": "CEMENT",
+      "customer_input": "After replacing a fire hydrant on my corner, your crew left a big patch of gravel. When will the sidewalk be properly restored?"
+    },
+    {
+      "id": 84,
+      "type": "CHOKED DRAIN",
+      "customer_input": "There's a drain on Center Street that bubbles up sewage every time it rains heavily. It's creating a serious health hazard."
+    },
+    {
+      "id": 85,
+      "type": "CLAIMS",
+      "customer_input": "Your crew left the water on while working on my pipes, which led to a flood in my kitchen. I want to file a claim for the cabinet damage."
+    },
+    {
+      "id": 86,
+      "type": "COMPOST",
+      "customer_input": "I heard you give away compost in the spring. Is there a waiting list I can get on for the next distribution?"
+    },
+    {
+      "id": 87,
+      "type": "RESTORE",
+      "customer_input": "My water was turned off because of an emergency repair on my street yesterday. The crew said it would be back on by evening, but it's still off."
+    },
+    {
+      "id": 88,
+      "type": "ABATEMENT",
+      "customer_input": "There's a vacant building with a major leak that's causing water to flow down the street. It's been like this for a week."
+    },
+    {
+      "id": 89,
+      "type": "AMR (METERING)",
+      "customer_input": "I got a notice saying my water usage is 300% above normal. I think my automatic meter reader must be malfunctioning."
+    },
+    {
+      "id": 90,
+      "type": "BILLING",
+      "customer_input": "I'm on a fixed income and my water bill has doubled. Is there an assistance program I can apply for?"
+    },
+    {
+      "id": 91,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "A truck just hit the fire hydrant in front of my business and water is shooting everywhere! My parking lot is completely flooded!"
+    },
+    {
+      "id": 92,
+      "type": "BTR/O (BAD TASTE & ODOR)",
+      "customer_input": "My tap water suddenly has a strong chlorine smell and taste. It's so strong it burns my throat when I drink it."
+    },
+    {
+      "id": 93,
+      "type": "C/I - DEP (CAVE IN/DEPRESSION)",
+      "customer_input": "There's a sinkhole forming in the middle of Pine Street. It started small but now it's about three feet wide and getting deeper."
+    },
+    {
+      "id": 94,
+      "type": "CEMENT",
+      "customer_input": "The water department replaced a valve in front of my house but left a dirt patch in my lawn. When will you come back to fix it?"
+    },
+    {
+      "id": 95,
+      "type": "CHOKED DRAIN",
+      "customer_input": "The catch basin at the corner of 4th and Main is completely clogged. The whole intersection floods when it rains just a little bit."
+    },
+    {
+      "id": 96,
+      "type": "CLAIMS",
+      "customer_input": "The water pressure surge after a main repair damaged my washing machine. How do I file a claim for the repair costs?"
+    },
+    {
+      "id": 97,
+      "type": "COMPOST",
+      "customer_input": "I'm working with a school to start a garden. Can the water department donate some compost for this educational project?"
+    },
+    {
+      "id": 98,
+      "type": "RESTORE",
+      "customer_input": "My water was shut off for a scheduled repair this morning. The crew has left but my water is still not turned back on."
+    },
+    {
+      "id": 99,
+      "type": "BILLING",
+      "customer_input": "I just got a shutoff notice but I never received my original bill. There must be a problem with mail delivery."
+    },
+    {
+      "id": 100,
+      "type": "BPCS (BROKEN PIPE)",
+      "customer_input": "There's a water main break on Elm Street! Water is gushing out of the pavement and flooding several homes including mine!"
+    }
+  ]
+}

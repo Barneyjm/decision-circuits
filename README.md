@@ -140,6 +140,7 @@ Numbered, each self-contained, in [`examples/`](examples/):
 8. **a refund desk**: seven questions, six gates, code-owned facts mixed with model judgments, five tickets routed to four queues (offline or Jev)
 9. the refund desk answered by Claude, stated versus sampled probabilities
 10. the refund desk answered through OpenAI-compatible logprobs (OpenAI, Fireworks, vLLM)
+11. **the article's water-utility call center**: the two-parser, negative-checker circuit from *Attaining LLM Certainty with AI Decision Circuits*, on its original 100 calls, with the article's confidence tiers and cost model
 
 ## Docs
 
