@@ -43,8 +43,8 @@
     --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   * { box-sizing: border-box; }
-  html { background: var(--black); }
-  body { margin: 0; overflow-x: clip; background: var(--black); color: var(--ice); font-family: var(--sans); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  html { background: var(--black); overflow-x: hidden; }
+  body { margin: 0; overflow-x: hidden; background: var(--black); color: var(--ice); font-family: var(--sans); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
   a { color: var(--ice); text-decoration-color: var(--haze); text-underline-offset: 3px; }
   a:hover, a:focus-visible { text-decoration-color: var(--ice); }
   :focus-visible { outline: 2px solid var(--die-edge); outline-offset: 3px; }
@@ -114,7 +114,7 @@
   h3 { font-family: var(--serif); font-weight: 400; font-size: clamp(24px, 3vw, 32px); line-height: 1.15; letter-spacing: -.01em; margin: 0 0 14px; text-wrap: balance; }
   p { max-width: 68ch; }
   section p { margin: 0 0 14px; }
-  p code, li code, td code, .note code { font-family: var(--mono); font-size: .9em; background: var(--code-bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 4px; }
+  p code, li code, td code, .note code { font-family: var(--mono); font-size: .9em; background: var(--code-bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
 
   /* the live circuit */
   .board { margin-top: 72px; }
