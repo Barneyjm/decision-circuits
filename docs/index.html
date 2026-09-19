@@ -448,11 +448,11 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     [0.91, 0.10, 0.35, 0.72, 0.20, 0.08], // card number in a refund demand
     [0.12, 0.05, 0.08, 0.15, 0.80, 0.05], // a plain bug report
     [0.65, 0.20, 0.40, 0.50, 0.30, 0.20], // inside the band: escalate
-    [0.88, 0.85, 0.10, 0.60, 0.10, 0.30], // details about a business, not a person
+    [0.92, 0.15, 0.20, 0.30, 0.10, 0.60], // an address and a phone number in a complaint
     [0.30, 0.10, 0.92, 0.40, 0.45, 0.15], // furious, no personal data
     [0.97, 0.02, 0.75, 0.85, 0.05, 0.10], // angry and exposed
     [0.05, 0.01, 0.02, 0.10, 0.10, 0.80], // small talk
-    [0.55, 0.40, 0.55, 0.34, 0.33, 0.33], // nobody can tell
+    [0.85, 0.05, 0.60, 0.55, 0.35, 0.10], // an account number from an annoyed customer
   ];
   let caseIx = 0, busy = false;
   function askAgain() {
