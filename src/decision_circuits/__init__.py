@@ -41,7 +41,7 @@ from decision_circuits.dsl import (
 from decision_circuits.gates import Gate, GateResult, evaluate_gates
 from decision_circuits.types import Answer, Answers, Backend, Question, answer_from_probabilities, normalized_confidence, option_keys
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "And",
