@@ -88,6 +88,7 @@
   .install .c { color: var(--haze); }
 
   h2 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 18px; color: var(--mist); margin: 88px 0 6px; }
+  #family h2 { margin-top: 64px; }
   h3 { font-family: var(--serif); font-weight: 400; font-size: clamp(24px, 3vw, 32px); line-height: 1.15; letter-spacing: -.01em; margin: 0 0 14px; text-wrap: balance; }
   p { max-width: 68ch; }
   section p { margin: 0 0 14px; }
@@ -163,7 +164,7 @@
   <header class="top">
     <div class="brand">Decision Circuits<small>decision-circuits 0.3</small></div>
     <nav>
-      <a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a><a href="#family">Family</a><a href="#api">API</a>
+      <a href="#family">Family</a><a href="#api">API</a><a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a>
       <a href="https://github.com/Barneyjm/decision-circuits">GitHub</a><a href="https://pypi.org/project/decision-circuits/">PyPI</a>
     </nav>
   </header>
@@ -178,6 +179,41 @@
       <div class="install"><span class="c">$</span><span>pip install <b>decision-circuits</b></span><span class="c"># no dependencies</span></div>
     </div>
   </div>
+
+  <section id="family">
+    <h2>The family</h2>
+    <h3>One recipe, one head, every modality the base has an encoder for</h3>
+    <p>Each circuit model is a LoRA on the language model plus the same pointer readout head, trained on code-labeled and CC-licensed data with soft targets so calibration is learned. What changes between them is the base and what the state can carry. All of them serve the same <code>POST /v1/systemone</code> contract.</p>
+    <div class="tbl"><table>
+      <tr><th>model</th><th>base</th><th>state</th><th>status</th><th>where it stands</th></tr>
+      <tr><td><b>circuit-1.7b</b></td><td>Qwen3-1.7B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam and toxicity, 4 points behind on 151-way intents, best calibration on the board; 175 ms per question on a laptop</td></tr>
+      <tr><td><b>circuit-8b</b> <span style="color:var(--mist)">, the 8-ball</span></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam, toxicity, and 151-way intents; 0.84 agreement with Jev on the production questions, level with Nimble-9B at half the calibration error</td></tr>
+      <tr><td><b><a href="https://huggingface.co/jbarney/circuit-vl-4b">circuit-vl-4b</a></b></td><td>Qwen3-VL-4B</td><td>images, multiple images, video frames, plus text</td><td class="n">released</td><td>98.3% / ECE 0.018 on the rendered vision grid against the raw base's 96.0% / 0.041; no option cap; seven minutes of training</td></tr>
+      <tr><td><b><a href="https://huggingface.co/jbarney/circuit-audio-7b">circuit-audio-7b</a></b></td><td>Qwen2-Audio-7B</td><td>recorded speech and sound, plus text</td><td class="n">released</td><td>93.5% / ECE 0.072 on the synthesized audio grid against the raw base's 72.0% / 0.188; counts, negations, and comparisons the base gets wrong; trained on a laptop in 35 minutes</td></tr>
+    </table></div>
+    <ul class="facts" style="margin-top:18px">
+      <li><h4>Same head everywhere</h4><p>A query from the decide token, a key from each option's closing delimiter, softmax. Order-invariant, no cap on options, and it doesn't know or care what encoder produced the hidden state.</p></li>
+      <li><h4>Same data idea everywhere</h4><p>A grid of judgment operations times state formats, labels computed at generation time. For images that's rendered receipts and charts; for audio it's synthesized calls with known content.</p></li>
+      <li><h4>Same test everywhere</h4><p>Hold out a whole operation or a whole format and measure transfer. So far: layouts transfer, new kinds of judgment have to be in the data, and nobody is calibrated on undecidable inputs yet.</p></li>
+    </ul>
+  </section>
+
+  <section id="api">
+    <h2>API</h2>
+    <h3>Call the models without running anything</h3>
+    <p>A hosted endpoint serves circuit-1.7b and circuit-8b at <code>api.decisioncircuits.com</code>, same request format as TypeSafe's <code>POST /v1/systemone</code>. Keys are free: 1,000 questions a day per key, no card, no account. The models scale to zero between calls, so the first call after a quiet spell takes about a minute while a GPU spins up; warm calls answer in under half a second.</p>
+    <form class="keyform" id="keyform">
+      <label for="key-email" style="display:none">Email (optional)</label>
+      <input id="key-email" type="email" placeholder="email, optional" autocomplete="email">
+      <button type="submit" id="key-btn">Get an API key</button>
+    </form>
+    <div class="keyout" id="keyout"></div>
+<pre style="margin-top:14px">curl https://api.decisioncircuits.com/v1/systemone \
+  -H <span class="s">"Authorization: Bearer dc-..."</span> -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"model": "circuit-8b", "state": "Card charged twice, my card ends in 4412",
+       "questions": {"pii": {"type": "noul", "instructions": "Does the message contain personal information?"}}}'</span></pre>
+    <p>Or from Python: <code>SystemOne("https://api.decisioncircuits.com/v1/systemone", api_key=KEY)</code> as the backend of any circuit. Pass <code>"model": "circuit-1.7b"</code> for the faster, smaller one.</p>
+  </section>
 
   <section id="try">
     <div class="board">
@@ -298,41 +334,6 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
       <li><h4>Yours</h4><p>A backend is one method: <code>answer(state, questions)</code>. Wrap a cache, inject code-owned facts, chain fallbacks.</p></li>
     </ul>
     <p class="note" style="margin-top:18px">No S1 model yet? Chat models can stand in through logprobs (OpenAI-compatible) or tool use (Claude), with the caveat that a chat model's stated confidence isn't calibrated the way an S1 model's output is.</p>
-  </section>
-
-  <section id="family">
-    <h2>The family</h2>
-    <h3>One recipe, one head, every modality the base has an encoder for</h3>
-    <p>Each circuit model is a LoRA on the language model plus the same pointer readout head, trained on code-labeled and CC-licensed data with soft targets so calibration is learned. What changes between them is the base and what the state can carry. All of them serve the same <code>POST /v1/systemone</code> contract.</p>
-    <div class="tbl"><table>
-      <tr><th>model</th><th>base</th><th>state</th><th>status</th><th>where it stands</th></tr>
-      <tr><td><b>circuit-1.7b</b></td><td>Qwen3-1.7B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam and toxicity, 4 points behind on 151-way intents, best calibration on the board; 175 ms per question on a laptop</td></tr>
-      <tr><td><b>circuit-8b</b> <span style="color:var(--mist)">, the 8-ball</span></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam, toxicity, and 151-way intents; 0.84 agreement with Jev on the production questions, level with Nimble-9B at half the calibration error</td></tr>
-      <tr><td><b><a href="https://huggingface.co/jbarney/circuit-vl-4b">circuit-vl-4b</a></b></td><td>Qwen3-VL-4B</td><td>images, multiple images, video frames, plus text</td><td class="n">released</td><td>98.3% / ECE 0.018 on the rendered vision grid against the raw base's 96.0% / 0.041; no option cap; seven minutes of training</td></tr>
-      <tr><td><b><a href="https://huggingface.co/jbarney/circuit-audio-7b">circuit-audio-7b</a></b></td><td>Qwen2-Audio-7B</td><td>recorded speech and sound, plus text</td><td class="n">released</td><td>93.5% / ECE 0.072 on the synthesized audio grid against the raw base's 72.0% / 0.188; counts, negations, and comparisons the base gets wrong; trained on a laptop in 35 minutes</td></tr>
-    </table></div>
-    <ul class="facts" style="margin-top:18px">
-      <li><h4>Same head everywhere</h4><p>A query from the decide token, a key from each option's closing delimiter, softmax. Order-invariant, no cap on options, and it doesn't know or care what encoder produced the hidden state.</p></li>
-      <li><h4>Same data idea everywhere</h4><p>A grid of judgment operations times state formats, labels computed at generation time. For images that's rendered receipts and charts; for audio it's synthesized calls with known content.</p></li>
-      <li><h4>Same test everywhere</h4><p>Hold out a whole operation or a whole format and measure transfer. So far: layouts transfer, new kinds of judgment have to be in the data, and nobody is calibrated on undecidable inputs yet.</p></li>
-    </ul>
-  </section>
-
-  <section id="api">
-    <h2>API</h2>
-    <h3>Call the models without running anything</h3>
-    <p>A hosted endpoint serves circuit-1.7b and circuit-8b at <code>api.decisioncircuits.com</code>, same request format as TypeSafe's <code>POST /v1/systemone</code>. Keys are free: 1,000 questions a day per key, no card, no account. The models scale to zero between calls, so the first call after a quiet spell takes about a minute while a GPU spins up; warm calls answer in under half a second.</p>
-    <form class="keyform" id="keyform">
-      <label for="key-email" style="display:none">Email (optional)</label>
-      <input id="key-email" type="email" placeholder="email, optional" autocomplete="email">
-      <button type="submit" id="key-btn">Get an API key</button>
-    </form>
-    <div class="keyout" id="keyout"></div>
-<pre style="margin-top:14px">curl https://api.decisioncircuits.com/v1/systemone \
-  -H <span class="s">"Authorization: Bearer dc-..."</span> -H <span class="s">"Content-Type: application/json"</span> \
-  -d <span class="s">'{"model": "circuit-8b", "state": "Card charged twice, my card ends in 4412",
-       "questions": {"pii": {"type": "noul", "instructions": "Does the message contain personal information?"}}}'</span></pre>
-    <p>Or from Python: <code>SystemOne("https://api.decisioncircuits.com/v1/systemone", api_key=KEY)</code> as the backend of any circuit. Pass <code>"model": "circuit-1.7b"</code> for the faster, smaller one.</p>
   </section>
 
   <footer>
