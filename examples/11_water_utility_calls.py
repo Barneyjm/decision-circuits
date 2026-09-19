@@ -59,7 +59,12 @@ c.choice("primary", "Extract the category of this customer service call to a wat
 # The backup parser: the article used a chain-of-thought prompt; here the same categories under a differently framed question.
 c.choice("backup", "First identify the customer's main issue or concern, then match it to the category that would handle it.", CALL_TYPES)
 # The negative checker.
-c.noul("enough_info", "Does this call contain enough information to categorize it into one of the water-utility call types?", true="A specific, categorizable issue is described", false="Too vague, off-topic, or missing the key detail")
+c.noul(
+    "enough_info",
+    "Does this call contain enough information to categorize it into one of the water-utility call types?",
+    true="A specific, categorizable issue is described",
+    false="Too vague, off-topic, or missing the key detail",
+)
 
 c.gate("vote", majority("primary", "backup"))  # the two parsers agree, and how strongly
 c.gate("checked", verify("primary", check=Q("enough_info"), tau=0.5, min_confidence=0.0), on_uncertain="escalate")
@@ -104,7 +109,9 @@ def report(name: str, rows: list[tuple[str, str | None, str, bool]]) -> None:
     for t in ("high", "medium", "low"):
         if tiers[t]:
             print(f"  {t:<6} {tiers[t]:>3} calls, {tier_ok[t] / tiers[t]:.1%} correct")
-    print(f"  article cost model per 10,000 calls: ${cost:,.0f}  (parsers ${0.10 * 3 * 10_000:,.0f}, humans ${200 * humans * scale:,.0f}, undetected ${1000 * undetected * scale:,.0f})")
+    print(
+        f"  article cost model per 10,000 calls: ${cost:,.0f}  (parsers ${0.10 * 3 * 10_000:,.0f}, humans ${200 * humans * scale:,.0f}, undetected ${1000 * undetected * scale:,.0f})"
+    )
 
 
 def main() -> None:
