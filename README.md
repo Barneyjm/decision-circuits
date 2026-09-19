@@ -113,7 +113,7 @@ print(c.to_mermaid(results=out["gates"], answers=out["answers"]))
 
 Alpha. The wire format is TypeSafe's `POST /v1/systemone` request with
 an added `gates` block; the reference server that evaluates gates is
-[s1proto](https://github.com/barneyjm/s1-proto). The gate semantics
+[s1proto](https://github.com/Barneyjm/s1-proto). The gate semantics
 (`and` as a product, `or` as noisy-or) assume independent questions;
 the trace records that assumption on every result so a reviewer can
 see it.

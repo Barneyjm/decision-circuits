@@ -25,7 +25,7 @@ dependencies = ["pydantic>=2.0"]
 http = ["httpx>=0.25"]
 
 [project.urls]
-Homepage = "https://github.com/barneyjm/decision-circuits"
+Homepage = "https://github.com/Barneyjm/decision-circuits"
 Article = "https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/"
 
 [dependency-groups]

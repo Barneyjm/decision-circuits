@@ -70,11 +70,17 @@ class _FakeClient:
 
     def post(self, url, json=None, headers=None):
         self.calls.append((url, json, headers))
+        status = 200
         body = {"answers": self.answers}
-        if self.with_gates:  # a server that evaluates gates itself (s1proto)
-            body["gates"] = {"_h_1": {"value": True}, "rush": {"value": True, "p": 0.9, "outcome": "decided"}}
+        if "gates" in json:
+            if self.with_gates:  # a server that evaluates gates itself (s1proto)
+                body["gates"] = {"_h_1": {"value": True}, "rush": {"value": True, "p": 0.9, "outcome": "decided"}}
+            else:  # TypeSafe rejects unknown fields
+                status, body = 400, {"detail": {"error_type": "api_usage_error", "message": "Invalid request."}}
 
         class R:
+            status_code = status
+
             def json(self):
                 return body
 
@@ -101,9 +107,13 @@ def test_run_sends_gates_and_uses_server_evaluation_when_present():
 
 def test_run_evaluates_gates_locally_when_server_returns_answers_only():
     client = _FakeClient({"urgent": {"type": "noul", "noul": 0.9}, "dept": ANSWERS["dept"]}, with_gates=False)
-    out = _circuit().run(client, "Card charged twice.", url="https://api.typesafe.ai/v1/systemone", headers={"Authorization": "Bearer k"})
+    c = _circuit()
+    out = c.run(client, "Card charged twice.", url="https://api.typesafe.ai/v1/systemone", headers={"Authorization": "Bearer k"})
     assert out["gates"]["rush"]["value"] is True and out["gates"]["route"]["value"] == "billing"
     assert out["gates_evaluated_by"] == "client"
+    assert len(client.calls) == 2 and "gates" not in client.calls[1][1]
+    c.run(client, "Again.", url="https://api.typesafe.ai/v1/systemone")
+    assert len(client.calls) == 3  # remembered: one request the second time
 
 
 def test_indexing_and_keyword_policy_match_string_forms():

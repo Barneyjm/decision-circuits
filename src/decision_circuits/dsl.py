@@ -189,6 +189,7 @@ class Circuit:
     questions: dict[str, dict[str, Any]] = field(default_factory=dict)
     gates: list[GateDef] = field(default_factory=list)
     model: str = "s1-proto"
+    _server_gates: bool | None = field(default=None, repr=False, compare=False)
 
     # questions ---------------------------------------------------------
     def noul(self, qid: str, instructions: Any, true: str | None = None, false: str | None = None) -> Circuit:
@@ -297,17 +298,39 @@ class Circuit:
         res = evaluate_gates({k: Gate.model_validate(v) for k, v in self.compile().items()}, answers)
         return {k: v.model_dump() for k, v in res.items() if not k.startswith("_")}
 
-    def run(self, client: Any, state: Any, url: str = "/v1/systemone", headers: dict[str, str] | None = None) -> dict[str, Any]:
-        """POST through any client with a `.post(url, json=..., headers=...)`
-        returning `.json()` (httpx, requests, FastAPI TestClient)."""
-        r = client.post(url, json=self.request(state), headers=headers or {"Authorization": "Bearer x"})
+    def run(self, client: Any, state: Any, url: str = "/v1/systemone", headers: dict[str, str] | None = None, gates: str = "auto") -> dict[str, Any]:
+        """POST through any client with `.post(url, json=..., headers=...)`
+        returning `.json()` (httpx, requests, FastAPI TestClient).
+
+        `gates="auto"` sends the compiled gates and lets the server
+        evaluate them if it can; a server that rejects the extra field
+        (TypeSafe today) or returns answers only gets a second request
+        without gates, and they are evaluated here. The outcome is cached
+        per Circuit so later calls make one request. `"server"` requires
+        server evaluation; `"client"` never sends gates."""
+        if gates not in ("auto", "server", "client"):
+            raise ValueError("gates must be 'auto', 'server', or 'client'")
+        body: dict[str, Any] | None = None
+        try_server = gates == "server" or (gates == "auto" and self._server_gates is not False)
+        if try_server:
+            r = client.post(url, json=self.request(state), headers=headers)
+            body = r.json()
+            ok = getattr(r, "status_code", 200) < 400 and "gates" in body
+            if ok:
+                self._server_gates = True
+                body["gates"] = {k: v for k, v in body["gates"].items() if not k.startswith("_")}
+                body["gates_evaluated_by"] = "server"
+                return body
+            if gates == "server":
+                raise RuntimeError(f"server did not evaluate gates: {str(body)[:200]}")
+            self._server_gates = False
+        req = {k: v for k, v in self.request(state).items() if k != "gates"}
+        r = client.post(url, json=req, headers=headers)
         body = r.json()
-        if "gates" in body:  # server evaluated the circuit (s1proto)
-            body["gates"] = {k: v for k, v in body["gates"].items() if not k.startswith("_")}
-            body["gates_evaluated_by"] = "server"
-        elif "answers" in body:  # plain System One server (TypeSafe): evaluate here
-            body["gates"] = self.evaluate(body["answers"])
-            body["gates_evaluated_by"] = "client"
+        if "answers" not in body:
+            raise RuntimeError(f"unexpected response: {str(body)[:200]}")
+        body["gates"] = self.evaluate(body["answers"])
+        body["gates_evaluated_by"] = "client"
         return body
 
 
