@@ -179,6 +179,26 @@
   .card dt { color: var(--mist); }
   .card dd { margin: 0; font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
   .card .blurb { font-size: 14px; color: var(--mist); margin: 0; }
+  .qzs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 14px; }
+  @media (max-width: 760px) { .qzs { grid-template-columns: 1fr; } }
+  .qz { background: linear-gradient(180deg, #0E2A72, var(--window-deep)); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .qz .src { font-size: 12.5px; color: var(--haze); margin: 0; }
+  .qz .state, .qz .thread { font-size: 13.5px; background: rgba(0,0,0,.35); border-radius: 10px; padding: 10px 12px; margin: 0; max-height: 220px; overflow: auto; }
+  .qz .state { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .qz .thread p { margin: 0 0 6px; max-width: none; } .qz .thread b { color: var(--mist); font-weight: 500; margin-right: 6px; }
+  .qz img { width: 100%; max-width: 420px; border-radius: 10px; background: #fff; }
+  .qz .cap { font-size: 13.5px; color: var(--mist); margin: 0; }
+  .qz audio { width: 100%; max-width: 420px; }
+  .qz .ask { font-family: var(--serif); font-size: 18px; margin: 4px 0 0; }
+  .qz .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .qz .opts button { font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--die-edge); background: transparent; color: var(--ice); cursor: pointer; }
+  .qz .opts button:hover, .qz .opts button:focus-visible { background: var(--die); }
+  .qz .opts button:disabled { cursor: default; opacity: .55; }
+  .qz .opts button.you { opacity: 1; background: var(--die); }
+  .qz .opts button.right { opacity: 1; border-color: var(--ice); box-shadow: inset 0 0 0 1px var(--ice); }
+  .qz .verdict { margin: 0; font-size: 14px; color: var(--mist); min-height: 1.4em; }
+  .qz .verdict b { color: var(--ice); font-weight: 500; }
+  .score { font-family: var(--serif); font-size: 18px; margin: 0 0 6px; }
   figure { margin: 18px 0 0; }
   figure img { display: block; width: 100%; max-width: 820px; height: auto; border-radius: 12px; background: #fff; }
   figcaption { font-size: 13.5px; color: var(--mist); margin-top: 8px; }
@@ -200,7 +220,7 @@
   <header class="top">
     <div class="brand">Decision Circuits<small>decision-circuits 0.3</small></div>
     <nav>
-      <a href="#family">Family</a><a href="#api">API</a><a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a>
+      <a href="#family">Family</a><a href="#quiz">Quiz</a><a href="#api">API</a><a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a>
       <a href="https://github.com/Barneyjm/decision-circuits">GitHub</a><a href="https://pypi.org/project/decision-circuits/">PyPI</a>
     </nav>
   </header>
@@ -258,6 +278,84 @@
       <li><h4>Same data idea everywhere</h4><p>A grid of judgment operations times state formats, labels computed at generation time. For images that's rendered receipts and charts; for audio it's synthesized calls with known content.</p></li>
       <li><h4>Same test everywhere</h4><p>Hold out a whole operation or a whole format and measure transfer. So far: layouts transfer, new kinds of judgment have to be in the data, and nobody is calibrated on undecidable inputs yet.</p></li>
     </ul>
+  </section>
+
+  <section id="quiz">
+    <h2>Think you're better than the model?</h2>
+    <h3>Eight questions straight from the benchmark. Answer first, then see what the model said.</h3>
+    <p>Real items from the text, vision, and audio grids and the article's water-utility calls, with the labels the code assigned when it built them. The model's answer and its probability appear after yours.</p>
+    <p class="score" id="qz-score">You 0 · models 0 · of 0 answered</p>
+    <div class="qzs">
+      <article class="qz" data-i="0">
+        <p class="src">the article&#x27;s water-utility calls · answered by circuit-8b</p>
+        <pre class="state">Hi, my water was shut off yesterday for repairs on my street, but it still hasn&#x27;t been turned back on. Can someone come restore my service?</pre>
+        <p class="ask">Extract the category of this customer service call to a water utility.</p>
+        <div class="opts"><button type="button" data-k="RESTORE" title="Water service was shut off (repairs, construction, non-payment) and needs to be turned back on">RESTORE</button><button type="button" data-k="ABATEMENT" title="A property, often vacant or abandoned, with a leak or running water that needs to be stopped">ABATEMENT</button><button type="button" data-k="AMR (METERING)" title="Water meter or automatic meter reading problems: blank display, wrong readings, replacement">AMR (METERING)</button><button type="button" data-k="BILLING" title="Charges, payment, account balance, bill amount disputes, payment plans">BILLING</button><button type="button" data-k="BPCS (BROKEN PIPE)" title="A broken or leaking water main or service pipe, water coming up through the street or ground">BPCS (BROKEN PIPE)</button><button type="button" data-k="BTR/O (BAD TASTE &amp; ODOR)" title="Water tastes or smells bad: chlorine, rotten eggs, metallic, discolored">BTR/O (BAD TASTE &amp; ODOR)</button><button type="button" data-k="C/I - DEP (CAVE IN/DEPRESSION)" title="A sinkhole, cave-in, or depression in the street or sidewalk">C/I - DEP (CAVE IN/DEPRESSION)</button><button type="button" data-k="CEMENT" title="Restoring pavement, sidewalk, or driveway concrete after utility work">CEMENT</button><button type="button" data-k="CHOKED DRAIN" title="A storm drain, inlet, or catch basin that is clogged and not draining">CHOKED DRAIN</button><button type="button" data-k="CLAIMS" title="Compensation for damage caused by the utility&#x27;s work or a water incident">CLAIMS</button><button type="button" data-k="COMPOST" title="Compost bins, yard waste, or composting program questions">COMPOST</button></div>
+        <p class="verdict" aria-live="polite"></p>
+      </article>
+      <article class="qz" data-i="1">
+        <p class="src">text grid, count / string · answered by circuit-8b</p>
+        <pre class="state">t1 blender (not returned); t2 wireless headphones (not returned); t3 notebook set (is returned); t4 rain jacket (not returned)</pre>
+        <p class="ask">How many items are returned?</p>
+        <div class="opts"><button type="button" data-k="0" title="">0</button><button type="button" data-k="1" title="">1</button><button type="button" data-k="2" title="">2</button><button type="button" data-k="3" title="">3 or more</button></div>
+        <p class="verdict" aria-live="polite"></p>
+      </article>
+      <article class="qz" data-i="2">
+        <p class="src">text grid, temporal / document · answered by circuit-8b</p>
+        <pre class="state">The knowledge base has a new article on setting up two-factor authentication.
+
+If you have feedback on the new dashboard, reply to this message.
+
+The support call was on January 11, 2026. The payment was on 12 Mar 2026.
+
+Weather permitting, deliveries in the region continue on the usual schedule.
+
+We appreciate your patience while we migrate to the new billing system.</pre>
+        <p class="ask">Was the support call earlier than the payment?</p>
+        <div class="opts"><button type="button" data-k="yes" title="">Yes</button><button type="button" data-k="no" title="">No</button></div>
+        <p class="verdict" aria-live="polite"></p>
+      </article>
+      <article class="qz" data-i="3">
+        <p class="src">text grid, negation / nested · answered by circuit-8b</p>
+        <pre class="state">{
+ &quot;from&quot;: &quot;Elena&quot;,
+ &quot;details&quot;: {
+  &quot;reply&quot;: &quot;I&#x27;ll take the discount, thanks.&quot;
+ }
+}</pre>
+        <p class="ask">Is this a refusal of the discount?</p>
+        <div class="opts"><button type="button" data-k="yes" title="">Yes</button><button type="button" data-k="no" title="">No</button></div>
+        <p class="verdict" aria-live="polite"></p>
+      </article>
+      <article class="qz" data-i="4">
+        <p class="src">vision grid, extract / receipt · answered by circuit-vl-4b</p>
+        <img src="bench/receipt.png" alt="a rendered document from the vision benchmark" loading="lazy">
+        <p class="ask">What is the total on the receipt?</p>
+        <div class="opts"><button type="button" data-k="100.52" title="">100.52</button><button type="button" data-k="90.47" title="">90.47</button><button type="button" data-k="Cannot tell" title="">Cannot tell</button><button type="button" data-k="7.50" title="">7.50</button><button type="button" data-k="103.62" title="">103.62</button></div>
+        <p class="verdict" aria-live="polite"></p>
+      </article>
+      <article class="qz" data-i="5">
+        <p class="src">vision grid, compare / chart · answered by circuit-vl-4b</p>
+        <img src="bench/chart.png" alt="a rendered document from the vision benchmark" loading="lazy">
+        <p class="ask">Which bar is the shortest?</p>
+        <div class="opts"><button type="button" data-k="North" title="">North</button><button type="button" data-k="Q1" title="">Q1</button><button type="button" data-k="2025" title="">2025</button><button type="button" data-k="South" title="">South</button><button type="button" data-k="Q2" title="">Q2</button></div>
+        <p class="verdict" aria-live="polite"></p>
+      </article>
+      <article class="qz" data-i="6">
+        <p class="src">audio grid, classify / call · answered by circuit-audio-7b</p>
+        <audio controls preload="none" src="bench/call.wav"></audio>
+        <p class="ask">Which kind of water-utility call is this?</p>
+        <div class="opts"><button type="button" data-k="billing" title="">billing</button><button type="button" data-k="metering" title="">metering</button><button type="button" data-k="taste and odor" title="">taste and odor</button><button type="button" data-k="outage" title="">outage</button><button type="button" data-k="leak" title="">leak</button></div>
+        <p class="verdict" aria-live="polite"></p>
+      </article>
+      <article class="qz" data-i="7">
+        <p class="src">audio grid, count / list · answered by circuit-audio-7b</p>
+        <audio controls preload="none" src="bench/list.wav"></audio>
+        <p class="ask">How many different items does the speaker list?</p>
+        <div class="opts"><button type="button" data-k="1" title="">1</button><button type="button" data-k="2" title="">2</button><button type="button" data-k="3" title="">3</button><button type="button" data-k="4" title="">4</button><button type="button" data-k="5" title="">5</button></div>
+        <p class="verdict" aria-live="polite"></p>
+      </article>
+    </div>
   </section>
 
   <section id="api">
@@ -476,6 +574,22 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     }, 480);
   }
   $('sphere').addEventListener('click', askAgain);
+
+  // The quiz: answer, then see the code label and the model's pick with its probability.
+  const qz = [{"ref": "RESTORE", "model": "circuit-8b", "pick": "RESTORE", "p": 1.0}, {"ref": "1", "model": "circuit-8b", "pick": "1", "p": 1.0}, {"ref": "yes", "model": "circuit-8b", "pick": "yes", "p": 0.99}, {"ref": "no", "model": "circuit-8b", "pick": "no", "p": 1.0}, {"ref": "100.52", "model": "circuit-vl-4b", "pick": "100.52", "p": 1.0}, {"ref": "South", "model": "circuit-vl-4b", "pick": "South", "p": 0.92}, {"ref": "billing", "model": "circuit-audio-7b", "pick": "metering", "p": 0.78}, {"ref": "4", "model": "circuit-audio-7b", "pick": "4", "p": 0.51}];
+  let you = 0, models = 0, answered = 0;
+  document.querySelectorAll('.qz').forEach(card => {
+    const d = qz[+card.dataset.i];
+    card.querySelectorAll('.opts button').forEach(btn => btn.addEventListener('click', () => {
+      const k = btn.dataset.k;
+      card.querySelectorAll('.opts button').forEach(b => { b.disabled = true; if (b.dataset.k === d.ref) b.classList.add('right'); });
+      btn.classList.add('you');
+      const youRight = k === d.ref, modelRight = d.pick === d.ref;
+      you += youRight; models += modelRight; answered += 1;
+      card.querySelector('.verdict').innerHTML = (youRight ? '<b>You got it.</b> ' : '<b>Not this one.</b> ') + 'Label: <b>' + d.ref + '</b>. ' + d.model + ' said <b>' + d.pick + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '.' : ', and was wrong.');
+      $('qz-score').textContent = 'You ' + you + ' · models ' + models + ' · of ' + answered + ' answered' + (answered === qz.length ? (you > models ? '. You win.' : you === models ? '. A draw.' : '. The models win this round.') : '');
+    }));
+  });
   const show = new URLSearchParams(location.search).get('show');
   if (show !== null) { $('die').style.animation = 'none'; $('window').classList.remove('stir'); surfaceAnswer(answers[+show][0], answers[+show][1]); }
   if (location.search.includes('check=1')) {
