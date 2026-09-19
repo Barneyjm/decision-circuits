@@ -1,0 +1,306 @@
+[
+ {
+  "label": "the article's water-utility calls",
+  "model": "circuit-8b",
+  "kind": "text",
+  "state": "Hi, my water was shut off yesterday for repairs on my street, but it still hasn't been turned back on. Can someone come restore my service?",
+  "question": {
+   "type": "choice",
+   "instructions": "Extract the category of this customer service call to a water utility.",
+   "criteria": {
+    "RESTORE": "Water service was shut off (repairs, construction, non-payment) and needs to be turned back on",
+    "ABATEMENT": "A property, often vacant or abandoned, with a leak or running water that needs to be stopped",
+    "AMR (METERING)": "Water meter or automatic meter reading problems: blank display, wrong readings, replacement",
+    "BILLING": "Charges, payment, account balance, bill amount disputes, payment plans",
+    "BPCS (BROKEN PIPE)": "A broken or leaking water main or service pipe, water coming up through the street or ground",
+    "BTR/O (BAD TASTE & ODOR)": "Water tastes or smells bad: chlorine, rotten eggs, metallic, discolored",
+    "C/I - DEP (CAVE IN/DEPRESSION)": "A sinkhole, cave-in, or depression in the street or sidewalk",
+    "CEMENT": "Restoring pavement, sidewalk, or driveway concrete after utility work",
+    "CHOKED DRAIN": "A storm drain, inlet, or catch basin that is clogged and not draining",
+    "CLAIMS": "Compensation for damage caused by the utility's work or a water incident",
+    "COMPOST": "Compost bins, yard waste, or composting program questions"
+   }
+  },
+  "ref": {
+   "RESTORE": 1.0,
+   "ABATEMENT": 0.0,
+   "AMR (METERING)": 0.0,
+   "BILLING": 0.0,
+   "BPCS (BROKEN PIPE)": 0.0,
+   "BTR/O (BAD TASTE & ODOR)": 0.0,
+   "C/I - DEP (CAVE IN/DEPRESSION)": 0.0,
+   "CEMENT": 0.0,
+   "CHOKED DRAIN": 0.0,
+   "CLAIMS": 0.0,
+   "COMPOST": 0.0
+  },
+  "answer": {
+   "type": "choice",
+   "choice": "RESTORE",
+   "probabilities": {
+    "RESTORE": 0.9999456897635479,
+    "ABATEMENT": 2.166929595074375e-06,
+    "AMR (METERING)": 1.125251495367094e-06,
+    "BILLING": 2.1456884573809918e-07,
+    "BPCS (BROKEN PIPE)": 3.141969629109933e-05,
+    "BTR/O (BAD TASTE & ODOR)": 7.665901275187597e-07,
+    "C/I - DEP (CAVE IN/DEPRESSION)": 8.437555801985237e-06,
+    "CEMENT": 6.041475156063319e-06,
+    "CHOKED DRAIN": 1.2284537708798927e-06,
+    "CLAIMS": 2.789314292857044e-06,
+    "COMPOST": 1.2040107540617215e-07
+   },
+   "confidence": 0.9997233739871234
+  }
+ },
+ {
+  "label": "text grid, count / string",
+  "model": "circuit-8b",
+  "kind": "text",
+  "state": "t1 blender (not returned); t2 wireless headphones (not returned); t3 notebook set (is returned); t4 rain jacket (not returned)",
+  "question": {
+   "type": "score",
+   "instructions": "How many items are returned?",
+   "criteria": [
+    "0",
+    "1",
+    "2",
+    "3 or more"
+   ]
+  },
+  "ref": {
+   "0": 0.0,
+   "1": 1.0,
+   "2": 0.0,
+   "3": 0.0
+  },
+  "answer": {
+   "type": "score",
+   "score": 1.0000010125975807,
+   "legend": {
+    "0": "0",
+    "1": "1",
+    "2": "2",
+    "3": "3 or more"
+   },
+   "probabilities": {
+    "0": 2.198352436480978e-06,
+    "1": 0.9999958051518394,
+    "2": 7.820414311868312e-07,
+    "3": 1.2144542929936812e-06
+   },
+   "confidence": 0.9999564497622753
+  }
+ },
+ {
+  "label": "text grid, temporal / document",
+  "model": "circuit-8b",
+  "kind": "text",
+  "state": "The knowledge base has a new article on setting up two-factor authentication.\n\nIf you have feedback on the new dashboard, reply to this message.\n\nThe support call was on January 11, 2026. The payment was on 12 Mar 2026.\n\nWeather permitting, deliveries in the region continue on the usual schedule.\n\nWe appreciate your patience while we migrate to the new billing system.",
+  "question": {
+   "type": "noul",
+   "instructions": "Was the support call earlier than the payment?",
+   "criteria": {
+    "true": "the support call is strictly earlier",
+    "false": "the support call is later or the same day"
+   }
+  },
+  "ref": {
+   "yes": 1.0,
+   "no": 0.0
+  },
+  "answer": {
+   "type": "noul",
+   "noul": 0.994159851722036
+  }
+ },
+ {
+  "label": "text grid, consistency / thread",
+  "model": "circuit-8b",
+  "kind": "text",
+  "state": [
+   {
+    "role": "agent",
+    "text": "Thanks again for the quick turnaround last quarter; the team was impressed."
+   },
+   {
+    "role": "customer",
+    "text": "Sure, one thing first."
+   },
+   {
+    "role": "agent",
+    "text": "Hi, how can I help today?"
+   },
+   {
+    "role": "customer",
+    "text": "Customer says: \"The order status is processing.\" Our record: rain jacket, $88, ordered 2026-05-06, delivered 2026-05-13 to Austin, status processing."
+   },
+   {
+    "role": "agent",
+    "text": "Our warehouse team has expanded, so shipping estimates should improve."
+   }
+  ],
+  "question": {
+   "type": "noul",
+   "instructions": "Check the claim against the record: does it hold?",
+   "criteria": {
+    "true": "The claim matches the record",
+    "false": "The claim contradicts the record"
+   }
+  },
+  "ref": {
+   "yes": 1.0,
+   "no": 0.0
+  },
+  "answer": {
+   "type": "noul",
+   "noul": 0.9997586778613382
+  }
+ },
+ {
+  "label": "vision grid, extract / receipt",
+  "model": "circuit-vl-4b",
+  "kind": "image",
+  "media": "bench/receipt.png",
+  "text": null,
+  "question": {
+   "type": "choice",
+   "instructions": "What is the total on the receipt?",
+   "criteria": {
+    "100.52": null,
+    "90.47": null,
+    "Cannot tell": null,
+    "7.50": null,
+    "103.62": null
+   }
+  },
+  "ref": {
+   "100.52": 1.0,
+   "90.47": 0.0,
+   "Cannot tell": 0.0,
+   "7.50": 0.0,
+   "103.62": 0.0
+  },
+  "answer": {
+   "type": "choice",
+   "choice": "100.52",
+   "probabilities": {
+    "100.52": 0.9999999930030206,
+    "90.47": 4.813902476475194e-10,
+    "Cannot tell": 1.712900551881569e-09,
+    "7.50": 1.708498086476069e-09,
+    "103.62": 3.09419049792467e-09
+   },
+   "confidence": 0.9999999086530481
+  }
+ },
+ {
+  "label": "vision grid, compare / chart",
+  "model": "circuit-vl-4b",
+  "kind": "image",
+  "media": "bench/chart.png",
+  "text": null,
+  "question": {
+   "type": "choice",
+   "instructions": "Which bar is the shortest?",
+   "criteria": {
+    "North": null,
+    "Q1": null,
+    "2025": null,
+    "South": null,
+    "Q2": null
+   }
+  },
+  "ref": {
+   "North": 0.0,
+   "Q1": 0.0,
+   "2025": 0.0,
+   "South": 1.0,
+   "Q2": 0.0
+  },
+  "answer": {
+   "type": "choice",
+   "choice": "South",
+   "probabilities": {
+    "2025": 2.1464810234528304e-09,
+    "North": 2.300867995703439e-06,
+    "Q1": 0.0815978400406182,
+    "South": 0.9183733012911802,
+    "Q2": 2.6555653724885645e-05
+   },
+   "confidence": 0.8241679769397491
+  }
+ },
+ {
+  "label": "audio grid, classify / call",
+  "model": "circuit-audio-7b",
+  "kind": "audio",
+  "media": "bench/call.wav",
+  "question": {
+   "type": "choice",
+   "instructions": "Which kind of water-utility call is this?",
+   "criteria": {
+    "billing": null,
+    "metering": null,
+    "taste and odor": null,
+    "outage": null,
+    "leak": null
+   }
+  },
+  "ref": {
+   "billing": 1.0,
+   "metering": 0.0,
+   "taste and odor": 0.0,
+   "outage": 0.0,
+   "leak": 0.0
+  },
+  "answer": {
+   "type": "choice",
+   "choice": "metering",
+   "probabilities": {
+    "billing": 0.21592135691520684,
+    "metering": 0.7831307314132262,
+    "taste and odor": 0.0001495450124650841,
+    "outage": 0.00024373482784233535,
+    "leak": 0.0005546318312596283
+   },
+   "confidence": 0.6707440942398755
+  }
+ },
+ {
+  "label": "audio grid, count / list",
+  "model": "circuit-audio-7b",
+  "kind": "audio",
+  "media": "bench/list.wav",
+  "question": {
+   "type": "choice",
+   "instructions": "How many different items does the speaker list?",
+   "criteria": {
+    "1": null,
+    "2": null,
+    "3": null,
+    "4": null,
+    "5": null
+   }
+  },
+  "ref": {
+   "1": 0.0,
+   "2": 0.0,
+   "3": 0.0,
+   "4": 1.0,
+   "5": 0.0
+  },
+  "answer": {
+   "type": "choice",
+   "choice": "4",
+   "probabilities": {
+    "1": 0.003518941252916389,
+    "2": 0.0013310844465381523,
+    "3": 0.032406419317438526,
+    "4": 0.5122743386293986,
+    "5": 0.4504692163537083
+   },
+   "confidence": 0.47700954923338623
+  }
+ }
+]

@@ -316,14 +316,9 @@ We appreciate your patience while we migrate to the new billing system.</pre>
         <p class="verdict" aria-live="polite"></p>
       </article>
       <article class="qz" data-i="3">
-        <p class="src">text grid, negation / nested · answered by circuit-8b</p>
-        <pre class="state">{
- &quot;from&quot;: &quot;Elena&quot;,
- &quot;details&quot;: {
-  &quot;reply&quot;: &quot;I&#x27;ll take the discount, thanks.&quot;
- }
-}</pre>
-        <p class="ask">Is this a refusal of the discount?</p>
+        <p class="src">text grid, consistency / thread · answered by circuit-8b</p>
+        <div class="thread"><p><b>agent</b> Thanks again for the quick turnaround last quarter; the team was impressed.</p><p><b>customer</b> Sure, one thing first.</p><p><b>agent</b> Hi, how can I help today?</p><p><b>customer</b> Customer says: &quot;The order status is processing.&quot; Our record: rain jacket, $88, ordered 2026-05-06, delivered 2026-05-13 to Austin, status processing.</p><p><b>agent</b> Our warehouse team has expanded, so shipping estimates should improve.</p></div>
+        <p class="ask">Check the claim against the record: does it hold?</p>
         <div class="opts"><button type="button" data-k="yes" title="">Yes</button><button type="button" data-k="no" title="">No</button></div>
         <p class="verdict" aria-live="polite"></p>
       </article>
@@ -576,7 +571,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
   $('sphere').addEventListener('click', askAgain);
 
   // The quiz: answer, then see the code label and the model's pick with its probability.
-  const qz = [{"ref": "RESTORE", "model": "circuit-8b", "pick": "RESTORE", "p": 1.0}, {"ref": "1", "model": "circuit-8b", "pick": "1", "p": 1.0}, {"ref": "yes", "model": "circuit-8b", "pick": "yes", "p": 0.99}, {"ref": "no", "model": "circuit-8b", "pick": "no", "p": 1.0}, {"ref": "100.52", "model": "circuit-vl-4b", "pick": "100.52", "p": 1.0}, {"ref": "South", "model": "circuit-vl-4b", "pick": "South", "p": 0.92}, {"ref": "billing", "model": "circuit-audio-7b", "pick": "metering", "p": 0.78}, {"ref": "4", "model": "circuit-audio-7b", "pick": "4", "p": 0.51}];
+  const qz = [{"ref": "RESTORE", "model": "circuit-8b", "pick": "RESTORE", "p": 1.0}, {"ref": "1", "model": "circuit-8b", "pick": "1", "p": 1.0}, {"ref": "yes", "model": "circuit-8b", "pick": "yes", "p": 0.99}, {"ref": "yes", "model": "circuit-8b", "pick": "yes", "p": 1.0}, {"ref": "100.52", "model": "circuit-vl-4b", "pick": "100.52", "p": 1.0}, {"ref": "South", "model": "circuit-vl-4b", "pick": "South", "p": 0.92}, {"ref": "billing", "model": "circuit-audio-7b", "pick": "metering", "p": 0.78}, {"ref": "4", "model": "circuit-audio-7b", "pick": "4", "p": 0.51}];
   let you = 0, models = 0, answered = 0;
   document.querySelectorAll('.qz').forEach(card => {
     const d = qz[+card.dataset.i];
