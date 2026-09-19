@@ -44,7 +44,7 @@
   }
   * { box-sizing: border-box; }
   html { background: var(--black); }
-  body { margin: 0; background: var(--black); color: var(--ice); font-family: var(--sans); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  body { margin: 0; overflow-x: clip; background: var(--black); color: var(--ice); font-family: var(--sans); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
   a { color: var(--ice); text-decoration-color: var(--haze); text-underline-offset: 3px; }
   a:hover, a:focus-visible { text-decoration-color: var(--ice); }
   :focus-visible { outline: 2px solid var(--die-edge); outline-offset: 3px; }
@@ -59,7 +59,7 @@
 
   /* hero: the sphere and the claim */
   .hero { display: grid; grid-template-columns: minmax(240px, 380px) 1fr; gap: 24px 56px; align-items: center; margin-top: 56px; }
-  @media (max-width: 820px) { .hero { grid-template-columns: 1fr; justify-items: start; } .sphere { width: min(300px, 78vw); } }
+  @media (max-width: 820px) { .hero { grid-template-columns: 1fr; justify-items: start; margin-top: 36px; } .sphere-wrap { justify-items: start; max-width: none; } .sphere { width: min(260px, 70vw); max-width: none; } }
   .sphere { position: relative; width: 100%; max-width: 380px; aspect-ratio: 1; border-radius: 50%;
     background:
       radial-gradient(circle at 34% 26%, rgba(255,255,255,.22) 0, rgba(255,255,255,.06) 12%, rgba(255,255,255,0) 30%),
@@ -77,6 +77,13 @@
   .die .answer { font-family: var(--serif); font-size: clamp(15px, 2.2vw, 22px); line-height: 1.1; color: var(--ice); transition: filter .5s; }
   .die .answer small { display: block; font-family: var(--sans); font-size: 11px; color: rgba(238,243,255,.75); margin-top: 4px; }
   .hazy { filter: blur(3px); }
+  .sphere-wrap { display: grid; justify-items: center; gap: 10px; width: 100%; max-width: 380px; }
+  .sphere { cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; touch-action: manipulation; }
+  .sphere:focus-visible { outline: 2px solid var(--die-edge); outline-offset: 8px; }
+  .sphere.shaking { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+  .die.resurface { animation: surface 1.2s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes shake { 10%, 90% { transform: translate3d(-2px, 0, 0) rotate(-2deg); } 20%, 80% { transform: translate3d(4px, 0, 0) rotate(2deg); } 30%, 50%, 70% { transform: translate3d(-6px, 0, 0) rotate(-3deg); } 40%, 60% { transform: translate3d(6px, 0, 0) rotate(3deg); } }
+  .hint { font-size: 13px; color: var(--haze); margin: 0; }
   @keyframes surface { from { transform: translateY(38%) scale(.9); opacity: 0; filter: blur(6px); } to { transform: none; opacity: 1; filter: blur(0); } }
   @keyframes rise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
   .claim h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 5.4vw, 60px); line-height: 1.02; letter-spacing: -.015em; margin: 0 0 20px; text-wrap: balance; font-variation-settings: "opsz" 144; }
@@ -105,7 +112,7 @@
   .q { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 12px 0; border-top: 1px solid #16204A; }
   .q:first-of-type { border-top: 0; }
   .q label { font-size: 15px; }
-  .q .id { font-family: var(--mono); font-size: 12px; color: var(--haze); margin-left: 6px; }
+  .q .id { font-family: var(--mono); font-size: 12px; color: var(--haze); margin-left: 6px; overflow-wrap: anywhere; }
   .q output { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; min-width: 4ch; text-align: right; color: var(--mist); }
   .q input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--die-edge); }
   .opts { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; align-items: center; font-size: 14px; }
@@ -115,14 +122,14 @@
     border-radius: 18px; padding: 14px 18px 14px; margin-bottom: 12px; box-shadow: inset 0 8px 24px rgba(0,0,0,.55), inset 0 -2px 10px rgba(74,107,224,.2); }
   .gate .row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 14px; }
   .gate .name { font-family: var(--serif); font-size: 19px; }
-  .gate .expr { font-family: var(--mono); font-size: 12px; color: var(--mist); }
+  .gate .expr { font-family: var(--mono); font-size: 12px; color: var(--mist); overflow-wrap: anywhere; min-width: 0; }
   .gate .well { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin: 10px 0 6px; }
   .gate .val { font-family: var(--serif); font-size: 28px; line-height: 1.1; color: var(--ice); transition: filter .45s; font-variant-numeric: tabular-nums; }
   .gate .val small { display: block; font-family: var(--mono); font-size: 12px; color: var(--mist); margin-top: 4px; }
   .gate.hold .val { filter: blur(2px); color: #C9D4FF; }
   .badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--die-edge); color: var(--ice); white-space: nowrap; }
   .badge.hold { border-style: dashed; color: var(--mist); }
-  .trace { font-family: var(--mono); font-size: 12px; color: var(--mist); margin: 0; white-space: pre-wrap; }
+  .trace { font-family: var(--mono); font-size: 12px; color: var(--mist); margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .human { margin-top: 6px; font-size: 14px; color: var(--ice); }
   .human:empty { display: none; }
 
@@ -184,8 +191,11 @@
   </header>
 
   <div class="hero">
-    <div class="sphere" aria-hidden="true">
-      <div class="window"><div class="die"><div class="answer" id="hero-answer">Yes<small>redact · p 0.95</small></div></div></div>
+    <div class="sphere-wrap">
+      <div class="sphere" id="sphere" role="button" tabindex="0" aria-label="Ask again: surfaces the answer for another example case">
+        <div class="window"><div class="die" id="die"><div class="answer" id="hero-answer">Yes<small>redact · p 0.95</small></div></div></div>
+      </div>
+      <p class="hint" id="hint">tap the ball, or shake your phone</p>
     </div>
     <div class="claim">
       <h1>Don't ask the model to decide. Ask it questions. <em>Decide in code.</em></h1>
@@ -432,6 +442,58 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
 
   ['pii', 'business', 'angry', 'd0', 'd1', 'd2'].forEach(id => $(id).addEventListener('input', update));
   update();
+
+  // Ask again: the ball surfaces the answer for another example case, and the sliders follow.
+  const cases = [
+    [0.91, 0.10, 0.35, 0.72, 0.20, 0.08], // card number in a refund demand
+    [0.12, 0.05, 0.08, 0.15, 0.80, 0.05], // a plain bug report
+    [0.65, 0.20, 0.40, 0.50, 0.30, 0.20], // inside the band: escalate
+    [0.88, 0.85, 0.10, 0.60, 0.10, 0.30], // details about a business, not a person
+    [0.30, 0.10, 0.92, 0.40, 0.45, 0.15], // furious, no personal data
+    [0.97, 0.02, 0.75, 0.85, 0.05, 0.10], // angry and exposed
+    [0.05, 0.01, 0.02, 0.10, 0.10, 0.80], // small talk
+    [0.55, 0.40, 0.55, 0.34, 0.33, 0.33], // nobody can tell
+  ];
+  let caseIx = 0, busy = false;
+  function askAgain() {
+    if (busy) return; busy = true;
+    caseIx = (caseIx + 1 + Math.floor(Math.random() * (cases.length - 1))) % cases.length;
+    const sphere = $('sphere'), die = $('die');
+    sphere.classList.add('shaking');
+    die.classList.remove('resurface');
+    setTimeout(() => {
+      const v = cases[caseIx];
+      ['pii', 'business', 'angry', 'd0', 'd1', 'd2'].forEach((id, i) => { $(id).value = v[i]; });
+      update();
+      void die.offsetWidth; die.classList.add('resurface');
+      sphere.classList.remove('shaking');
+      busy = false;
+    }, 450);
+  }
+  $('sphere').addEventListener('click', askAgain);
+  $('sphere').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); askAgain(); } });
+  // Shake: motion events need a permission grant on iOS, asked on the first tap.
+  let last = 0;
+  function onMotion(e) {
+    const a = e.accelerationIncludingGravity; if (!a) return;
+    const g = Math.abs(a.x || 0) + Math.abs(a.y || 0) + Math.abs(a.z || 0);
+    const now = Date.now();
+    if (g > 32 && now - last > 1200) { last = now; askAgain(); }
+  }
+  function armShake() {
+    if (typeof DeviceMotionEvent === 'undefined') return;
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+      DeviceMotionEvent.requestPermission().then(state => { if (state === 'granted') window.addEventListener('devicemotion', onMotion); }).catch(() => {});
+    } else {
+      window.addEventListener('devicemotion', onMotion);
+    }
+  }
+  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    $('sphere').addEventListener('click', armShake, { once: true });
+  } else {
+    armShake();
+  }
+  if (!('ontouchstart' in window)) $('hint').textContent = 'tap the ball for another case';
 
   $('keyform').addEventListener('submit', async e => {
     e.preventDefault();
