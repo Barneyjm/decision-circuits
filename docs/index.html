@@ -73,14 +73,16 @@
     display: grid; place-items: center; overflow: hidden; }
   .die { width: 72%; aspect-ratio: 1 / .9; clip-path: polygon(50% 4%, 97% 96%, 3% 96%);
     background: linear-gradient(180deg, var(--die-edge), var(--die) 60%, #1A37A6); display: grid; place-items: center;
-    padding: 34% 14% 10%; text-align: center; animation: surface 2.2s cubic-bezier(.16,.6,.2,1) both; will-change: transform, filter, opacity; }
+    padding: 0; text-align: center; animation: surface 2.2s cubic-bezier(.16,.6,.2,1) both; will-change: transform, filter, opacity; position: relative; }
   .window::after { content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
     background: radial-gradient(circle at 50% 60%, rgba(4,10,40,.85) 0, rgba(4,10,40,.55) 45%, rgba(4,10,40,0) 75%);
     opacity: 0; }
   .window.stir::after { animation: ink 2.2s cubic-bezier(.16,.6,.2,1) both; }
   .die.sink { animation: sink .45s ease-in both; }
   .die.rise { animation: surface 2.2s cubic-bezier(.16,.6,.2,1) both; }
-  .die .answer { font-family: var(--serif); font-size: clamp(14px, 2vw, 19px); line-height: 1.1; color: var(--ice); }
+  /* the text sits in the lower two thirds of the triangle, where it is wide: box top at 48% of the height, 52% of the width */
+  .die .answer { position: absolute; left: 24%; right: 24%; top: 40%; bottom: 9%; display: grid; align-content: end; font-family: var(--serif); font-size: clamp(12px, 1.7vw, 17px); line-height: 1.08; color: var(--ice); text-wrap: balance; overflow-wrap: anywhere; }
+  .die .answer.long { font-size: clamp(11px, 1.45vw, 14.5px); }
   .die .answer small { display: block; font-family: var(--sans); font-size: 11px; color: rgba(238,243,255,.75); margin-top: 4px; }
 
   .sphere-wrap { display: grid; justify-items: center; gap: 10px; width: 100%; max-width: 380px; }
@@ -456,7 +458,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
   ];
   let lastIx = -1, busy = false;
   function surfaceAnswer(text, p) {
-    const a = $('hero-answer'); a.innerHTML = ''; a.append(text);
+    const a = $('hero-answer'); a.innerHTML = ''; a.append(text); a.classList.toggle('long', text.length > 14);
     const s = document.createElement('small'); s.textContent = 'p ' + f2(p); a.append(s);
   }
   function askAgain() {
@@ -474,6 +476,29 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     }, 480);
   }
   $('sphere').addEventListener('click', askAgain);
+  const show = new URLSearchParams(location.search).get('show');
+  if (show !== null) { $('die').style.animation = 'none'; $('window').classList.remove('stir'); surfaceAnswer(answers[+show][0], answers[+show][1]); }
+  if (location.search.includes('check=1')) {
+    const die = $('die'), win = $('window'); die.style.animation = 'none'; win.classList.remove('stir');
+    const report = [];
+    answers.forEach(([t, p]) => {
+      surfaceAnswer(t, p);
+      const d = die.getBoundingClientRect(), a = $('hero-answer').getBoundingClientRect();
+      const fits = [...$('hero-answer').childNodes].every(() => true);
+      // the triangle is polygon(50% 4%, 97% 96%, 3% 96%): at a given y, the half-width is proportional to the depth below the apex
+      const lines = [];
+      const range = document.createRange(); range.selectNodeContents($('hero-answer'));
+      for (const r of range.getClientRects()) {
+        const depth = (r.top - d.top - 0.04 * d.height) / (0.92 * d.height);
+        const half = 0.47 * d.width * depth;
+        const cx = d.left + d.width / 2;
+        const inside = r.left >= cx - half - 0.5 && r.right <= cx + half + 0.5 && r.bottom <= d.top + 0.96 * d.height + 0.5;
+        lines.push(inside ? 'ok' : 'CLIPPED');
+      }
+      report.push(t + ': ' + lines.join(' '));
+    });
+    document.title = 'CHECK ' + report.join(' | ');
+  }
   $('sphere').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); askAgain(); } });
   // Shake: motion events need a permission grant on iOS, asked on the first tap.
   let last = 0;
