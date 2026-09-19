@@ -143,6 +143,20 @@
   .facts p { font-size: 14.5px; color: var(--mist); margin: 0; }
   @media (max-width: 760px) { .facts { grid-template-columns: 1fr; } .facts li { border-bottom: 1px solid var(--line); } }
 
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
+  @media (max-width: 900px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 460px) { .cards { grid-template-columns: 1fr; } }
+  .card { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 22px 16px 18px; border-radius: 18px;
+    background: radial-gradient(120% 90% at 50% 0%, #17389C 0, var(--window) 55%, var(--window-deep) 100%);
+    box-shadow: inset 0 8px 24px rgba(0,0,0,.55), inset 0 -2px 10px rgba(74,107,224,.2); }
+  .card .ball { display: block; height: 96px; width: auto; margin-bottom: 10px; filter: drop-shadow(0 10px 16px rgba(0,0,0,.6)); }
+  .card h4 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0; }
+  .card h4 a { text-decoration: none; }
+  .card .base { font-size: 13px; color: var(--mist); margin: 4px 0 12px; }
+  .card dl { display: grid; grid-template-columns: auto auto; gap: 4px 12px; margin: 0 0 12px; width: 100%; font-size: 13.5px; text-align: left; border-top: 1px solid rgba(159,176,224,.25); border-bottom: 1px solid rgba(159,176,224,.25); padding: 8px 0; }
+  .card dt { color: var(--mist); }
+  .card dd { margin: 0; font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+  .card .blurb { font-size: 14px; color: var(--mist); margin: 0; }
   figure { margin: 18px 0 0; }
   figure img { display: block; width: 100%; max-width: 820px; height: auto; border-radius: 12px; background: #fff; }
   figcaption { font-size: 13.5px; color: var(--mist); margin-top: 8px; }
@@ -184,13 +198,36 @@
     <h2>The family</h2>
     <h3>One recipe, one head, every modality the base has an encoder for</h3>
     <p>Each circuit model is a LoRA on the language model plus the same pointer readout head, trained on code-labeled and CC-licensed data with soft targets so calibration is learned. What changes between them is the base and what the state can carry. All of them serve the same <code>POST /v1/systemone</code> contract.</p>
-    <div class="tbl"><table>
-      <tr><th>model</th><th>base</th><th>state</th><th>status</th><th>where it stands</th></tr>
-      <tr><td><b>circuit-1.7b</b></td><td>Qwen3-1.7B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam and toxicity, 4 points behind on 151-way intents, best calibration on the board; 175 ms per question on a laptop</td></tr>
-      <tr><td><b>circuit-8b</b> <span style="color:var(--mist)">, the 8-ball</span></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam, toxicity, and 151-way intents; 0.84 agreement with Jev on the production questions, level with Nimble-9B at half the calibration error</td></tr>
-      <tr><td><b><a href="https://huggingface.co/jbarney/circuit-vl-4b">circuit-vl-4b</a></b></td><td>Qwen3-VL-4B</td><td>images, multiple images, video frames, plus text</td><td class="n">released</td><td>98.3% / ECE 0.018 on the rendered vision grid against the raw base's 96.0% / 0.041; no option cap; seven minutes of training</td></tr>
-      <tr><td><b><a href="https://huggingface.co/jbarney/circuit-audio-7b">circuit-audio-7b</a></b></td><td>Qwen2-Audio-7B</td><td>recorded speech and sound, plus text</td><td class="n">released</td><td>93.5% / ECE 0.072 on the synthesized audio grid against the raw base's 72.0% / 0.188; counts, negations, and comparisons the base gets wrong; trained on a laptop in 35 minutes</td></tr>
-    </table></div>
+    <div class="cards">
+      <article class="card">
+        <svg class="ball" width="76" height="76" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="g-1.7b" cx="36%" cy="28%" r="70%"><stop offset="0" stop-color="#2A2A30"/><stop offset=".55" stop-color="#0A0A0C"/><stop offset="1" stop-color="#000"/></radialGradient><radialGradient id="w-1.7b" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#1B3FA8"/><stop offset=".6" stop-color="#0B1F5E"/><stop offset="1" stop-color="#061340"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#g-1.7b)"/><ellipse cx="36" cy="22" rx="14" ry="7" fill="#fff" opacity=".18" transform="rotate(-20 36 22)"/><circle cx="50" cy="50" r="22" fill="url(#w-1.7b)" stroke="#000" stroke-width="3"/><path d="M50 40 L60 56 L40 56 Z" fill="#2447C9"/></svg>
+        <h4><a href="https://huggingface.co/jbarney/circuit-1.7b">circuit-1.7b</a></h4>
+        <p class="base">Qwen3-1.7B-Base · text, JSON, chat threads</p>
+        <dl><dt>SMS spam</dt><dd>98% / 0.02</dd><dt>151-way intents</dt><dd>86% / 0.06</dd><dt>per question</dt><dd>175 ms</dd></dl>
+        <p class="blurb">The small one. Beats Jev on spam and toxicity, best calibration on the board, runs anywhere.</p>
+      </article>
+      <article class="card">
+        <svg class="ball" width="96" height="96" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="g-8b" cx="36%" cy="28%" r="70%"><stop offset="0" stop-color="#2A2A30"/><stop offset=".55" stop-color="#0A0A0C"/><stop offset="1" stop-color="#000"/></radialGradient><radialGradient id="w-8b" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#1B3FA8"/><stop offset=".6" stop-color="#0B1F5E"/><stop offset="1" stop-color="#061340"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#g-8b)"/><ellipse cx="36" cy="22" rx="14" ry="7" fill="#fff" opacity=".18" transform="rotate(-20 36 22)"/><circle cx="50" cy="50" r="22" fill="url(#w-8b)" stroke="#000" stroke-width="3"/><text x="50" y="56" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-size="22" fill="#EEF3FF">8</text></svg>
+        <h4><a href="https://huggingface.co/jbarney/circuit-8b">circuit-8b</a></h4>
+        <p class="base">Qwen3-8B-Base · text, JSON, chat threads</p>
+        <dl><dt>151-way intents</dt><dd>95% / 0.03</dd><dt>agreement with Jev</dt><dd>0.84</dd><dt>per question</dt><dd>178 ms</dd></dl>
+        <p class="blurb">The 8-ball. Beats Jev on three of four cold evals and ties Nimble-9B on real production questions at half the calibration error.</p>
+      </article>
+      <article class="card">
+        <svg class="ball" width="96" height="96" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="g-vision" cx="36%" cy="28%" r="70%"><stop offset="0" stop-color="#2A2A30"/><stop offset=".55" stop-color="#0A0A0C"/><stop offset="1" stop-color="#000"/></radialGradient><radialGradient id="w-vision" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#1B3FA8"/><stop offset=".6" stop-color="#0B1F5E"/><stop offset="1" stop-color="#061340"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#g-vision)"/><ellipse cx="36" cy="22" rx="14" ry="7" fill="#fff" opacity=".18" transform="rotate(-20 36 22)"/><circle cx="50" cy="50" r="22" fill="url(#w-vision)" stroke="#000" stroke-width="3"/><path d="M50 40 L60 56 L40 56 Z" fill="#2447C9"/><ellipse cx="38" cy="30" rx="8" ry="9" fill="#EEF3FF"/><ellipse cx="62" cy="30" rx="8" ry="9" fill="#EEF3FF"/><circle cx="40" cy="31" r="3.6" fill="#000"/><circle cx="64" cy="31" r="3.6" fill="#000"/><circle cx="41.3" cy="29.8" r="1.1" fill="#EEF3FF"/><circle cx="65.3" cy="29.8" r="1.1" fill="#EEF3FF"/></svg>
+        <h4><a href="https://huggingface.co/jbarney/circuit-vl-4b">circuit-vl-4b</a></h4>
+        <p class="base">Qwen3-VL-4B · images, video frames, plus text</p>
+        <dl><dt>vision grid</dt><dd>98.3% / 0.018</dd><dt>raw base</dt><dd>96.0% / 0.041</dd><dt>per image</dt><dd>90 ms</dd></dl>
+        <p class="blurb">Reads receipts, charts, tables, and forms. No cap on options, half the base's calibration error, seven minutes of training.</p>
+      </article>
+      <article class="card">
+        <svg class="ball" width="96" height="96" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="g-audio" cx="36%" cy="28%" r="70%"><stop offset="0" stop-color="#2A2A30"/><stop offset=".55" stop-color="#0A0A0C"/><stop offset="1" stop-color="#000"/></radialGradient><radialGradient id="w-audio" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#1B3FA8"/><stop offset=".6" stop-color="#0B1F5E"/><stop offset="1" stop-color="#061340"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#g-audio)"/><ellipse cx="36" cy="22" rx="14" ry="7" fill="#fff" opacity=".18" transform="rotate(-20 36 22)"/><circle cx="50" cy="50" r="22" fill="url(#w-audio)" stroke="#000" stroke-width="3"/><path d="M50 40 L60 56 L40 56 Z" fill="#2447C9"/><path d="M18 52 C18 22 82 22 82 52" fill="none" stroke="#EEF3FF" stroke-width="5" stroke-linecap="round"/><rect x="10" y="48" width="14" height="22" rx="6" fill="#2447C9" stroke="#EEF3FF" stroke-width="3"/><rect x="76" y="48" width="14" height="22" rx="6" fill="#2447C9" stroke="#EEF3FF" stroke-width="3"/></svg>
+        <h4><a href="https://huggingface.co/jbarney/circuit-audio-7b">circuit-audio-7b</a></h4>
+        <p class="base">Qwen2-Audio-7B · speech and sound, plus text</p>
+        <dl><dt>audio grid</dt><dd>93.5% / 0.072</dd><dt>raw base</dt><dd>72.0% / 0.188</dd><dt>per clip</dt><dd>1.2 s</dd></dl>
+        <p class="blurb">Counts, negations, and comparisons the base gets wrong. Least overconfident of the family on undecidable clips. Trained on a laptop.</p>
+      </article>
+    </div>
     <ul class="facts" style="margin-top:18px">
       <li><h4>Same head everywhere</h4><p>A query from the decide token, a key from each option's closing delimiter, softmax. Order-invariant, no cap on options, and it doesn't know or care what encoder produced the hidden state.</p></li>
       <li><h4>Same data idea everywhere</h4><p>A grid of judgment operations times state formats, labels computed at generation time. For images that's rendered receipts and charts; for audio it's synthesized calls with known content.</p></li>
