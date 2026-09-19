@@ -127,7 +127,7 @@
   <header class="top">
     <div>decision-circuits · v0.3</div>
     <nav>
-      <a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a>
+      <a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a><a href="#family">Family</a>
       <a href="https://github.com/Barneyjm/decision-circuits">GitHub</a><a href="https://pypi.org/project/decision-circuits/">PyPI</a>
     </nav>
   </header>
@@ -257,6 +257,25 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
       <div class="card"><h4>Yours</h4><p>A backend is one method: <code>answer(state, questions)</code>. Wrap a cache, inject code-owned facts, chain fallbacks.</p></div>
     </div>
     <p class="note" style="margin-top:14px">No S1 model yet? Chat models can stand in through logprobs (OpenAI-compatible) or tool use (Claude), with the caveat that a chat model's stated confidence isn't calibrated the way an S1 model's output is.</p>
+  </section>
+
+
+  <section id="family">
+    <h2>The family</h2>
+    <h3>One recipe, one head, every modality the base has an encoder for</h3>
+    <p>Each circuit model is a LoRA on the language model plus the same pointer readout head, trained on code-labeled and CC-licensed data with soft targets so calibration is learned. What changes between them is the base and what the state can carry. All of them serve the same <code>POST /v1/systemone</code> contract.</p>
+    <div class="tbl"><table>
+      <tr><th>model</th><th>base</th><th>state</th><th>status</th><th>where it stands</th></tr>
+      <tr><td><b>circuit-1.7b</b></td><td>Qwen3-1.7B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam and toxicity, 4 points behind on 151-way intents, best calibration on the board; 175 ms per question on a laptop</td></tr>
+      <tr><td><b>circuit-8b</b></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">training</td><td>validation ECE 0.023 at the last checkpoint; the production-question benchmark is what it's for</td></tr>
+      <tr><td><b>circuit-vl-4b</b></td><td>Qwen3-VL-4B</td><td>images, multiple images, video frames, plus text</td><td class="n">training</td><td>raw base already reads receipts, charts, and forms at 97% on our rendered grid; the fine-tune adds calibration and removes the 26-option cap</td></tr>
+      <tr><td><b>circuit-audio</b></td><td>Qwen2-Audio-7B</td><td>recorded speech and sound, plus text</td><td class="n">planned</td><td>raw base classifies synthesized support calls correctly and hears anger and urgency; the negative checker is its weak spot</td></tr>
+    </table></div>
+    <div class="grid3" style="margin-top:14px">
+      <div class="card"><h4>Same head everywhere</h4><p>A query from the decide token, a key from each option's closing delimiter, softmax. Order-invariant, no cap on options, and it doesn't know or care what encoder produced the hidden state.</p></div>
+      <div class="card"><h4>Same data idea everywhere</h4><p>A grid of judgment operations times state formats, labels computed at generation time. For images that's rendered receipts and charts; for audio it's synthesized calls with known content.</p></div>
+      <div class="card"><h4>Same test everywhere</h4><p>Hold out a whole operation or a whole format and measure transfer. So far: layouts transfer, new kinds of judgment have to be in the data, and nobody is calibrated on undecidable inputs yet.</p></div>
+    </div>
   </section>
 
   <footer>
