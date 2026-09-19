@@ -18,131 +18,167 @@
 <meta name="twitter:description" content="Don't ask the model to decide. Ask it questions. Decide in code.">
 <meta name="twitter:image" content="https://decisioncircuits.com/og.png">
 <link rel="canonical" href="https://decisioncircuits.com/">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔀</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23000%22/><circle cx=%2250%22 cy=%2250%22 r=%2222%22 fill=%22%230B1F5E%22/><path d=%22M50 36 L63 58 L37 58 Z%22 fill=%22%232447C9%22/></svg>">
+<meta name="theme-color" content="#000000">
 <title>Decision Circuits</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root {
-    --ground: #12304F; --panel: #1A3D63; --panel-2: #214A75; --line: #3B658F;
-    --ink: #EAF1F7; --muted: #A9BCD0; --accent: #E8A64F; --accent-ink: #12304F;
-    --yes: #79D39A; --no: #9FB3C8; --hold: #F2C94C; --block: #EF8A79;
-    --code-bg: #0D243D;
+    color-scheme: dark;
+    --black: #000000;
+    --sphere: #0A0A0C;
+    --window: #0B1F5E;
+    --window-deep: #061340;
+    --liquid: #10307F;
+    --die: #2447C9;
+    --die-edge: #4A6BE0;
+    --ice: #EEF3FF;
+    --mist: #9FB0E0;
+    --haze: #5F73B8;
+    --line: #1B3A8C;
+    --code-bg: #05102E;
+    --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: "Instrument Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-    --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
-  }
-  :root:not([data-theme="dark"]) { color-scheme: light; }
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) {
-      --ground: #EEF2F6; --panel: #FFFFFF; --panel-2: #F4F7FA; --line: #C9D5E1;
-      --ink: #14263A; --muted: #556B82; --accent: #B86A1F; --accent-ink: #FFFFFF;
-      --yes: #2E8B57; --no: #6B7F94; --hold: #B8860B; --block: #C0392B;
-      --code-bg: #14263A;
-    }
-  }
-  :root[data-theme="light"] {
-    --ground: #EEF2F6; --panel: #FFFFFF; --panel-2: #F4F7FA; --line: #C9D5E1;
-    --ink: #14263A; --muted: #556B82; --accent: #B86A1F; --accent-ink: #FFFFFF;
-    --yes: #2E8B57; --no: #6B7F94; --hold: #B8860B; --block: #C0392B;
-    --code-bg: #14263A;
-  }
-  :root[data-theme="dark"] {
-    --ground: #12304F; --panel: #1A3D63; --panel-2: #214A75; --line: #3B658F;
-    --ink: #EAF1F7; --muted: #A9BCD0; --accent: #E8A64F; --accent-ink: #12304F;
-    --yes: #79D39A; --no: #9FB3C8; --hold: #F2C94C; --block: #EF8A79;
-    --code-bg: #0D243D;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.55;
-    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-    background-size: 32px 32px; background-position: -1px -1px; }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-  .wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; }
-  header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 24px; font-family: var(--mono); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-  header.top nav { display: flex; flex-wrap: wrap; gap: 18px; }
-  header.top a { color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; }
-  header.top a:hover, header.top a:focus-visible { color: var(--ink); border-bottom-color: var(--accent); outline: none; }
-  h1 { font-family: var(--mono); font-weight: 600; font-size: clamp(30px, 5vw, 52px); line-height: 1.08; margin: 40px 0 14px; text-wrap: balance; letter-spacing: -.01em; }
-  h1 em { font-style: normal; color: var(--accent); }
-  .lede { font-size: clamp(17px, 2.1vw, 20px); max-width: 62ch; color: var(--ink); margin: 0 0 26px; }
-  .lede code, p code, li code, td code { font-family: var(--mono); font-size: .92em; background: var(--panel-2); padding: 1px 6px; border-radius: 4px; }
-  .install { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; font-family: var(--mono); font-size: 14px; background: var(--code-bg); color: #EAF1F7; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--line); }
-  .install b { color: var(--accent); font-weight: 500; }
-  h2 { font-family: var(--mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 56px 0 10px; }
-  h3 { font-size: 22px; margin: 0 0 10px; text-wrap: balance; }
+  html { background: var(--black); }
+  body { margin: 0; background: var(--black); color: var(--ice); font-family: var(--sans); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: var(--ice); text-decoration-color: var(--haze); text-underline-offset: 3px; }
+  a:hover, a:focus-visible { text-decoration-color: var(--ice); }
+  :focus-visible { outline: 2px solid var(--die-edge); outline-offset: 3px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; padding-block: 24px 72px; }
+
+  header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px 24px; font-size: 14px; color: var(--mist); }
+  header.top .brand { font-family: var(--serif); font-size: 18px; color: var(--ice); }
+  header.top .brand small { font-family: var(--sans); font-size: 13px; color: var(--mist); margin-left: 10px; }
+  header.top nav { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+  header.top a { color: var(--mist); text-decoration: none; }
+  header.top a:hover, header.top a:focus-visible { color: var(--ice); }
+
+  /* hero: the sphere and the claim */
+  .hero { display: grid; grid-template-columns: minmax(240px, 380px) 1fr; gap: 24px 56px; align-items: center; margin-top: 56px; }
+  @media (max-width: 820px) { .hero { grid-template-columns: 1fr; justify-items: start; } .sphere { width: min(300px, 78vw); } }
+  .sphere { position: relative; width: 100%; max-width: 380px; aspect-ratio: 1; border-radius: 50%;
+    background:
+      radial-gradient(circle at 34% 26%, rgba(255,255,255,.22) 0, rgba(255,255,255,.06) 12%, rgba(255,255,255,0) 30%),
+      radial-gradient(circle at 50% 50%, #1A1A1F 0, #0A0A0C 62%, #000 100%);
+    box-shadow: inset -22px -30px 60px rgba(0,0,0,.9), inset 10px 14px 40px rgba(255,255,255,.05), 0 40px 80px -30px rgba(36,71,201,.35); }
+  .sphere::after { content: ""; position: absolute; left: 20%; top: 9%; width: 34%; height: 18%; border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,.28), rgba(255,255,255,0) 70%); transform: rotate(-22deg); }
+  .window { position: absolute; left: 25%; top: 25%; width: 50%; height: 50%; border-radius: 50%;
+    background: radial-gradient(circle at 50% 42%, #1B3FA8 0, var(--window) 46%, var(--window-deep) 100%);
+    box-shadow: inset 0 10px 30px rgba(0,0,0,.7), inset 0 -4px 14px rgba(74,107,224,.25), 0 0 0 6px rgba(0,0,0,.6);
+    display: grid; place-items: center; overflow: hidden; }
+  .die { width: 72%; aspect-ratio: 1 / .9; clip-path: polygon(50% 4%, 97% 96%, 3% 96%);
+    background: linear-gradient(180deg, var(--die-edge), var(--die) 60%, #1A37A6); display: grid; place-items: center;
+    padding: 34% 14% 10%; text-align: center; animation: surface 1.6s cubic-bezier(.2,.7,.2,1) both; }
+  .die .answer { font-family: var(--serif); font-size: clamp(15px, 2.2vw, 22px); line-height: 1.1; color: var(--ice); transition: filter .5s; }
+  .die .answer small { display: block; font-family: var(--sans); font-size: 11px; color: rgba(238,243,255,.75); margin-top: 4px; }
+  .hazy { filter: blur(3px); }
+  @keyframes surface { from { transform: translateY(38%) scale(.9); opacity: 0; filter: blur(6px); } to { transform: none; opacity: 1; filter: blur(0); } }
+  @keyframes rise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .claim h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 5.4vw, 60px); line-height: 1.02; letter-spacing: -.015em; margin: 0 0 20px; text-wrap: balance; font-variation-settings: "opsz" 144; }
+  .claim h1 em { font-style: italic; }
+  .lede { font-size: clamp(17px, 2vw, 19px); max-width: 58ch; color: var(--mist); margin: 0 0 24px; }
+  .lede b { color: var(--ice); font-weight: 500; }
+  .install { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; font-family: var(--mono); font-size: 14px; background: var(--code-bg); color: var(--ice); padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line); }
+  .install b { font-weight: 500; color: #B9C8FF; }
+  .install .c { color: var(--haze); }
+
+  h2 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 18px; color: var(--mist); margin: 88px 0 6px; }
+  h3 { font-family: var(--serif); font-weight: 400; font-size: clamp(24px, 3vw, 32px); line-height: 1.15; letter-spacing: -.01em; margin: 0 0 14px; text-wrap: balance; }
   p { max-width: 68ch; }
   section p { margin: 0 0 14px; }
-  /* live circuit */
-  .board { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 24px; }
-  .board-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; margin-bottom: 14px; }
-  .board-head h3 { margin: 0; }
-  .board-head span { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .cols { display: grid; grid-template-columns: 1.1fr 1.3fr; gap: 20px; }
-  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
-  .col h4 { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
-  .q { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
-  .q:first-of-type { border-top: 0; }
-  .q label { font-size: 14px; }
-  .q .id { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .q output { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; min-width: 4ch; text-align: right; }
-  .q input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
-  .opts { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; align-items: center; font-size: 13px; }
-  .opts input[type=range] { grid-column: auto; }
-  .gate { background: var(--panel-2); border: 1px solid var(--line); border-left: 4px solid var(--no); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
-  .gate.yes { border-left-color: var(--yes); } .gate.block { border-left-color: var(--block); } .gate.hold { border-left-color: var(--hold); }
-  .gate .row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 14px; }
-  .gate .name { font-family: var(--mono); font-weight: 600; font-size: 14px; }
-  .gate .expr { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .gate .val { font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; }
-  .badge { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
-  .badge.yes { color: var(--yes); } .badge.no { color: var(--no); } .badge.hold { color: var(--hold); } .badge.block { color: var(--block); }
-  .trace { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 6px 0 0; white-space: pre-wrap; }
-  .human { margin-top: 6px; font-size: 13px; color: var(--hold); }
+  p code, li code, td code, .note code { font-family: var(--mono); font-size: .9em; background: var(--code-bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 4px; }
 
-  /* code */
-  pre { background: var(--code-bg); color: #EAF1F7; font-family: var(--mono); font-size: 13.5px; line-height: 1.5; padding: 16px 18px; border-radius: 8px; border: 1px solid var(--line); overflow-x: auto; margin: 0 0 14px; }
-  pre .c { color: #8FB3D9; } pre .k { color: #E8A64F; } pre .s { color: #A6E3B8; }
-  /* tables */
-  .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
-  td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* the live circuit */
+  .board { margin-top: 72px; }
+  .board-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; margin-bottom: 18px; }
+  .board-head h3 { margin: 0; }
+  .board-head span { font-size: 14px; color: var(--mist); }
+  .cols { display: grid; grid-template-columns: 1fr 1.2fr; gap: 28px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .col h4 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 17px; color: var(--mist); margin: 0 0 8px; }
+  .q { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 12px 0; border-top: 1px solid #16204A; }
+  .q:first-of-type { border-top: 0; }
+  .q label { font-size: 15px; }
+  .q .id { font-family: var(--mono); font-size: 12px; color: var(--haze); margin-left: 6px; }
+  .q output { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; min-width: 4ch; text-align: right; color: var(--mist); }
+  .q input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--die-edge); }
+  .opts { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; align-items: center; font-size: 14px; }
+  .opts input[type=range] { grid-column: auto; }
+
+  .gate { position: relative; background: radial-gradient(120% 90% at 50% 0%, #17389C 0, var(--window) 55%, var(--window-deep) 100%);
+    border-radius: 18px; padding: 14px 18px 14px; margin-bottom: 12px; box-shadow: inset 0 8px 24px rgba(0,0,0,.55), inset 0 -2px 10px rgba(74,107,224,.2); }
+  .gate .row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 14px; }
+  .gate .name { font-family: var(--serif); font-size: 19px; }
+  .gate .expr { font-family: var(--mono); font-size: 12px; color: var(--mist); }
+  .gate .well { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin: 10px 0 6px; }
+  .gate .val { font-family: var(--serif); font-size: 28px; line-height: 1.1; color: var(--ice); transition: filter .45s; font-variant-numeric: tabular-nums; }
+  .gate .val small { display: block; font-family: var(--mono); font-size: 12px; color: var(--mist); margin-top: 4px; }
+  .gate.hold .val { filter: blur(2px); color: #C9D4FF; }
+  .badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--die-edge); color: var(--ice); white-space: nowrap; }
+  .badge.hold { border-style: dashed; color: var(--mist); }
+  .trace { font-family: var(--mono); font-size: 12px; color: var(--mist); margin: 0; white-space: pre-wrap; }
+  .human { margin-top: 6px; font-size: 14px; color: var(--ice); }
+  .human:empty { display: none; }
+
+  pre { background: var(--code-bg); color: var(--ice); font-family: var(--mono); font-size: 13.5px; line-height: 1.55; padding: 18px 20px; border-radius: 12px; border: 1px solid var(--line); overflow-x: auto; margin: 0 0 16px; }
+  pre .c { color: var(--haze); } pre .k { color: #B9C8FF; } pre .s { color: #AFC6FF; }
+
+  .tbl { overflow-x: auto; border-radius: 12px; background: linear-gradient(180deg, #0E2A72, var(--window-deep)); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid rgba(159,176,224,.16); vertical-align: top; }
+  th { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 15px; color: var(--mist); }
+  td.n { font-family: var(--mono); font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   tr:last-child td { border-bottom: 0; }
-  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  @media (max-width: 760px) { .grid3 { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
-  .card h4 { margin: 0 0 8px; font-family: var(--mono); font-size: 14px; }
-  .card p { font-size: 14px; color: var(--muted); margin: 0; }
+
+  .facts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 32px; border-top: 1px solid var(--line); }
+  .facts li { padding: 16px 0 18px; border-bottom: 1px solid var(--line); }
+  .facts h4 { font-family: var(--serif); font-weight: 400; font-size: 20px; margin: 0 0 6px; }
+  .facts h4 a { text-decoration: none; }
+  .facts p { font-size: 14.5px; color: var(--mist); margin: 0; }
+  @media (max-width: 760px) { .facts { grid-template-columns: 1fr; } .facts li { border-bottom: 1px solid var(--line); } }
+
   figure { margin: 18px 0 0; }
-  figure img { display: block; width: 100%; max-width: 820px; height: auto; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
-  figcaption { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .note { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; color: var(--muted); font-size: 15px; }
-  footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 22px; }
-  footer a { color: var(--muted); }
-  a { color: var(--accent); }
+  figure img { display: block; width: 100%; max-width: 820px; height: auto; border-radius: 12px; background: #fff; }
+  figcaption { font-size: 13.5px; color: var(--mist); margin-top: 8px; }
+  .note { border-left: 2px solid var(--die-edge); padding: 2px 0 2px 16px; color: var(--mist); font-size: 15px; }
+  footer { margin-top: 88px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--mist); display: flex; flex-wrap: wrap; gap: 8px 22px; }
+  footer a { color: var(--mist); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <div>decision-circuits · v0.3</div>
+    <div class="brand">Decision Circuits<small>decision-circuits 0.3</small></div>
     <nav>
       <a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a><a href="#family">Family</a>
       <a href="https://github.com/Barneyjm/decision-circuits">GitHub</a><a href="https://pypi.org/project/decision-circuits/">PyPI</a>
     </nav>
   </header>
 
-  <h1>Don't ask the model to decide.<br>Ask it questions. <em>Decide in code.</em></h1>
-  <p class="lede">A decision circuit is a set of typed questions a model answers with probabilities, and a set of gates that turn those probabilities into decisions: thresholds, AND/OR/NOT, votes, verification. The model never sees the gates. Every decision carries its probability, its outcome, and a trace. When the number sits too close to a threshold to call, the gate says so and a human gets the case.</p>
-  <div class="install"><span>$</span><span>pip install <b>decision-circuits</b></span><span style="color:#A9BCD0"># no dependencies</span></div>
+  <div class="hero">
+    <div class="sphere" aria-hidden="true">
+      <div class="window"><div class="die"><div class="answer" id="hero-answer">Yes<small>redact · p 0.95</small></div></div></div>
+    </div>
+    <div class="claim">
+      <h1>Don't ask the model to decide. Ask it questions. <em>Decide in code.</em></h1>
+      <p class="lede">A decision circuit is a set of typed questions a model answers with probabilities, and a set of gates that turn those probabilities into decisions: thresholds, AND/OR/NOT, votes, verification. The model never sees the gates. Every decision carries its probability, its outcome, and a trace. <b>When the number sits too close to a threshold to call, the gate says so and a human gets the case.</b></p>
+      <div class="install"><span class="c">$</span><span>pip install <b>decision-circuits</b></span><span class="c"># no dependencies</span></div>
+    </div>
+  </div>
 
   <section id="try">
     <div class="board">
       <div class="board-head"><h3>A support-triage circuit, live</h3><span>drag the probabilities a model might return; gates re-evaluate</span></div>
       <div class="cols">
         <div class="col">
-          <h4>Inputs · what the model answered</h4>
+          <h4>What the model answered</h4>
           <div class="q"><label for="pii">Does the message contain personal information? <span class="id">noul pii</span></label><output id="pii-o">0.91</output><input type="range" id="pii" min="0" max="1" step="0.01" value="0.91"></div>
           <div class="q"><label for="business">Are the details about a business, not a person? <span class="id">noul business</span></label><output id="business-o">0.10</output><input type="range" id="business" min="0" max="1" step="0.01" value="0.10"></div>
           <div class="q"><label for="angry">Is the customer angry? <span class="id">noul angry</span></label><output id="angry-o">0.35</output><input type="range" id="angry" min="0" max="1" step="0.01" value="0.35"></div>
@@ -155,11 +191,11 @@
           </div>
         </div>
         <div class="col">
-          <h4>Gates · what code decided</h4>
-          <div class="gate" id="g-redact"><div class="row"><span class="name">redact</span><span class="expr">(pii &amp; ~business) ≥ 0.6, band 0.1, on_uncertain: escalate</span></div><div class="row"><span class="val" id="redact-val"></span><span class="badge" id="redact-badge"></span></div><div class="trace" id="redact-trace"></div><div class="human" id="redact-human"></div></div>
-          <div class="gate" id="g-route"><div class="row"><span class="name">route</span><span class="expr">argmax(dept), min_confidence 0.35</span></div><div class="row"><span class="val" id="route-val"></span><span class="badge" id="route-badge"></span></div><div class="trace" id="route-trace"></div><div class="human" id="route-human"></div></div>
-          <div class="gate" id="g-human"><div class="row"><span class="name">human</span><span class="expr">(angry | pii) ≥ 0.6</span></div><div class="row"><span class="val" id="human-val"></span><span class="badge" id="human-badge"></span></div><div class="trace" id="human-trace"></div><div class="human" id="human-human"></div></div>
-          <p class="note" style="margin:12px 0 0">Nudge <code>pii</code> to 0.65 and watch <code>redact</code> stop answering. That's the point: inside the band, the circuit escalates instead of guessing.</p>
+          <h4>What code decided</h4>
+          <div class="gate" id="g-redact"><div class="row"><span class="name">redact</span><span class="expr">(pii &amp; ~business) ≥ 0.6, band 0.1, on_uncertain: escalate</span></div><div class="well"><div class="val" id="redact-val"></div><span class="badge" id="redact-badge"></span></div><div class="trace" id="redact-trace"></div><div class="human" id="redact-human"></div></div>
+          <div class="gate" id="g-route"><div class="row"><span class="name">route</span><span class="expr">argmax(dept), min_confidence 0.35</span></div><div class="well"><div class="val" id="route-val"></div><span class="badge" id="route-badge"></span></div><div class="trace" id="route-trace"></div><div class="human" id="route-human"></div></div>
+          <div class="gate" id="g-human"><div class="row"><span class="name">human</span><span class="expr">(angry | pii) ≥ 0.6</span></div><div class="well"><div class="val" id="human-val"></div><span class="badge" id="human-badge"></span></div><div class="trace" id="human-trace"></div><div class="human" id="human-human"></div></div>
+          <p class="note" style="margin:16px 0 0">Nudge <code>pii</code> to 0.65 and watch <code>redact</code> stop answering. That's the point: inside the band, the circuit escalates instead of guessing.</p>
         </div>
       </div>
     </div>
@@ -174,12 +210,10 @@ c.noul(<span class="s">"pii"</span>, <span class="s">"Does the message contain p
 c.noul(<span class="s">"business"</span>, <span class="s">"Are all identifying details about a business rather than a person?"</span>)
 c.noul(<span class="s">"angry"</span>, <span class="s">"Is the customer angry?"</span>)
 c.choice(<span class="s">"dept"</span>, <span class="s">"Which team should handle this?"</span>, {<span class="s">"billing"</span>: <span class="s">"Money, refunds"</span>, <span class="s">"technical"</span>: <span class="s">"Bugs, outages"</span>, <span class="s">"other"</span>: None})
-
 <span class="c"># gates code evaluates</span>
 c.gate(<span class="s">"redact"</span>, (Q(<span class="s">"pii"</span>) &amp; ~Q(<span class="s">"business"</span>)) &gt;= 0.6, band=0.1, on_uncertain=<span class="s">"escalate"</span>)
 c.gate(<span class="s">"route"</span>,  argmax(<span class="s">"dept"</span>, min_confidence=0.35))
 c.gate(<span class="s">"human"</span>,  (Q(<span class="s">"angry"</span>) | Q(<span class="s">"pii"</span>)) &gt;= 0.6)
-
 out = c.run(SystemOne(api_key=KEY), <span class="s">"Card charged twice, refund NOW. My card ends in 4412."</span>)
 out[<span class="s">"gates"</span>][<span class="s">"redact"</span>]
 <span class="c"># {'value': True, 'p': 0.97, 'outcome': 'decided', 'trace': ['pii p=0.97', 'gate _redact_1 p=0.98', 'and under independence -> p=0.95']}</span></pre>
@@ -202,22 +236,21 @@ out[<span class="s">"gates"</span>][<span class="s">"redact"</span>]
     <h3>The 2025 article, re-run on a model built for this</h3>
     <p>The original <a href="https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/">write-up</a> classified 100 water-utility customer calls into eleven types with two LLM parsers and a negative checker, combined into confidence tiers. Same calls, same circuit, one call to a System One model:</p>
     <div class="tbl"><table>
-      <tr><th></th><th>2025 · Claude Sonnet 3.7, three LLM calls</th><th>2026 · Jev, one call</th></tr>
+      <tr><th></th><th>2025, Claude Sonnet 3.7, three LLM calls</th><th>2026, Jev, one call</th></tr>
       <tr><td>single question, no circuit</td><td class="n">91%</td><td class="n">98%</td></tr>
       <tr><td>circuit, overall</td><td class="n">87%</td><td class="n">98%</td></tr>
-      <tr><td>high-confidence calls</td><td class="n">80 calls · 92.5% right</td><td class="n">93 calls · 97.8% right</td></tr>
+      <tr><td>high-confidence calls</td><td class="n">80 calls, 92.5% right</td><td class="n">93 calls, 97.8% right</td></tr>
       <tr><td>latency</td><td class="n">three round trips</td><td class="n">325 ms for all three questions</td></tr>
     </table></div>
     <p style="margin-top:14px">And a test that didn't exist before: nine kinds of judgment (extract, compare, count, apply a rule, check a claim against a record, …) times six ways of laying out the data, every label computed by code. Jev scores 95% on it. It also gets confident on inputs built to be undecidable, which is exactly what a threshold with a band is there to catch.</p>
   </section>
-
 
   <section id="scoreboard">
     <h2>Scoreboard</h2>
     <h3>Every System One model we can get our hands on, same items, same labels</h3>
     <p>Jev is TypeSafe's API. Bespoke-Nimble-9B and kev-0.5b are open reproductions released September 18. circuit-1.7b is ours. Cells are accuracy / expected calibration error; lower ECE is better calibrated. Latency is per question, measured the same way for every row in a block.</p>
     <div class="tbl"><table>
-      <tr><th>cold eval · 1,200 human-labeled items</th><th>MultiNLI</th><th>SMS spam</th><th>toxicity</th><th>CLINC, 151 intents</th><th>latency</th></tr>
+      <tr><th>cold eval, 1,200 human-labeled items</th><th>MultiNLI</th><th>SMS spam</th><th>toxicity</th><th>CLINC, 151 intents</th><th>latency</th></tr>
       <tr><td>Jev</td><td class="n">88% / 0.04</td><td class="n">96% / 0.05</td><td class="n">82% / 0.06</td><td class="n">90% / 0.05</td><td class="n">164 ms, API</td></tr>
       <tr><td>Bespoke-Nimble-9B</td><td class="n">84% / 0.09</td><td class="n">91% / 0.06</td><td class="n">86% / 0.08</td><td class="n">unsupported (26-option cap)</td><td class="n">1.8 s, laptop</td></tr>
       <tr><td>kev-0.5b</td><td class="n">46% / 0.28</td><td class="n">50% / 0.30</td><td class="n">62% / 0.16</td><td class="n">62% / 0.17</td><td class="n">325 ms, laptop</td></tr>
@@ -238,12 +271,12 @@ out[<span class="s">"gates"</span>][<span class="s">"redact"</span>]
   <section id="agents">
     <h2>Agents</h2>
     <h3>The circuit sits where the agent shouldn't be trusted</h3>
-    <div class="grid3">
-      <div class="card"><h4>LangChain</h4><p><code>CircuitToolGuard</code> judges each tool call: allow, block, or pause with the standard human-in-the-loop interrupt. <code>CircuitRouter</code> picks a model per run.</p></div>
-      <div class="card"><h4>OpenAI Agents SDK</h4><p>Input, output, and tool guardrails from a circuit. Tripwires carry the gate's probability and trace.</p></div>
-      <div class="card"><h4>Claude Agent SDK</h4><p>A PreToolUse hook whose allow / deny / ask maps straight onto the gate's decided / blocked / uncertain.</p></div>
-    </div>
-<pre style="margin-top:14px">guard = CircuitToolGuard(c, jev, gate=<span class="s">"block"</span>, tools=[delete_file, send_email])
+    <ul class="facts">
+      <li><h4>LangChain</h4><p><code>CircuitToolGuard</code> judges each tool call: allow, block, or pause with the standard human-in-the-loop interrupt. <code>CircuitRouter</code> picks a model per run.</p></li>
+      <li><h4>OpenAI Agents SDK</h4><p>Input, output, and tool guardrails from a circuit. Tripwires carry the gate's probability and trace.</p></li>
+      <li><h4>Claude Agent SDK</h4><p>A PreToolUse hook whose allow / deny / ask maps straight onto the gate's decided / blocked / uncertain.</p></li>
+    </ul>
+<pre style="margin-top:18px">guard = CircuitToolGuard(c, jev, gate=<span class="s">"block"</span>, tools=[delete_file, send_email])
 agent = create_agent(model, tools=[read_file, delete_file, send_email], middleware=[guard])</pre>
     <p>Compared with a single yes/no classifier at a fixed 0.5, a circuit combines several questions, makes the threshold and its band explicit, and sends the uncertain cases to a person instead of silently allowing or blocking them.</p>
   </section>
@@ -252,14 +285,13 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <h2>Models</h2>
     <h3>Built for System One models</h3>
     <p>Circuits need calibrated probabilities. That's what a System One model produces: typed questions in, a distribution per question out, in one pass, in about 200 ms. The <code>SystemOne</code> backend talks to any server speaking that contract.</p>
-    <div class="grid3">
-      <div class="card"><h4>Jev · TypeSafe</h4><p>The model that made this practical. Drop in an API key.</p></div>
-      <div class="card"><h4><a href="https://huggingface.co/jbarney/circuit-1.7b" style="color:inherit;text-decoration:none">circuit-1.7b · open weights</a></h4><p>Our own S1 model: pointer readout, code-labeled and CC-licensed data only, 175 ms per question on a laptop. See the scoreboard.</p></div>
-      <div class="card"><h4>Yours</h4><p>A backend is one method: <code>answer(state, questions)</code>. Wrap a cache, inject code-owned facts, chain fallbacks.</p></div>
-    </div>
-    <p class="note" style="margin-top:14px">No S1 model yet? Chat models can stand in through logprobs (OpenAI-compatible) or tool use (Claude), with the caveat that a chat model's stated confidence isn't calibrated the way an S1 model's output is.</p>
+    <ul class="facts">
+      <li><h4>Jev, by TypeSafe</h4><p>The model that made this practical. Drop in an API key.</p></li>
+      <li><h4><a href="https://huggingface.co/jbarney/circuit-1.7b">circuit-1.7b, open weights</a></h4><p>Our own S1 model: pointer readout, code-labeled and CC-licensed data only, 175 ms per question on a laptop. See the scoreboard.</p></li>
+      <li><h4>Yours</h4><p>A backend is one method: <code>answer(state, questions)</code>. Wrap a cache, inject code-owned facts, chain fallbacks.</p></li>
+    </ul>
+    <p class="note" style="margin-top:18px">No S1 model yet? Chat models can stand in through logprobs (OpenAI-compatible) or tool use (Claude), with the caveat that a chat model's stated confidence isn't calibrated the way an S1 model's output is.</p>
   </section>
-
 
   <section id="family">
     <h2>The family</h2>
@@ -268,15 +300,15 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <div class="tbl"><table>
       <tr><th>model</th><th>base</th><th>state</th><th>status</th><th>where it stands</th></tr>
       <tr><td><b>circuit-1.7b</b></td><td>Qwen3-1.7B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam and toxicity, 4 points behind on 151-way intents, best calibration on the board; 175 ms per question on a laptop</td></tr>
-      <tr><td><b>circuit-8b</b> <span style="color:var(--muted)">· the 8-ball</span></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">training</td><td>validation ECE 0.023 at the last checkpoint; the production-question benchmark is what it's for</td></tr>
+      <tr><td><b>circuit-8b</b> <span style="color:var(--mist)">, the 8-ball</span></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">training</td><td>validation ECE 0.023 at the last checkpoint; the production-question benchmark is what it's for</td></tr>
       <tr><td><b>circuit-vl-4b</b></td><td>Qwen3-VL-4B</td><td>images, multiple images, video frames, plus text</td><td class="n">training</td><td>raw base already reads receipts, charts, and forms at 97% on our rendered grid; the fine-tune adds calibration and removes the 26-option cap</td></tr>
       <tr><td><b>circuit-audio</b></td><td>Qwen2-Audio-7B</td><td>recorded speech and sound, plus text</td><td class="n">planned</td><td>raw base classifies synthesized support calls correctly and hears anger and urgency; the negative checker is its weak spot</td></tr>
     </table></div>
-    <div class="grid3" style="margin-top:14px">
-      <div class="card"><h4>Same head everywhere</h4><p>A query from the decide token, a key from each option's closing delimiter, softmax. Order-invariant, no cap on options, and it doesn't know or care what encoder produced the hidden state.</p></div>
-      <div class="card"><h4>Same data idea everywhere</h4><p>A grid of judgment operations times state formats, labels computed at generation time. For images that's rendered receipts and charts; for audio it's synthesized calls with known content.</p></div>
-      <div class="card"><h4>Same test everywhere</h4><p>Hold out a whole operation or a whole format and measure transfer. So far: layouts transfer, new kinds of judgment have to be in the data, and nobody is calibrated on undecidable inputs yet.</p></div>
-    </div>
+    <ul class="facts" style="margin-top:18px">
+      <li><h4>Same head everywhere</h4><p>A query from the decide token, a key from each option's closing delimiter, softmax. Order-invariant, no cap on options, and it doesn't know or care what encoder produced the hidden state.</p></li>
+      <li><h4>Same data idea everywhere</h4><p>A grid of judgment operations times state formats, labels computed at generation time. For images that's rendered receipts and charts; for audio it's synthesized calls with known content.</p></li>
+      <li><h4>Same test everywhere</h4><p>Hold out a whole operation or a whole format and measure transfer. So far: layouts transfer, new kinds of judgment have to be in the data, and nobody is calibrated on undecidable inputs yet.</p></li>
+    </ul>
   </section>
 
   <footer>
@@ -285,7 +317,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <a href="https://github.com/Barneyjm/circuit">github.com/Barneyjm/circuit</a>
     <a href="https://huggingface.co/jbarney/circuit-1.7b">huggingface.co/jbarney/circuit-1.7b</a>
     <a href="https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/">the article, May 2025</a>
-    <span>MIT · James Barney</span>
+    <span>MIT, James Barney</span>
   </footer>
 </div>
 
@@ -295,19 +327,26 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
   const f2 = x => x.toFixed(2);
   function settle(name, value, p, uncertain, trace, policy, conf) {
     const el = $('g-' + name), badge = $(name + '-badge'), val = $(name + '-val'), tr = $(name + '-trace'), hu = $(name + '-human');
-    el.classList.remove('yes', 'no', 'hold', 'block'); badge.classList.remove('yes', 'no', 'hold', 'block');
+    el.classList.remove('yes', 'no', 'hold'); badge.classList.remove('yes', 'no', 'hold');
     hu.textContent = '';
+    const detail = (p != null ? 'p=' + f2(p) : '') + (conf != null ? '  confidence=' + f2(conf) : '');
     if (uncertain) {
       el.classList.add('hold'); badge.classList.add('hold'); badge.textContent = policy;
-      val.textContent = (p != null ? 'p=' + f2(p) : '') + (conf != null ? '  confidence=' + f2(conf) : '') + '  value=None';
-      hu.textContent = policy === 'escalate' ? '→ a human decides this one' : '→ no decision; the caller handles it';
+      val.innerHTML = ''; val.append('None'); const s = document.createElement('small'); s.textContent = detail; val.append(s);
+      hu.textContent = policy === 'escalate' ? 'a human decides this one' : 'no decision; the caller handles it';
       tr.textContent = trace.concat(['uncertain -> ' + policy]).join('\n');
       return;
     }
     const cls = value === true ? 'yes' : value === false ? 'no' : 'yes';
     el.classList.add(cls); badge.classList.add(cls); badge.textContent = 'decided';
-    val.textContent = 'value=' + String(value) + (p != null ? '  p=' + f2(p) : '') + (conf != null ? '  confidence=' + f2(conf) : '');
+    val.innerHTML = ''; val.append(String(value)); const s = document.createElement('small'); s.textContent = detail; val.append(s);
     tr.textContent = trace.join('\n');
+  }
+  function hero(value, p, uncertain) {
+    const a = $('hero-answer'); if (!a) return;
+    a.classList.toggle('hazy', uncertain);
+    a.innerHTML = ''; a.append(uncertain ? 'Ask a person' : (value ? 'Yes' : 'No'));
+    const s = document.createElement('small'); s.textContent = 'redact · p ' + f2(p); a.append(s);
   }
   function update() {
     const pii = +$('pii').value, business = +$('business').value, angry = +$('angry').value;
@@ -317,7 +356,9 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     const names = ['billing', 'technical', 'other']; const top = d.indexOf(Math.max(...d)); $('dept-o').textContent = names[top];
     // redact: (pii & ~business) >= 0.6, band 0.1
     const notB = 1 - business, pr = pii * notB, tau = 0.6, band = 0.1;
-    settle('redact', pr >= tau, pr, Math.abs(pr - tau) < band, ['pii p=' + f2(pii), 'not business -> p=' + f2(notB), 'and under independence -> p=' + f2(pr)], 'escalate', null);
+    const redactUncertain = Math.abs(pr - tau) < band;
+    settle('redact', pr >= tau, pr, redactUncertain, ['pii p=' + f2(pii), 'not business -> p=' + f2(notB), 'and under independence -> p=' + f2(pr)], 'escalate', null);
+    hero(pr >= tau, pr, redactUncertain);
     // route: argmax with confidence floor; confidence = 1 - H/logN
     const H = -d.reduce((s, p) => s + (p > 0 ? p * Math.log(p) : 0), 0); const conf = Math.max(0, 1 - H / Math.log(3));
     settle('route', names[top], d[top], conf < 0.35, ['dept -> ' + names[top] + ' p=' + f2(d[top]) + ' conf=' + f2(conf) + ' (min 0.35)'], 'abstain', conf);
