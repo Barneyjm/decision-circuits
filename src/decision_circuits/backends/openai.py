@@ -25,7 +25,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from decision_circuits.types import Answers, answer_from_probabilities, option_keys
+from decision_circuits.types import Answers, answer_from_probabilities, option_keys, to_jsonable
 
 LETTERS = "ABCDEFGHIJKLMNOPQRST"
 
@@ -60,7 +60,7 @@ def render_question(state: Any, question: Mapping[str, Any]) -> tuple[str, list[
 def _json(x: Any) -> str:
     import json
 
-    return json.dumps(x, ensure_ascii=False, indent=1)
+    return json.dumps(to_jsonable(x), ensure_ascii=False, indent=1)
 
 
 class OpenAILogprobs:

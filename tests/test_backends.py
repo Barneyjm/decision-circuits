@@ -213,3 +213,29 @@ def test_langgraph_node_and_router():
     state.update(node(state))
     assert route_on("route")(state) == "billing"
     assert route_on("rush")(state) == "escalate"
+
+
+def test_systemone_gates_negotiation_learns_only_from_definitive_answers():
+    seq = [(503, {"detail": "down"}), (200, {"answers": {"u": {"type": "noul", "noul": 0.5}}, "gates": {"g": {"value": True}}})]
+    sent = []
+
+    class C:
+        def post(self, url, json=None, headers=None):
+            sent.append("gates" in json)
+            return _Resp(*seq.pop(0))
+
+    be = SystemOne(client=C())
+    with pytest.raises(SystemOneError):
+        be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "threshold", "input": "u"}})
+    assert be._server_gates is None  # a 503 taught nothing
+    _answers, gates = be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "threshold", "input": "u"}})
+    assert gates == {"g": {"value": True}} and sent == [True, True] and be._server_gates is True
+
+
+def test_to_jsonable_keeps_message_identity():
+    from types import SimpleNamespace
+
+    from decision_circuits import to_jsonable
+
+    m = SimpleNamespace(type="tool", content="denied", name="delete_file", tool_call_id="c1", status="error", response_metadata={"big": 1})
+    assert to_jsonable(m) == {"type": "tool", "content": "denied", "name": "delete_file", "tool_call_id": "c1", "status": "error"}

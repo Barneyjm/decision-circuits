@@ -15,8 +15,8 @@ same either way.
     c.gate("redact", Q("pii") >= 0.7, on_uncertain="escalate")
     c.gate("route", argmax("dept", min_confidence=0.35))
 
-    out = c.run(httpx.Client(), state, url="https://api.typesafe.ai/v1/systemone",
-                headers={"Authorization": f"Bearer {key}"})
+    from decision_circuits.backends import SystemOne
+    out = c.run(SystemOne(api_key=key, model="jev-latest"), state)   # or any object with .answer()
     out["gates"]["redact"]   # {"value": True, "p": 0.91, "outcome": "decided", "trace": [...]}
 """
 

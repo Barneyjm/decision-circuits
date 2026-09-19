@@ -147,11 +147,12 @@ def to_jsonable(x: Any) -> Any:
         return {str(k): to_jsonable(v) for k, v in x.items()}
     if isinstance(x, list | tuple):
         return [to_jsonable(v) for v in x]
-    if hasattr(x, "content") and hasattr(x, "type"):
+    if hasattr(x, "content") and hasattr(x, "type"):  # a chat message
         out = {"type": x.type, "content": to_jsonable(x.content)}
-        calls = getattr(x, "tool_calls", None)
-        if calls:
-            out["tool_calls"] = to_jsonable(calls)
+        for attr in ("name", "tool_calls", "tool_call_id", "status"):
+            v = getattr(x, attr, None)
+            if v:
+                out[attr] = to_jsonable(v)
         return out
     dump = getattr(x, "model_dump", None)
     if callable(dump):

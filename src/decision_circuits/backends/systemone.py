@@ -85,8 +85,11 @@ class SystemOne:
                 self._server_gates = True
                 self.last_response = body
                 return body["answers"], body["gates"]
-            self._server_gates = False
-            if status < 400 and "answers" in body:  # ignored the field; no second request needed
+            if status < 400 and "answers" in body:  # ignored the field: a plain server, no second request needed
+                self._server_gates = False
                 self.last_response = body
                 return body["answers"], None
+            if status not in (400, 422):  # auth, rate limit, outage: report it, learn nothing
+                raise SystemOneError(status, body)
+            self._server_gates = False  # rejected the field: a plain server
         return self.answer(state, questions, model=model), None

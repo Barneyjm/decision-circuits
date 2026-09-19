@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from decision_circuits.types import Answers, answer_from_probabilities, option_keys
+from decision_circuits.types import Answers, answer_from_probabilities, option_keys, to_jsonable
 
 TOOL_NAME = "submit_answers"
 
@@ -57,7 +57,7 @@ def render_prompt(state: Any, questions: Mapping[str, Any]) -> str:
         "Consider the following state and answer every question about it.",
         "",
         "State:",
-        state if isinstance(state, str) else json.dumps(state, ensure_ascii=False, indent=1),
+        state if isinstance(state, str) else json.dumps(to_jsonable(state), ensure_ascii=False, indent=1),
         "",
     ]
     for qid, q in questions.items():

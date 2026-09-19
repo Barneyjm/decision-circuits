@@ -33,6 +33,7 @@ Requires `openai-agents>=0.22` (`pip install "decision-circuits[openai-agents]"`
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -45,6 +46,16 @@ except ImportError as e:  # pragma: no cover
 from decision_circuits.dsl import Circuit
 from decision_circuits.integrations._policy import Action, CircuitPolicy, Judgment, tool_state
 from decision_circuits.types import Backend
+
+
+def _args(raw: Any) -> Any:
+    """The SDK hands tool arguments as a JSON string; give circuits the dict the other adapters give."""
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return raw
+    return raw
 
 
 def _info(j: Judgment) -> dict[str, Any]:
@@ -95,7 +106,7 @@ def circuit_tool_guardrail(
 
     async def guard(data: ToolInputGuardrailData) -> ToolGuardrailFunctionOutput:
         ctx = data.context
-        j = await asyncio.to_thread(policy.judge, tool_state(ctx.tool_name, ctx.tool_arguments, agent=data.agent.name))
+        j = await asyncio.to_thread(policy.judge, tool_state(ctx.tool_name, _args(ctx.tool_arguments), agent=data.agent.name))
         if j.action == "allow":
             return ToolGuardrailFunctionOutput.allow(output_info=_info(j))
         template = reject_message if j.action == "block" else ask_message

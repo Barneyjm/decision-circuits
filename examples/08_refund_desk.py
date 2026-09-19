@@ -55,7 +55,7 @@ c.noul("small_amount", "Order under $100 (computed).")
 c.gate("eligible", (Q("in_window") | Q("defective")) >= 0.6, band=0.1, on_uncertain="escalate")
 c.gate("risky", Q("abuse") >= 0.5, band=0.15, on_uncertain="escalate")
 c.gate("reason_checked", verify("reason", check=Q("supported"), tau=0.7, min_confidence=0.3), on_uncertain="escalate")
-c.gate("hostile", Q("tone")[2] >= 0.5)
+c.gate("hostile", Q("tone")[2] >= 0.5, band=0.1, on_uncertain="escalate")
 c.gate("auto_refund", (G("eligible") & ~G("risky") & Q("small_amount")) >= 0.7, on_uncertain="escalate")
 c.gate("route", argmax("reason", min_confidence=0.3))
 

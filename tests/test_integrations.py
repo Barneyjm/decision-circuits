@@ -169,7 +169,7 @@ def test_langchain_circuit_when_predicate():
     from decision_circuits.integrations.langchain import circuit_when
 
     when = circuit_when(guard_circuit(), ScriptedBackend(TABLE), gate="block")
-    req = lambda name: SimpleNamespace(tool_call={"name": name, "args": {}, "id": "1"}, tool=None, state={"messages": []})
+    req = lambda name: SimpleNamespace(tool_call={"name": name, "args": {}, "id": f"call_{name}"}, tool=None, state={"messages": []})
     assert when(req("delete_file")) is True and when(req("send_email")) is True and when(req("read_file")) is False
 
 
@@ -250,3 +250,70 @@ def test_claude_agent_sdk_hook_and_permission_callback():
     assert isinstance(asyncio.run(cb("read_file", {}, None)), PermissionResultAllow)
     deny = asyncio.run(cb("send_email", {}, None))
     assert isinstance(deny, PermissionResultDeny) and "could not decide" in deny.message
+
+
+def test_policy_bool_defaults_do_not_match_ints():
+    from decision_circuits import order
+
+    c = Circuit()
+    c.score("risk", "How risky?", ["low", "mid", "high"])
+    c.gate("bucket", order("risk", [0.5, 1.5]))
+
+    class BE:
+        def __init__(self, level):
+            self.level = level
+
+        def answer(self, state, questions, *, model=None):
+            dist = [0.0, 0.0, 0.0]
+            dist[self.level] = 1.0
+            return {"risk": answer_from_probabilities(questions["risk"], dist)}
+
+    assert CircuitPolicy(c, BE(1), gate="bucket").judge("x").action == "block"  # bucket 1 != True
+    assert CircuitPolicy(c, BE(0), gate="bucket").judge("x").action == "block"  # bucket 0 != False
+    assert CircuitPolicy(c, BE(0), gate="bucket", actions={0: "allow"}).judge("x").action == "allow"
+
+
+def test_langchain_replay_after_interrupt_keeps_the_judgment():
+    pytest.importorskip("langchain.agents")
+    from langchain.agents import create_agent
+    from langchain_core.messages import AIMessage
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.types import Command
+
+    from decision_circuits.integrations.langchain import CircuitToolGuard
+
+    class Flaky:
+        """Uncertain on the first call, then confidently safe: a replay must not re-ask."""
+
+        def __init__(self):
+            self.n = 0
+
+        def answer(self, state, questions, *, model=None):
+            self.n += 1
+            risky, auth = (0.60, 0.20) if self.n == 1 else (0.05, 0.9)
+            return {"risky": {"type": "noul", "noul": risky}, "authorized": {"type": "noul", "noul": auth}}
+
+    executed: list[str] = []
+    guard = CircuitToolGuard(guard_circuit(), Flaky(), gate="block")
+    model = _fake_model(AIMessage(content="", tool_calls=[{"name": "send_email", "args": {"to": "x@y"}, "id": "c1"}]), AIMessage(content="done"))
+    agent = create_agent(model, tools=_tools(executed), middleware=[guard], checkpointer=InMemorySaver())
+    cfg = {"configurable": {"thread_id": "t2"}}
+    out = agent.invoke({"messages": [("user", "email them")]}, config=cfg)
+    assert "__interrupt__" in out
+    out = agent.invoke(Command(resume={"decisions": [{"type": "reject"}]}), config=cfg)
+    assert executed == []  # the human's rejection stands
+    assert "rejected" in next(m.content for m in out["messages"] if getattr(m, "status", None) == "error")
+
+
+def test_openai_tool_arguments_are_parsed():
+    pytest.importorskip("agents")
+    from types import SimpleNamespace
+
+    from agents.tool_guardrails import ToolInputGuardrailData
+
+    from decision_circuits.integrations.openai_agents import circuit_tool_guardrail
+
+    be = ScriptedBackend(TABLE)
+    tg = circuit_tool_guardrail(guard_circuit(), be, gate="block")
+    asyncio.run(tg.run(ToolInputGuardrailData(context=SimpleNamespace(tool_name="read_file", tool_arguments='{"path": "a"}'), agent=SimpleNamespace(name="a"))))
+    assert be.states[-1]["tool_call"]["args"] == {"path": "a"}

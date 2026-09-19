@@ -75,7 +75,8 @@ def request_state(request: ToolCallRequest, recent_messages: int = RECENT_MESSAG
     """What a tool-call circuit sees: the call, the tool's description, recent messages."""
     tc = request.tool_call
     description = request.tool.description if request.tool is not None else None
-    return tool_state(tc["name"], tc["args"], description=description, messages=request.state.get("messages", [])[-recent_messages:])
+    messages = request.state.get("messages", [])
+    return tool_state(tc["name"], tc["args"], description=description, messages=messages[-recent_messages:] if recent_messages else [])
 
 
 def _tool_message(request: ToolCallRequest, text: str) -> ToolMessage:
@@ -114,9 +115,21 @@ class CircuitToolGuard(AgentMiddleware[AgentState[ResponseT], ContextT, Response
         # not `self.tools`: AgentMiddleware.tools registers extra tools with the agent
         self.guarded: frozenset[str] | None = None if tools is None else frozenset(t if isinstance(t, str) else t.name for t in tools)
         self.recent_messages = recent_messages
+        # LangGraph replays the tool node from the top after an interrupt is resumed. The
+        # judgment must be the same on the replay, or a non-deterministic backend could
+        # skip the interrupt and override the human's decision. Keyed by tool_call id.
+        self._judged: dict[str, Judgment] = {}
 
     def judge(self, request: ToolCallRequest) -> Judgment:
-        return self.policy.judge(request_state(request, self.recent_messages))
+        call_id = request.tool_call.get("id")
+        if call_id and call_id in self._judged:
+            return self._judged[call_id]
+        j = self.policy.judge(request_state(request, self.recent_messages))
+        if call_id:
+            if len(self._judged) >= 512:
+                self._judged.pop(next(iter(self._judged)))
+            self._judged[call_id] = j
+        return j
 
     def _intercept(self, request: ToolCallRequest, judgment: Judgment) -> ToolMessage | None:
         """The message to return instead of running the tool, or None to run it."""

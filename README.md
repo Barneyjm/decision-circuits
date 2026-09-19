@@ -142,3 +142,9 @@ Numbered, each self-contained, in [`examples/`](examples/):
 
 Alpha. The wire format is TypeSafe's `POST /v1/systemone` request plus a
 `gates` block. MIT.
+
+**Changed in 0.3.0:** `Circuit.run` takes a backend, not an HTTP client.
+Where 0.2 wrote `c.run(httpx.Client(), state, url=..., headers=...)`,
+write `c.run(SystemOne(url, api_key=...), state)`. The full server
+response (usage, model) is on `SystemOne.last_response`. The core no
+longer depends on pydantic.

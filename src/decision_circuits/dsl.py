@@ -19,8 +19,8 @@ or Polars expressions: build an expression, hand it to the request.
     c.gate("human", (Q("angry") | Q("urgency")[3]) >= 0.6, on_uncertain="escalate")
     c.gate("bill_hot", (G("route")["billing"] & G("tier")[3]).at(0.5))
 
-    body = c.request(state)          # JSON body for POST /v1/systemone
-    out = c.run(client, state)       # or evaluate through a TestClient / httpx client
+    body = c.request(state)          # the wire body: TypeSafe's request plus a `gates` block
+    out = c.run(SystemOne(api_key=KEY), state)   # any backend; see decision_circuits.backends
 
 Semantics, in one paragraph. `Q("x")` is the probability behind a
 question: a noul's P(yes), `Q("choice")["option"]` or `Q("score")[level]`
@@ -200,7 +200,6 @@ class Circuit:
     questions: dict[str, dict[str, Any]] = field(default_factory=dict)
     gates: list[GateDef] = field(default_factory=list)
     model: str | None = None  # None: the backend picks
-    _compiled: dict[str, dict[str, Any]] | None = field(default=None, repr=False, compare=False)
 
     # questions ---------------------------------------------------------
     def noul(self, qid: str, instructions: Any, true: str | None = None, false: str | None = None) -> Circuit:
@@ -236,7 +235,6 @@ class Circuit:
         if band is not None:
             g.band(band)
         self.gates.append(g)
-        self._compiled = None
         return g
 
     # rendering ---------------------------------------------------------
@@ -248,14 +246,9 @@ class Circuit:
     def compile(self) -> dict[str, dict[str, Any]]:
         """Lower the expression trees to the server's flat `gates` map.
         Sub-expressions become auto-named helper gates (`_name_N`) so
-        every intermediate probability shows up in the trace. Cached
-        until the next `gate()`; GateDef policy edits after that call
-        `gate` again or clear `_compiled`."""
-        if self._compiled is None:
-            self._compiled = self._compile()
-        return {k: dict(v) for k, v in self._compiled.items()}
-
-    def _compile(self) -> dict[str, dict[str, Any]]:
+        every intermediate probability shows up in the trace. Recompiled
+        on every call (it is cheap) so `GateDef.band()` / `.on_uncertain()`
+        edits are always honored."""
         out: dict[str, dict[str, Any]] = {}
         counter = itertools.count(1)
 
@@ -310,8 +303,9 @@ class Circuit:
         return out
 
     def request(self, state: Any) -> dict[str, Any]:
-        """The wire request: TypeSafe's body plus a `gates` block."""
-        return {"state": state, "model": self.model or "s1-proto", "questions": dict(self.questions), "gates": self.compile()}
+        """The wire request: TypeSafe's body plus a `gates` block. `model`
+        is the circuit's own; `SystemOne` fills in its default when None."""
+        return {"state": state, "model": self.model, "questions": dict(self.questions), "gates": self.compile()}
 
     def evaluate(self, answers: Answers) -> dict[str, GateResultDict]:
         """Evaluate the compiled gates locally against answers already in hand."""

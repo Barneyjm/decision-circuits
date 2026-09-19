@@ -60,7 +60,9 @@ class CircuitPolicy:
         self.circuit = circuit
         self.backend = backend
         self.gate = gate
-        self.actions: dict[Any, Action] = {**DEFAULT_ACTIONS, **(actions or {})}
+        # Ordered pairs, not a dict: in a dict 0 and False (1 and True) are the same key,
+        # so `{**DEFAULT_ACTIONS, 0: "allow"}` would silently rewrite the False entry.
+        self.actions: list[tuple[Any, Action]] = [*DEFAULT_ACTIONS.items(), *(actions or {}).items()]
         self.uncertain_fallback = uncertain_fallback
         self.last: Judgment | None = None
 
@@ -69,8 +71,20 @@ class CircuitPolicy:
         results = out["gates"]
         if self.gate not in results:
             raise KeyError(f"gate {self.gate!r} is not in the circuit; gates are {sorted(results)}")
-        self.last = Judgment(self.actions.get(result_key(results[self.gate]), self.uncertain_fallback), explain(results, self.gate), out)
+        self.last = Judgment(self.action_for(result_key(results[self.gate])), explain(results, self.gate), out)
         return self.last
+
+    def action_for(self, key: Any) -> Action:
+        """Look up a result key. `True`/`False` entries match only booleans,
+        so an order-gate bucket of 1 or 0 never hits them (1 == True in
+        Python) and falls through to `uncertain_fallback` like any other
+        unlisted value."""
+        for k, action in reversed(self.actions):  # later (user) entries win
+            if isinstance(k, bool) != isinstance(key, bool):
+                continue
+            if k == key:
+                return action
+        return self.uncertain_fallback
 
 
 def explain(results: Mapping[str, GateResultDict], gate: str) -> str:
