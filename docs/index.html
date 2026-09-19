@@ -146,6 +146,12 @@
   figure img { display: block; width: 100%; max-width: 820px; height: auto; border-radius: 12px; background: #fff; }
   figcaption { font-size: 13.5px; color: var(--mist); margin-top: 8px; }
   .note { border-left: 2px solid var(--die-edge); padding: 2px 0 2px 16px; color: var(--mist); font-size: 15px; }
+  .keyform { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0; }
+  .keyform input { font: inherit; font-size: 15px; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--code-bg); color: var(--ice); min-width: min(320px, 100%); }
+  .keyform button { font: inherit; font-size: 15px; padding: 10px 18px; border-radius: 999px; border: 1px solid var(--die-edge); background: var(--die); color: var(--ice); cursor: pointer; }
+  .keyform button:hover, .keyform button:focus-visible { background: var(--die-edge); }
+  .keyout { font-family: var(--mono); font-size: 14px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; white-space: pre-wrap; word-break: break-all; }
+  .keyout:empty { display: none; }
   footer { margin-top: 88px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--mist); display: flex; flex-wrap: wrap; gap: 8px 22px; }
   footer a { color: var(--mist); }
 
@@ -157,7 +163,7 @@
   <header class="top">
     <div class="brand">Decision Circuits<small>decision-circuits 0.3</small></div>
     <nav>
-      <a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a><a href="#family">Family</a>
+      <a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a><a href="#family">Family</a><a href="#api">API</a>
       <a href="https://github.com/Barneyjm/decision-circuits">GitHub</a><a href="https://pypi.org/project/decision-circuits/">PyPI</a>
     </nav>
   </header>
@@ -312,6 +318,23 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     </ul>
   </section>
 
+  <section id="api">
+    <h2>API</h2>
+    <h3>Call the models without running anything</h3>
+    <p>A hosted endpoint serves circuit-1.7b and circuit-8b at <code>api.decisioncircuits.com</code>, same request format as TypeSafe's <code>POST /v1/systemone</code>. Keys are free: 1,000 questions a day per key, no card, no account. The models scale to zero between calls, so the first call after a quiet spell takes about a minute while a GPU spins up; warm calls answer in under half a second.</p>
+    <form class="keyform" id="keyform">
+      <label for="key-email" style="display:none">Email (optional)</label>
+      <input id="key-email" type="email" placeholder="email, optional" autocomplete="email">
+      <button type="submit" id="key-btn">Get an API key</button>
+    </form>
+    <div class="keyout" id="keyout"></div>
+<pre style="margin-top:14px">curl https://api.decisioncircuits.com/v1/systemone \
+  -H <span class="s">"Authorization: Bearer dc-..."</span> -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"model": "circuit-8b", "state": "Card charged twice, my card ends in 4412",
+       "questions": {"pii": {"type": "noul", "instructions": "Does the message contain personal information?"}}}'</span></pre>
+    <p>Or from Python: <code>SystemOne("https://api.decisioncircuits.com/v1/systemone", api_key=KEY)</code> as the backend of any circuit. Pass <code>"model": "circuit-1.7b"</code> for the faster, smaller one.</p>
+  </section>
+
   <footer>
     <a href="https://github.com/Barneyjm/decision-circuits">github.com/Barneyjm/decision-circuits</a>
     <a href="https://pypi.org/project/decision-circuits/">pypi.org/project/decision-circuits</a>
@@ -371,6 +394,18 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
 
   ['pii', 'business', 'angry', 'd0', 'd1', 'd2'].forEach(id => $(id).addEventListener('input', update));
   update();
+
+  $('keyform').addEventListener('submit', async e => {
+    e.preventDefault();
+    const out = $('keyout'), btn = $('key-btn');
+    btn.disabled = true; out.textContent = 'Issuing a key…';
+    try {
+      const r = await fetch('https://api.decisioncircuits.com/v1/keys', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: $('key-email').value || undefined }) });
+      const j = await r.json();
+      out.textContent = r.ok ? 'Your key (shown once, keep it):\n' + j.key + '\n\n' + j.daily_quota + ' questions a day. Models: ' + j.models.join(', ') + '.' : 'Could not issue a key: ' + (j.error || r.status);
+    } catch (err) { out.textContent = 'Could not reach api.decisioncircuits.com: ' + err.message; }
+    btn.disabled = false;
+  });
 })();
 </script>
 </body>

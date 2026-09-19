@@ -1,0 +1,18 @@
+name = "circuit-gateway"
+main = "worker.js"
+account_id = "5e09cd27e2878baba3bba9f7fef6e66f"
+compatibility_date = "2026-09-01"
+
+# api.decisioncircuits.com: issues API keys and proxies POST /v1/systemone to the Modal endpoints.
+routes = [{ pattern = "api.decisioncircuits.com", custom_domain = true }]
+
+[vars]
+MODAL_URLS = '{"circuit-1.7b":"https://james-73074--circuit-1-7b.modal.run","circuit-8b":"https://james-73074--circuit-8b.modal.run"}'
+DEFAULT_MODEL = "circuit-1.7b"
+KEY_DAILY_QUOTA = "1000"      # calls per key per UTC day
+GLOBAL_DAILY_QUOTA = "50000"  # calls across all keys per UTC day (a spend ceiling)
+KEYS_PER_IP_PER_DAY = "3"
+
+[[kv_namespaces]]
+binding = "KEYS"
+id = "af80ab5a71b14172a964086fe9d5785a"
