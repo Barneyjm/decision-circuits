@@ -168,8 +168,9 @@ Numbered, each self-contained, in [`examples/`](examples/):
 
 ## Status
 
-Alpha. The wire format is TypeSafe's `POST /v1/systemone` request plus a
-`gates` block. MIT.
+0.4.x, alpha. The wire format is TypeSafe's `POST /v1/systemone` request plus a
+`gates` block, and for the vision and audio models a media state. MIT.
+See [CHANGELOG.md](CHANGELOG.md).
 
 **Changed in 0.3.0:** `Circuit.run` takes a backend, not an HTTP client.
 Where 0.2 wrote `c.run(httpx.Client(), state, url=..., headers=...)`,

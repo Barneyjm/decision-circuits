@@ -1,6 +1,6 @@
 [project]
 name = "decision-circuits"
-version = "0.4.0"
+version = "0.4.1"
 description = "Deterministic decision gates over calibrated model answers: a small DSL that compiles to System One requests, evaluates AND/OR/NOT/threshold/argmax/majority/verify/order gates with explicit uncertainty, and renders the circuit."
 readme = "README.md"
 license = "MIT"
@@ -30,7 +30,12 @@ claude = ["claude-agent-sdk>=0.2"]
 all = ["openai>=2.44,<4", "anthropic>=1.0,<2", "langchain>=1.4,<2", "openai-agents>=0.22", "claude-agent-sdk>=0.2"]
 
 [project.urls]
-Homepage = "https://github.com/Barneyjm/decision-circuits"
+Homepage = "https://decisioncircuits.com"
+Documentation = "https://github.com/Barneyjm/decision-circuits/tree/main/docs"
+Source = "https://github.com/Barneyjm/decision-circuits"
+Issues = "https://github.com/Barneyjm/decision-circuits/issues"
+Changelog = "https://github.com/Barneyjm/decision-circuits/blob/main/CHANGELOG.md"
+Models = "https://huggingface.co/jbarney"
 Article = "https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/"
 
 [dependency-groups]
