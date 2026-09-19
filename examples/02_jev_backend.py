@@ -38,4 +38,4 @@ for text in [
     ms = (time.perf_counter() - t0) * 1000
     print(f"\n{text[:60]!r}  ({ms:.0f} ms, {out['model']})")
     for name, r in out["gates"].items():
-        print(f"  {name:<7} -> {r['value']!s:<8} p={r['p']}  {r['outcome']}")
+        print(f"  {name:<7} -> {r['value']!s:<8} p={r['p']:.2f}  {r['outcome']}")

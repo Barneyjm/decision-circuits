@@ -327,7 +327,7 @@ class Circuit:
         implement `answer_with_gates(state, questions, gates, model=...)`
         to let a server evaluate the circuit itself; `SystemOne` does,
         and falls back to answering when the server rejects gates."""
-        model = model or self.model
+        model = model or self.model or getattr(backend, "model", None)
         with_gates = getattr(backend, "answer_with_gates", None)
         if callable(with_gates):
             answers, gates = with_gates(state, self.questions, self.compile(), model=model)

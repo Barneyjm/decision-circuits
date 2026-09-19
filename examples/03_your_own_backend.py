@@ -52,13 +52,14 @@ class KeywordBackend:
 
 assert isinstance(KeywordBackend(), Backend)  # structural: no base class needed
 
-c = Circuit()
-c.noul("pii", "Does this text contain personal information?")
-c.noul("angry", "Is the writer angry?")
-c.choice("dept", "Which team?", {"billing": None, "technical": None, "other": None})
-c.gate("redact", Q("pii") >= 0.7, on_uncertain="escalate")
-c.gate("route", argmax("dept", min_confidence=0.3))
+if __name__ == "__main__":
+    c = Circuit()
+    c.noul("pii", "Does this text contain personal information?")
+    c.noul("angry", "Is the writer angry?")
+    c.choice("dept", "Which team?", {"billing": None, "technical": None, "other": None})
+    c.gate("redact", Q("pii") >= 0.7, on_uncertain="escalate")
+    c.gate("route", argmax("dept", min_confidence=0.3))
 
-for text in ["Card charged twice, refund NOW!", "Getting a 500 error from the API", "hello there"]:
-    out = c.run(KeywordBackend(), text)
-    print(f"{text!r:<40} redact={out['gates']['redact']['value']!s:<6} route={out['gates']['route']['value']!s:<10} ({out['gates']['route']['outcome']})")
+    for text in ["Card charged twice, refund NOW!", "Getting a 500 error from the API", "hello there"]:
+        out = c.run(KeywordBackend(), text)
+        print(f"{text!r:<40} redact={out['gates']['redact']['value']!s:<6} route={out['gates']['route']['value']!s:<10} ({out['gates']['route']['outcome']})")
