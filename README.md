@@ -93,6 +93,18 @@ none of their SDKs; each imports its own when you construct it.
 
 Writing your own is a dozen lines: [`examples/03_your_own_backend.py`](examples/03_your_own_backend.py).
 
+Cloud-hosted versions of the same models work by passing the provider's
+client, since the backends only depend on the response format:
+
+```python
+OpenAILogprobs(model=DEPLOYMENT, client=AzureOpenAI(...))            # Azure OpenAI / Foundry OpenAI models
+Anthropic(model="anthropic.claude-sonnet-...", client=AnthropicBedrock())   # Claude on Bedrock (anthropic[bedrock])
+Anthropic(model="claude-sonnet-...", client=AnthropicVertex(...))     # Claude on Vertex
+```
+
+Non-Anthropic models on Bedrock use the Converse API and need their own
+backend (stated or sampled via tool use); see [docs/extending.md](docs/extending.md).
+
 **Calibration is the backend's, not the package's.** Gates threshold
 whatever they are handed. A System One model is trained to be
 calibrated; a chat model's stated confidence usually is not. Check on a
