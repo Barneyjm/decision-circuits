@@ -73,18 +73,31 @@
     display: grid; place-items: center; overflow: hidden; }
   .die { width: 72%; aspect-ratio: 1 / .9; clip-path: polygon(50% 4%, 97% 96%, 3% 96%);
     background: linear-gradient(180deg, var(--die-edge), var(--die) 60%, #1A37A6); display: grid; place-items: center;
-    padding: 34% 14% 10%; text-align: center; animation: surface 1.6s cubic-bezier(.2,.7,.2,1) both; }
-  .die .answer { font-family: var(--serif); font-size: clamp(15px, 2.2vw, 22px); line-height: 1.1; color: var(--ice); transition: filter .5s; }
+    padding: 34% 14% 10%; text-align: center; animation: surface 2.2s cubic-bezier(.16,.6,.2,1) both; will-change: transform, filter, opacity; }
+  .window::after { content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle at 50% 60%, rgba(4,10,40,.85) 0, rgba(4,10,40,.55) 45%, rgba(4,10,40,0) 75%);
+    opacity: 0; }
+  .window.stir::after { animation: ink 2.2s cubic-bezier(.16,.6,.2,1) both; }
+  .die.sink { animation: sink .45s ease-in both; }
+  .die.rise { animation: surface 2.2s cubic-bezier(.16,.6,.2,1) both; }
+  .die .answer { font-family: var(--serif); font-size: clamp(14px, 2vw, 19px); line-height: 1.1; color: var(--ice); }
   .die .answer small { display: block; font-family: var(--sans); font-size: 11px; color: rgba(238,243,255,.75); margin-top: 4px; }
-  .hazy { filter: blur(1.6px); }
+
   .sphere-wrap { display: grid; justify-items: center; gap: 10px; width: 100%; max-width: 380px; }
   .sphere { cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; touch-action: manipulation; }
   .sphere:focus-visible { outline: 2px solid var(--die-edge); outline-offset: 8px; }
   .sphere.shaking { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both; }
-  .die.resurface { animation: surface 1.2s cubic-bezier(.2,.7,.2,1) both; }
   @keyframes shake { 10%, 90% { transform: translate3d(-2px, 0, 0) rotate(-2deg); } 20%, 80% { transform: translate3d(4px, 0, 0) rotate(2deg); } 30%, 50%, 70% { transform: translate3d(-6px, 0, 0) rotate(-3deg); } 40%, 60% { transform: translate3d(6px, 0, 0) rotate(3deg); } }
   .hint { font-size: 13px; color: var(--haze); margin: 0; }
-  @keyframes surface { from { transform: translateY(38%) scale(.9); opacity: 0; filter: blur(6px); } to { transform: none; opacity: 1; filter: blur(0); } }
+  @keyframes surface {
+    0%   { transform: translateY(70%) scale(.55) rotate(-6deg); opacity: 0; filter: blur(10px) brightness(.5); }
+    35%  { opacity: .55; filter: blur(6px) brightness(.7); }
+    70%  { transform: translateY(4%) scale(.98) rotate(1deg); opacity: 1; filter: blur(1.5px) brightness(.95); }
+    85%  { transform: translateY(-2%) scale(1.01) rotate(-.5deg); filter: blur(.4px); }
+    100% { transform: none; opacity: 1; filter: blur(0) brightness(1); }
+  }
+  @keyframes sink { to { transform: translateY(55%) scale(.7); opacity: 0; filter: blur(8px) brightness(.5); } }
+  @keyframes ink { 0% { opacity: 1; } 60% { opacity: .5; } 100% { opacity: 0; } }
   @keyframes rise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
   .claim h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 5.4vw, 60px); line-height: 1.02; letter-spacing: -.015em; margin: 0 0 20px; text-wrap: balance; font-variation-settings: "opsz" 144; }
   .claim h1 em { font-style: italic; }
@@ -126,7 +139,7 @@
   .gate .well { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin: 10px 0 6px; }
   .gate .val { font-family: var(--serif); font-size: 28px; line-height: 1.1; color: var(--ice); transition: filter .45s; font-variant-numeric: tabular-nums; }
   .gate .val small { display: block; font-family: var(--mono); font-size: 12px; color: var(--mist); margin-top: 4px; }
-  .gate.hold .val { filter: blur(2px); color: #C9D4FF; }
+  .gate.hold .val { color: var(--mist); }
   .badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--die-edge); color: var(--ice); white-space: nowrap; }
   .badge.hold { border-style: dashed; color: var(--mist); }
   .trace { font-family: var(--mono); font-size: 12px; color: var(--mist); margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -193,9 +206,9 @@
   <div class="hero">
     <div class="sphere-wrap">
       <div class="sphere" id="sphere" role="button" tabindex="0" aria-label="Ask again: surfaces the answer for another example case">
-        <div class="window"><div class="die" id="die"><div class="answer" id="hero-answer">Yes<small>redact · p 0.95</small></div></div></div>
+        <div class="window stir" id="window"><div class="die" id="die"><div class="answer" id="hero-answer">Yes<small>p 0.95</small></div></div></div>
       </div>
-      <p class="hint" id="hint">tap the ball, or shake your phone</p>
+      <p class="hint" id="hint">tap, or shake your phone</p>
     </div>
     <div class="claim">
       <h1>Don't ask the model to decide. Ask it questions. <em>Decide in code.</em></h1>
@@ -415,12 +428,6 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     val.innerHTML = ''; val.append(String(value)); const s = document.createElement('small'); s.textContent = detail; val.append(s);
     tr.textContent = trace.join('\n');
   }
-  function hero(value, p, uncertain) {
-    const a = $('hero-answer'); if (!a) return;
-    a.classList.toggle('hazy', uncertain);
-    a.innerHTML = ''; a.append(uncertain ? 'Ask a person' : (value ? 'Yes' : 'No'));
-    const s = document.createElement('small'); s.textContent = 'redact · p ' + f2(p) + (uncertain ? ' · too close to call' : ''); a.append(s);
-  }
   function update() {
     const pii = +$('pii').value, business = +$('business').value, angry = +$('angry').value;
     let d = [+$('d0').value, +$('d1').value, +$('d2').value]; const z = d.reduce((a, b) => a + b, 0) || 1; d = d.map(x => x / z);
@@ -429,9 +436,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     const names = ['billing', 'technical', 'other']; const top = d.indexOf(Math.max(...d)); $('dept-o').textContent = names[top];
     // redact: (pii & ~business) >= 0.6, band 0.1
     const notB = 1 - business, pr = pii * notB, tau = 0.6, band = 0.1;
-    const redactUncertain = Math.abs(pr - tau) < band;
-    settle('redact', pr >= tau, pr, redactUncertain, ['pii p=' + f2(pii), 'not business -> p=' + f2(notB), 'and under independence -> p=' + f2(pr)], 'escalate', null);
-    hero(pr >= tau, pr, redactUncertain);
+    settle('redact', pr >= tau, pr, Math.abs(pr - tau) < band, ['pii p=' + f2(pii), 'not business -> p=' + f2(notB), 'and under independence -> p=' + f2(pr)], 'escalate', null);
     // route: argmax with confidence floor; confidence = 1 - H/logN
     const H = -d.reduce((s, p) => s + (p > 0 ? p * Math.log(p) : 0), 0); const conf = Math.max(0, 1 - H / Math.log(3));
     settle('route', names[top], d[top], conf < 0.35, ['dept -> ' + names[top] + ' p=' + f2(d[top]) + ' conf=' + f2(conf) + ' (min 0.35)'], 'abstain', conf);
@@ -443,32 +448,30 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
   ['pii', 'business', 'angry', 'd0', 'd1', 'd2'].forEach(id => $(id).addEventListener('input', update));
   update();
 
-  // Ask again: the ball surfaces the answer for another example case, and the sliders follow.
-  const cases = [
-    [0.91, 0.10, 0.35, 0.72, 0.20, 0.08], // card number in a refund demand
-    [0.12, 0.05, 0.08, 0.15, 0.80, 0.05], // a plain bug report
-    [0.65, 0.20, 0.40, 0.50, 0.30, 0.20], // inside the band: escalate
-    [0.92, 0.15, 0.20, 0.30, 0.10, 0.60], // an address and a phone number in a complaint
-    [0.30, 0.10, 0.92, 0.40, 0.45, 0.15], // furious, no personal data
-    [0.97, 0.02, 0.75, 0.85, 0.05, 0.10], // angry and exposed
-    [0.05, 0.01, 0.02, 0.10, 0.10, 0.80], // small talk
-    [0.85, 0.05, 0.60, 0.55, 0.35, 0.10], // an account number from an annoyed customer
+  // The ball: a shake surfaces one of the answers a circuit can give, with the probability behind it.
+  const answers = [
+    ['Yes', 0.97], ['Without a doubt', 0.99], ['Signs point to yes', 0.78], ['Most likely', 0.86], ['It is decidedly so', 0.98], ['Outlook good', 0.84], ['Yes, definitely', 0.96],
+    ['No', 0.06], ["Don't count on it", 0.11], ['My sources say no', 0.09], ['Very doubtful', 0.07], ['Outlook not so good', 0.18], ['No, and I checked', 0.02],
+    ['Ask a person', 0.58], ['Too close to call', 0.61], ['A human decides this one', 0.55], ['Escalating', 0.63], ['Cannot say from here', 0.52], ['Try a better question', 0.50],
   ];
-  let caseIx = 0, busy = false;
+  let lastIx = -1, busy = false;
+  function surfaceAnswer(text, p) {
+    const a = $('hero-answer'); a.innerHTML = ''; a.append(text);
+    const s = document.createElement('small'); s.textContent = 'p ' + f2(p); a.append(s);
+  }
   function askAgain() {
     if (busy) return; busy = true;
-    caseIx = (caseIx + 1 + Math.floor(Math.random() * (cases.length - 1))) % cases.length;
-    const sphere = $('sphere'), die = $('die');
+    let ix; do { ix = Math.floor(Math.random() * answers.length); } while (ix === lastIx); lastIx = ix;
+    const sphere = $('sphere'), die = $('die'), win = $('window');
     sphere.classList.add('shaking');
-    die.classList.remove('resurface');
+    die.classList.remove('rise'); void die.offsetWidth; die.classList.add('sink');
     setTimeout(() => {
-      const v = cases[caseIx];
-      ['pii', 'business', 'angry', 'd0', 'd1', 'd2'].forEach((id, i) => { $(id).value = v[i]; });
-      update();
-      void die.offsetWidth; die.classList.add('resurface');
+      surfaceAnswer(answers[ix][0], answers[ix][1]);
+      die.classList.remove('sink'); void die.offsetWidth; die.classList.add('rise');
+      win.classList.remove('stir'); void win.offsetWidth; win.classList.add('stir');
       sphere.classList.remove('shaking');
-      busy = false;
-    }, 450);
+      setTimeout(() => { busy = false; }, 700);
+    }, 480);
   }
   $('sphere').addEventListener('click', askAgain);
   $('sphere').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); askAgain(); } });
@@ -493,7 +496,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
   } else {
     armShake();
   }
-  if (!('ontouchstart' in window)) $('hint').textContent = 'tap the ball for another case';
+  if (!('ontouchstart' in window)) $('hint').textContent = 'tap the ball';
 
   $('keyform').addEventListener('submit', async e => {
     e.preventDefault();
