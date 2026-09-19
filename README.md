@@ -80,35 +80,32 @@ silently allowing or blocking them. See [docs/integrations.md](docs/integrations
 
 ## Backends
 
-A backend is any object with `answer(state, questions, *, model=None)`
-returning the answers map. The core package ships three and depends on
-none of their SDKs; each imports its own when you construct it.
+Circuits are built for **System One models**: models that answer typed
+questions with calibrated probabilities, in one pass, fast. That is what
+makes a threshold and a band mean something. The `SystemOne` backend
+talks to any server speaking the System One contract:
 
-| backend | install | how it gets probabilities |
+| backend | install | server |
 |---|---|---|
-| `SystemOne(url, api_key, model)` | none | A System One server: TypeSafe's Jev, or [s1proto](https://github.com/Barneyjm/s1-proto) on open weights. Measured, calibrated. |
-| `OpenAILogprobs(model, base_url=...)` | `[openai]` | Options are lettered; the next-token logprobs over the letters are the distribution. OpenAI, Fireworks, vLLM. Up to 20 options. |
-| `Anthropic(model, mode="stated")` | `[anthropic]` | One tool-use call returning a probability per option. Fast; a self-report, not calibrated. |
-| `Anthropic(model, mode="sampled", k=5)` | `[anthropic]` | k calls at temperature 1, one pick each; vote frequencies. |
+| `SystemOne("https://api.typesafe.ai/v1/systemone", api_key, model="jev-latest")` | none | TypeSafe's Jev |
+| `SystemOne("http://localhost:8901/v1/systemone", api_key)` | none | [s1proto](https://github.com/Barneyjm/s1-proto), an open-weights S1 model you can run yourself |
 
-Writing your own is a dozen lines: [`examples/03_your_own_backend.py`](examples/03_your_own_backend.py).
+A backend is any object with `answer(state, questions, *, model=None)`,
+so wrapping one (a cache, code-owned facts, a fallback) is a dozen
+lines: [`examples/03_your_own_backend.py`](examples/03_your_own_backend.py).
 
-Cloud-hosted versions of the same models work by passing the provider's
-client, since the backends only depend on the response format:
+<details>
+<summary>No S1 model yet? Chat models can stand in, with caveats.</summary>
 
-```python
-OpenAILogprobs(model=DEPLOYMENT, client=AzureOpenAI(...))            # Azure OpenAI / Foundry OpenAI models
-Anthropic(model="anthropic.claude-sonnet-...", client=AnthropicBedrock())   # Claude on Bedrock (anthropic[bedrock])
-Anthropic(model="claude-sonnet-...", client=AnthropicVertex(...))     # Claude on Vertex
-```
-
-Non-Anthropic models on Bedrock use the Converse API and need their own
-backend (stated or sampled via tool use); see [docs/extending.md](docs/extending.md).
-
-**Calibration is the backend's, not the package's.** Gates threshold
-whatever they are handed. A System One model is trained to be
-calibrated; a chat model's stated confidence usually is not. Check on a
-labeled sample before trusting a threshold.
+`OpenAILogprobs` (`[openai]`) letters the options and reads next-token
+logprobs; works with OpenAI, Azure OpenAI, Fireworks, vLLM, up to 20
+options. `Anthropic` (`[anthropic]`) asks Claude for probabilities
+through tool use, either stated in one call or sampled over k calls;
+works with `AnthropicBedrock` and `AnthropicVertex` clients too. Both
+are slower, cost a request per question or per sample, and a chat
+model's stated confidence is not calibrated the way an S1 model's
+output is. Check on a labeled sample before trusting a threshold.
+</details>
 
 ## The expression language
 
