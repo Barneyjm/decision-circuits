@@ -255,17 +255,18 @@ out[<span class="s">"gates"</span>][<span class="s">"redact"</span>]
       <tr><td>Bespoke-Nimble-9B</td><td class="n">84% / 0.09</td><td class="n">91% / 0.06</td><td class="n">86% / 0.08</td><td class="n">unsupported (26-option cap)</td><td class="n">1.8 s, laptop</td></tr>
       <tr><td>kev-0.5b</td><td class="n">46% / 0.28</td><td class="n">50% / 0.30</td><td class="n">62% / 0.16</td><td class="n">62% / 0.17</td><td class="n">325 ms, laptop</td></tr>
       <tr><td><b>circuit-1.7b</b></td><td class="n">81% / 0.09</td><td class="n"><b>98% / 0.02</b></td><td class="n"><b>90%</b> / 0.16</td><td class="n">86% / 0.06</td><td class="n">175 ms, laptop</td></tr>
+      <tr><td><b>circuit-8b</b></td><td class="n">86% / 0.08</td><td class="n"><b>98% / 0.02</b></td><td class="n"><b>93%</b> / 0.14</td><td class="n"><b>95% / 0.03</b></td><td class="n">178 ms, A6000</td></tr>
     </table></div>
     <p class="note" style="margin-top:12px">Those four tasks' public train splits are in circuit-1.7b's training data and presumably not in Jev's. The two blocks below were trained on by nobody.</p>
     <div class="tbl" style="margin-top:14px"><table>
-      <tr><th>out of distribution</th><th>Jev</th><th>Nimble-9B</th><th>kev-0.5b</th><th>circuit-1.7b</th></tr>
-      <tr><td>the article's 100 water-utility calls, 11 types</td><td class="n">98% / 0.02</td><td class="n">93% / 0.05</td><td class="n">80% / 0.13</td><td class="n">92% / 0.08</td></tr>
-      <tr><td>546 production questions from a real site (agreement with Jev)</td><td class="n">—</td><td class="n">0.84 / 0.05</td><td class="n">0.49 / 0.11</td><td class="n">0.70 / 0.05</td></tr>
-      <tr><td>generalization grid, 9 operations × 6 formats, labels computed by code</td><td class="n">95%</td><td class="n">85%</td><td class="n">48%</td><td class="n">97%*</td></tr>
+      <tr><th>out of distribution</th><th>Jev</th><th>Nimble-9B</th><th>kev-0.5b</th><th>circuit-1.7b</th><th>circuit-8b</th></tr>
+      <tr><td>the article's 100 water-utility calls, 11 types</td><td class="n">98% / 0.02</td><td class="n">93% / 0.05</td><td class="n">80% / 0.13</td><td class="n">92% / 0.08</td><td class="n">93% / 0.05</td></tr>
+      <tr><td>546 production questions from a real site (agreement with Jev)</td><td class="n">—</td><td class="n">0.84 / 0.05</td><td class="n">0.49 / 0.11</td><td class="n">0.70 / 0.05</td><td class="n">0.84 / 0.04</td></tr>
+      <tr><td>generalization grid, 9 operations × 6 formats, labels computed by code</td><td class="n">95%</td><td class="n">85%</td><td class="n">48%</td><td class="n">97%*</td><td class="n">98%*</td></tr>
     </table></div>
     <p style="margin-top:14px">* The grid generator is ours, so that row is held-out items, not held-out structure. Trained with one operation and one format withheld, the same recipe scores 91% on the unseen format and 57% on the unseen operation. Layouts transfer; new kinds of judgment have to be in the data.</p>
     <p><b>The finding nobody else measures.</b> About five percent of grid items are built to be undecidable: a vague claim, two equal bars under "which is taller", a date with no year. The right answer is a flat distribution. Every model above, Jev included, answers those with mean confidence between 0.5 and 0.97. That is exactly the failure an uncertainty band around a threshold exists to catch, and why circuits escalate instead of trusting a number near the line.</p>
-    <p>circuit-1.7b: LoRA plus a pointer readout head on Qwen3-1.7B-Base, trained in 61 minutes on one RTX 4090 on code-labeled and CC-licensed data only. Weights and card: <a href="https://huggingface.co/jbarney/circuit-1.7b">huggingface.co/jbarney/circuit-1.7b</a>. Training and evaluation code: <a href="https://github.com/Barneyjm/circuit">github.com/Barneyjm/circuit</a>.</p>
+    <p>circuit-1.7b: LoRA plus a pointer readout head on Qwen3-1.7B-Base, trained in 61 minutes on one RTX 4090 on code-labeled and CC-licensed data only. Weights and card: <a href="https://huggingface.co/jbarney/circuit-1.7b">huggingface.co/jbarney/circuit-1.7b</a>. circuit-8b: the same recipe on Qwen3-8B-Base, 75 minutes on one RTX A6000; it beats Jev on three of the four cold-eval tasks and matches Nimble-9B on the production questions. Weights: <a href="https://huggingface.co/jbarney/circuit-8b">huggingface.co/jbarney/circuit-8b</a>. Training and evaluation code: <a href="https://github.com/Barneyjm/circuit">github.com/Barneyjm/circuit</a>.</p>
   </section>
 
   <section id="agents">
@@ -287,7 +288,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <p>Circuits need calibrated probabilities. That's what a System One model produces: typed questions in, a distribution per question out, in one pass, in about 200 ms. The <code>SystemOne</code> backend talks to any server speaking that contract.</p>
     <ul class="facts">
       <li><h4>Jev, by TypeSafe</h4><p>The model that made this practical. Drop in an API key.</p></li>
-      <li><h4><a href="https://huggingface.co/jbarney/circuit-1.7b">circuit-1.7b, open weights</a></h4><p>Our own S1 model: pointer readout, code-labeled and CC-licensed data only, 175 ms per question on a laptop. See the scoreboard.</p></li>
+      <li><h4><a href="https://huggingface.co/jbarney/circuit-1.7b">circuit-1.7b</a> and <a href="https://huggingface.co/jbarney/circuit-8b">circuit-8b</a>, open weights</h4><p>Our own S1 models: pointer readout, code-labeled and CC-licensed data only. The small one runs at 175 ms per question on a laptop; the large one leads the scoreboard.</p></li>
       <li><h4>Yours</h4><p>A backend is one method: <code>answer(state, questions)</code>. Wrap a cache, inject code-owned facts, chain fallbacks.</p></li>
     </ul>
     <p class="note" style="margin-top:18px">No S1 model yet? Chat models can stand in through logprobs (OpenAI-compatible) or tool use (Claude), with the caveat that a chat model's stated confidence isn't calibrated the way an S1 model's output is.</p>
@@ -300,7 +301,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <div class="tbl"><table>
       <tr><th>model</th><th>base</th><th>state</th><th>status</th><th>where it stands</th></tr>
       <tr><td><b>circuit-1.7b</b></td><td>Qwen3-1.7B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam and toxicity, 4 points behind on 151-way intents, best calibration on the board; 175 ms per question on a laptop</td></tr>
-      <tr><td><b>circuit-8b</b> <span style="color:var(--mist)">, the 8-ball</span></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">training</td><td>validation ECE 0.023 at the last checkpoint; the production-question benchmark is what it's for</td></tr>
+      <tr><td><b>circuit-8b</b> <span style="color:var(--mist)">, the 8-ball</span></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam, toxicity, and 151-way intents; 0.84 agreement with Jev on the production questions, level with Nimble-9B at half the calibration error</td></tr>
       <tr><td><b>circuit-vl-4b</b></td><td>Qwen3-VL-4B</td><td>images, multiple images, video frames, plus text</td><td class="n">training</td><td>raw base already reads receipts, charts, and forms at 97% on our rendered grid; the fine-tune adds calibration and removes the 26-option cap</td></tr>
       <tr><td><b>circuit-audio</b></td><td>Qwen2-Audio-7B</td><td>recorded speech and sound, plus text</td><td class="n">planned</td><td>raw base classifies synthesized support calls correctly and hears anger and urgency; the negative checker is its weak spot</td></tr>
     </table></div>
@@ -316,6 +317,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <a href="https://pypi.org/project/decision-circuits/">pypi.org/project/decision-circuits</a>
     <a href="https://github.com/Barneyjm/circuit">github.com/Barneyjm/circuit</a>
     <a href="https://huggingface.co/jbarney/circuit-1.7b">huggingface.co/jbarney/circuit-1.7b</a>
+    <a href="https://huggingface.co/jbarney/circuit-8b">huggingface.co/jbarney/circuit-8b</a>
     <a href="https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/">the article, May 2025</a>
     <span>MIT, James Barney</span>
   </footer>
