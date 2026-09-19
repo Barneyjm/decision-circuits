@@ -51,6 +51,18 @@
     "COMPOST": 1.2040107540617215e-07
    },
    "confidence": 0.9997233739871234
+  },
+  "timing": {
+   "circuit": {
+    "rtt_ms": 1400,
+    "server_ms": 55.2
+   },
+   "llm": {
+    "answer": "RESTORE",
+    "wall_ms": 1451,
+    "api_ms": 650,
+    "model": "claude-fable-5-1"
+   }
   }
  },
  {
@@ -90,6 +102,18 @@
     "3": 1.2144542929936812e-06
    },
    "confidence": 0.9999564497622753
+  },
+  "timing": {
+   "circuit": {
+    "rtt_ms": 1183,
+    "server_ms": 70.0
+   },
+   "llm": {
+    "answer": "1",
+    "wall_ms": 3561,
+    "api_ms": 1530,
+    "model": "claude-haiku-4-5-20251001"
+   }
   }
  },
  {
@@ -112,6 +136,18 @@
   "answer": {
    "type": "noul",
    "noul": 0.994159851722036
+  },
+  "timing": {
+   "circuit": {
+    "rtt_ms": 967,
+    "server_ms": 45.1
+   },
+   "llm": {
+    "answer": "yes",
+    "wall_ms": 3486,
+    "api_ms": 1513,
+    "model": "claude-haiku-4-5-20251001"
+   }
   }
  },
  {
@@ -159,6 +195,18 @@
     "r3": 7.193966105253804e-05
    },
    "confidence": 0.9990754565709588
+  },
+  "timing": {
+   "circuit": {
+    "rtt_ms": 1564,
+    "server_ms": 75.8
+   },
+   "llm": {
+    "answer": "r2",
+    "wall_ms": 3576,
+    "api_ms": 1567,
+    "model": "claude-haiku-4-5-20251001"
+   }
   }
  },
  {
@@ -196,6 +244,18 @@
     "103.62": 3.09419049792467e-09
    },
    "confidence": 0.9999999086530481
+  },
+  "timing": {
+   "circuit": {
+    "rtt_ms": 929,
+    "server_ms": 157.9
+   },
+   "llm": {
+    "answer": "100.52",
+    "wall_ms": 4257,
+    "api_ms": 4208,
+    "model": "claude-haiku-4-5-20251001"
+   }
   }
  },
  {
@@ -233,6 +293,18 @@
     "Q2": 2.6555653724885645e-05
    },
    "confidence": 0.8241679769397491
+  },
+  "timing": {
+   "circuit": {
+    "rtt_ms": 859,
+    "server_ms": 165.4
+   },
+   "llm": {
+    "answer": "South",
+    "wall_ms": 6000,
+    "api_ms": 4030,
+    "model": "claude-haiku-4-5-20251001"
+   }
   }
  },
  {
@@ -269,6 +341,21 @@
     "leak": 0.0005546318312596283
    },
    "confidence": 0.6707440942398755
+  },
+  "timing": {
+   "circuit": {
+    "rtt_ms": 978,
+    "server_ms": 108.7
+   },
+   "llm": {
+    "answer": "billing",
+    "wall_ms": 2761,
+    "transcribe_ms": 858,
+    "llm_ms": 1902,
+    "transcript": "Hi there, I need to set up a payment plan for my balance. What can you do about it?",
+    "model": "whisper-small + claude",
+    "note": "transcribed locally with Whisper, then the transcript read by a chat model"
+   }
   }
  },
  {
@@ -305,6 +392,21 @@
     "5": 0.4504692163537083
    },
    "confidence": 0.47700954923338623
+  },
+  "timing": {
+   "circuit": {
+    "rtt_ms": 813,
+    "server_ms": 118.7
+   },
+   "llm": {
+    "answer": "4",
+    "wall_ms": 2331,
+    "transcribe_ms": 832,
+    "llm_ms": 1499,
+    "transcript": "We're out of cheese, coffee, milk and juice.",
+    "model": "whisper-small + claude",
+    "note": "transcribed locally with Whisper, then the transcript read by a chat model"
+   }
   }
  }
 ]
