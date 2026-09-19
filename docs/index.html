@@ -701,7 +701,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     try {
       const r = await fetch('https://api.decisioncircuits.com/v1/keys', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: $('key-email').value || undefined }) });
       const j = await r.json();
-      out.textContent = r.ok ? 'Your key (shown once, keep it):\n' + j.key + '\n\n' + j.daily_quota + ' questions a day. Models: ' + j.models.join(', ') + '.' : 'Could not issue a key: ' + (j.error || r.status);
+      out.textContent = r.ok ? 'Your key (shown once, keep it):\n' + j.key + '\n\n60 questions a minute. Models: ' + j.models.join(', ') + '.' : 'Could not issue a key: ' + (j.error || r.status);
     } catch (err) { out.textContent = 'Could not reach api.decisioncircuits.com: ' + err.message; }
     btn.disabled = false;
   });

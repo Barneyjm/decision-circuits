@@ -34,7 +34,7 @@ async function issueKey(request, env) {
   const key = newKey();
   const record = { email, created: new Date().toISOString(), quota: parseInt(env.KEY_DAILY_QUOTA, 10) };
   await env.KEYS.put(`key:${await sha256(key)}`, JSON.stringify(record));
-  return json({ key, daily_quota: record.quota, models: Object.keys(JSON.parse(env.MODAL_URLS)), endpoint: "https://api.decisioncircuits.com/v1/systemone" });
+  return json({ key, rate: "60 questions a minute", models: Object.keys(JSON.parse(env.MODAL_URLS)), endpoint: "https://api.decisioncircuits.com/v1/systemone" });
 }
 
 async function proxy(request, env) {
