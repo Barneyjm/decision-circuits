@@ -115,46 +115,50 @@
   }
  },
  {
-  "label": "text grid, consistency / thread",
+  "label": "text grid, compare / thread",
   "model": "circuit-8b",
   "kind": "text",
   "state": [
    {
-    "role": "agent",
-    "text": "Thanks again for the quick turnaround last quarter; the team was impressed."
+    "role": "customer",
+    "text": "Here are the options."
    },
    {
     "role": "customer",
-    "text": "Sure, one thing first."
-   },
-   {
-    "role": "agent",
-    "text": "Hi, how can I help today?"
+    "text": "r1: blender, price 492"
    },
    {
     "role": "customer",
-    "text": "Customer says: \"The order status is processing.\" Our record: rain jacket, $88, ordered 2026-05-06, delivered 2026-05-13 to Austin, status processing."
+    "text": "r2: board game, price 100"
    },
    {
-    "role": "agent",
-    "text": "Our warehouse team has expanded, so shipping estimates should improve."
+    "role": "customer",
+    "text": "r3: board game, price 217"
    }
   ],
   "question": {
-   "type": "noul",
-   "instructions": "Check the claim against the record: does it hold?",
+   "type": "choice",
+   "instructions": "Which option has the lowest price?",
    "criteria": {
-    "true": "The claim matches the record",
-    "false": "The claim contradicts the record"
+    "r1": null,
+    "r2": null,
+    "r3": null
    }
   },
   "ref": {
-   "yes": 1.0,
-   "no": 0.0
+   "r1": 0.0,
+   "r2": 1.0,
+   "r3": 0.0
   },
   "answer": {
-   "type": "noul",
-   "noul": 0.9997586778613382
+   "type": "choice",
+   "choice": "r2",
+   "probabilities": {
+    "r1": 2.195894534972928e-05,
+    "r2": 0.9999061013935977,
+    "r3": 7.193966105253804e-05
+   },
+   "confidence": 0.9990754565709588
   }
  },
  {
