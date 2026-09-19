@@ -237,18 +237,18 @@
    "type": "choice",
    "choice": "100.52",
    "probabilities": {
-    "100.52": 0.9999999930030206,
-    "90.47": 4.813902476475194e-10,
-    "Cannot tell": 1.712900551881569e-09,
-    "7.50": 1.708498086476069e-09,
-    "103.62": 3.09419049792467e-09
+    "100.52": 0.9998202385619424,
+    "90.47": 2.5354482076496152e-05,
+    "Cannot tell": 0.00014108035916882716,
+    "7.50": 7.857895518989666e-06,
+    "103.62": 5.468701293409175e-06
    },
-   "confidence": 0.9999999086530481
+   "confidence": 0.9988458532974639
   },
   "timing": {
    "circuit": {
-    "rtt_ms": 929,
-    "server_ms": 157.9
+    "rtt_ms": 303,
+    "server_ms": 125.2
    },
    "llm": {
     "answer": "100.52",
@@ -259,52 +259,44 @@
   }
  },
  {
-  "label": "vision grid, compare / chart",
+  "label": "vision grid, real photo (photo by Damian Gadal, CC BY 2.0, via Open Images)",
   "model": "circuit-vl-4b",
   "kind": "image",
-  "media": "bench/chart.png",
+  "media": "bench/photo.jpg",
   "text": null,
   "question": {
-   "type": "choice",
-   "instructions": "Which bar is the shortest?",
+   "type": "noul",
+   "instructions": "Is there a car in the photo?",
    "criteria": {
-    "North": null,
-    "Q1": null,
-    "2025": null,
-    "South": null,
-    "Q2": null
+    "true": "at least one car is visible",
+    "false": "none"
    }
   },
   "ref": {
-   "North": 0.0,
-   "Q1": 0.0,
-   "2025": 0.0,
-   "South": 1.0,
-   "Q2": 0.0
+   "yes": 1.0,
+   "no": 0.0
   },
   "answer": {
-   "type": "choice",
-   "choice": "South",
-   "probabilities": {
-    "2025": 2.1464810234528304e-09,
-    "North": 2.300867995703439e-06,
-    "Q1": 0.0815978400406182,
-    "South": 0.9183733012911802,
-    "Q2": 2.6555653724885645e-05
-   },
-   "confidence": 0.8241679769397491
+   "type": "noul",
+   "noul": 0.7277682272676511
   },
   "timing": {
    "circuit": {
-    "rtt_ms": 859,
-    "server_ms": 165.4
+    "rtt_ms": 405,
+    "server_ms": 129.5
    },
    "llm": {
-    "answer": "South",
-    "wall_ms": 6000,
-    "api_ms": 4030,
-    "model": "claude-haiku-4-5-20251001"
+    "answer": "yes",
+    "wall_ms": 5057,
+    "api_ms": 3015,
+    "model": "claude"
    }
+  },
+  "attribution": {
+   "author": "Damian Gadal",
+   "author_url": "https://www.flickr.com/people/23024164@N06/",
+   "source_url": "https://www.flickr.com/photos/23024164@N06/6071493307",
+   "license": "https://creativecommons.org/licenses/by/2.0/"
   }
  },
  {
