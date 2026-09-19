@@ -99,20 +99,6 @@
   .trace { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 6px 0 0; white-space: pre-wrap; }
   .human { margin-top: 6px; font-size: 13px; color: var(--hold); }
 
-  /* the 8-ball */
-  .ballwrap { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 6px 0 16px; }
-  .ball { width: 150px; height: 150px; border-radius: 50%; position: relative; cursor: pointer; border: 0; padding: 0;
-    background: radial-gradient(circle at 35% 30%, #4a4f57 0, #17191d 45%, #050607 100%); box-shadow: 0 10px 24px rgba(0,0,0,.45), inset 0 -6px 14px rgba(0,0,0,.6); }
-  .ball:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
-  .ball .win { position: absolute; left: 50%; top: 50%; width: 92px; height: 92px; transform: translate(-50%, -50%); border-radius: 50%;
-    background: radial-gradient(circle at 50% 40%, #1b3e9e 0, #0b1f5c 60%, #061238 100%); box-shadow: inset 0 0 18px rgba(0,0,0,.7); display: grid; place-items: center; }
-  .ball .tri { width: 0; height: 0; border-left: 40px solid transparent; border-right: 40px solid transparent; border-top: 70px solid #2a5bd7; position: absolute; top: 14px; opacity: .95; }
-  .ball .txt { position: relative; z-index: 1; width: 76px; text-align: center; font-family: var(--mono); font-size: 10.5px; line-height: 1.15; color: #EAF1F7; text-transform: uppercase; letter-spacing: .02em; margin-top: -8px; }
-  .ball .eight { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: 26px; height: 26px; border-radius: 50%; background: #f2f2f2; color: #111; font-family: var(--mono); font-weight: 600; font-size: 16px; display: grid; place-items: center; }
-  .ball.shake { animation: shake .6s ease-in-out; }
-  @keyframes shake { 0%,100% { transform: rotate(0) } 20% { transform: rotate(-9deg) translateX(-5px) } 40% { transform: rotate(8deg) translateX(5px) } 60% { transform: rotate(-6deg) } 80% { transform: rotate(4deg) } }
-  @media (prefers-reduced-motion: reduce) { .ball.shake { animation: none; } }
-  .ballcap { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: center; max-width: 34ch; }
   /* code */
   pre { background: var(--code-bg); color: #EAF1F7; font-family: var(--mono); font-size: 13.5px; line-height: 1.5; padding: 16px 18px; border-radius: 8px; border: 1px solid var(--line); overflow-x: auto; margin: 0 0 14px; }
   pre .c { color: #8FB3D9; } pre .k { color: #E8A64F; } pre .s { color: #A6E3B8; }
@@ -170,14 +156,10 @@
         </div>
         <div class="col">
           <h4>Gates · what code decided</h4>
-          <div class="ballwrap">
-            <button class="ball" id="ball" aria-label="Shake the 8-ball: draw a new message and re-run the circuit"><span class="eight">8</span><span class="win"><span class="tri"></span><span class="txt" id="ball-txt">it is certain</span></span></button>
-            <div class="ballcap">Shake for a new message. The window shows the <code>redact</code> gate. Inside the band it says what the 8-Ball said in 1950.</div>
-          </div>
           <div class="gate" id="g-redact"><div class="row"><span class="name">redact</span><span class="expr">(pii &amp; ~business) ≥ 0.6, band 0.1, on_uncertain: escalate</span></div><div class="row"><span class="val" id="redact-val"></span><span class="badge" id="redact-badge"></span></div><div class="trace" id="redact-trace"></div><div class="human" id="redact-human"></div></div>
           <div class="gate" id="g-route"><div class="row"><span class="name">route</span><span class="expr">argmax(dept), min_confidence 0.35</span></div><div class="row"><span class="val" id="route-val"></span><span class="badge" id="route-badge"></span></div><div class="trace" id="route-trace"></div><div class="human" id="route-human"></div></div>
           <div class="gate" id="g-human"><div class="row"><span class="name">human</span><span class="expr">(angry | pii) ≥ 0.6</span></div><div class="row"><span class="val" id="human-val"></span><span class="badge" id="human-badge"></span></div><div class="trace" id="human-trace"></div><div class="human" id="human-human"></div></div>
-          <p class="note" style="margin:12px 0 0">Nudge <code>pii</code> to 0.65 and watch <code>redact</code> stop answering. That's the point: inside the band, the circuit says "ask again later" instead of guessing.</p>
+          <p class="note" style="margin:12px 0 0">Nudge <code>pii</code> to 0.65 and watch <code>redact</code> stop answering. That's the point: inside the band, the circuit escalates instead of guessing.</p>
         </div>
       </div>
     </div>
@@ -245,7 +227,7 @@ out[<span class="s">"gates"</span>][<span class="s">"redact"</span>]
     <div class="tbl" style="margin-top:14px"><table>
       <tr><th>out of distribution</th><th>Jev</th><th>Nimble-9B</th><th>kev-0.5b</th><th>circuit-1.7b</th></tr>
       <tr><td>the article's 100 water-utility calls, 11 types</td><td class="n">98% / 0.02</td><td class="n">93% / 0.05</td><td class="n">80% / 0.13</td><td class="n">92% / 0.08</td></tr>
-      <tr><td>546 production questions from a real site (agreement with Jev)</td><td class="n">—</td><td class="n">pending</td><td class="n">0.49 / 0.11</td><td class="n">0.70 / 0.05</td></tr>
+      <tr><td>546 production questions from a real site (agreement with Jev)</td><td class="n">—</td><td class="n">0.84 / 0.05</td><td class="n">0.49 / 0.11</td><td class="n">0.70 / 0.05</td></tr>
       <tr><td>generalization grid, 9 operations × 6 formats, labels computed by code</td><td class="n">95%</td><td class="n">85%</td><td class="n">48%</td><td class="n">97%*</td></tr>
     </table></div>
     <p style="margin-top:14px">* The grid generator is ours, so that row is held-out items, not held-out structure. Trained with one operation and one format withheld, the same recipe scores 91% on the unseen format and 57% on the unseen operation. Layouts transfer; new kinds of judgment have to be in the data.</p>
@@ -311,20 +293,14 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
 (function () {
   const $ = id => document.getElementById(id);
   const f2 = x => x.toFixed(2);
-  function ballSay(r) {
-    if (r.uncertain) return r.policy === 'escalate' ? 'ask again later' : 'reply hazy, try again';
-    if (r.value === true) return r.p > 0.85 ? 'it is certain' : 'signs point to yes';
-    return r.p < 0.15 ? 'don\'t count on it' : 'my sources say no';
-  }
   function settle(name, value, p, uncertain, trace, policy, conf) {
-    if (name === 'redact' && document.getElementById('ball-txt')) { document.getElementById('ball-txt').textContent = ballSay({ value, p, uncertain, policy }); }
     const el = $('g-' + name), badge = $(name + '-badge'), val = $(name + '-val'), tr = $(name + '-trace'), hu = $(name + '-human');
     el.classList.remove('yes', 'no', 'hold', 'block'); badge.classList.remove('yes', 'no', 'hold', 'block');
     hu.textContent = '';
     if (uncertain) {
-      el.classList.add('hold'); badge.classList.add('hold'); badge.textContent = policy === 'escalate' ? 'ask again later' : 'reply hazy, try again';
+      el.classList.add('hold'); badge.classList.add('hold'); badge.textContent = policy;
       val.textContent = (p != null ? 'p=' + f2(p) : '') + (conf != null ? '  confidence=' + f2(conf) : '') + '  value=None';
-      hu.textContent = policy === 'escalate' ? 'outcome: escalate → a human decides this one' : 'outcome: abstain → no decision; the caller handles it';
+      hu.textContent = policy === 'escalate' ? '→ a human decides this one' : '→ no decision; the caller handles it';
       tr.textContent = trace.concat(['uncertain -> ' + policy]).join('\n');
       return;
     }
@@ -350,15 +326,6 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     settle('human', po >= 0.6, po, Math.abs(po - 0.6) < 0.1, ['angry p=' + f2(angry), 'pii p=' + f2(pii), 'or under independence -> p=' + f2(po)], 'abstain', null);
   }
 
-  // the 8-ball: shake -> new message -> the redact gate speaks 8-ball
-  const ball = $('ball'), ballTxt = $('ball-txt');
-  ball.addEventListener('click', () => {
-    ball.classList.remove('shake'); void ball.offsetWidth; ball.classList.add('shake');
-    const rnd = (a, b) => (a + Math.random() * (b - a)).toFixed(2);
-    $('pii').value = rnd(0.02, 0.98); $('business').value = rnd(0.02, 0.6); $('angry').value = rnd(0.02, 0.98);
-    $('d0').value = rnd(0.05, 0.9); $('d1').value = rnd(0.05, 0.9); $('d2').value = rnd(0.02, 0.4);
-    setTimeout(update, 250);
-  });
   ['pii', 'business', 'angry', 'd0', 'd1', 'd2'].forEach(id => $(id).addEventListener('input', update));
   update();
 })();
