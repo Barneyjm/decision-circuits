@@ -204,28 +204,28 @@
         <h4><a href="https://huggingface.co/jbarney/circuit-1.7b">circuit-1.7b</a></h4>
         <p class="base">Qwen3-1.7B-Base · text, JSON, chat threads</p>
         <dl><dt>SMS spam</dt><dd>98% / 0.02</dd><dt>151-way intents</dt><dd>86% / 0.06</dd><dt>per question</dt><dd>175 ms</dd></dl>
-        <p class="blurb">The small one. Beats Jev on spam and toxicity, best calibration on the board, runs anywhere.</p>
+        <p class="blurb">Reads text, JSON, and chat threads. A yes/no, a pick from any number of options, or a score, in one pass and 175 ms on a laptop. Runs anywhere, no GPU needed.</p>
       </article>
       <article class="card">
         <svg class="ball" width="96" height="96" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="g-8b" cx="36%" cy="28%" r="70%"><stop offset="0" stop-color="#2A2A30"/><stop offset=".55" stop-color="#0A0A0C"/><stop offset="1" stop-color="#000"/></radialGradient><radialGradient id="w-8b" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#1B3FA8"/><stop offset=".6" stop-color="#0B1F5E"/><stop offset="1" stop-color="#061340"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#g-8b)"/><ellipse cx="36" cy="22" rx="14" ry="7" fill="#fff" opacity=".18" transform="rotate(-20 36 22)"/><circle cx="50" cy="50" r="22" fill="url(#w-8b)" stroke="#000" stroke-width="3"/><text x="50" y="56" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-size="22" fill="#EEF3FF">8</text></svg>
         <h4><a href="https://huggingface.co/jbarney/circuit-8b">circuit-8b</a></h4>
         <p class="base">Qwen3-8B-Base · text, JSON, chat threads</p>
         <dl><dt>151-way intents</dt><dd>95% / 0.03</dd><dt>agreement with Jev</dt><dd>0.84</dd><dt>per question</dt><dd>178 ms</dd></dl>
-        <p class="blurb">The 8-ball. Beats Jev on three of four cold evals and ties Nimble-9B on real production questions at half the calibration error.</p>
+        <p class="blurb">The 8-ball. The strongest text model in the family: 151-way intents, long threads, real production questions. Probabilities steady enough to put a threshold on.</p>
       </article>
       <article class="card">
         <svg class="ball" width="96" height="96" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="g-vision" cx="36%" cy="28%" r="70%"><stop offset="0" stop-color="#2A2A30"/><stop offset=".55" stop-color="#0A0A0C"/><stop offset="1" stop-color="#000"/></radialGradient><radialGradient id="w-vision" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#1B3FA8"/><stop offset=".6" stop-color="#0B1F5E"/><stop offset="1" stop-color="#061340"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#g-vision)"/><ellipse cx="36" cy="22" rx="14" ry="7" fill="#fff" opacity=".18" transform="rotate(-20 36 22)"/><circle cx="50" cy="50" r="22" fill="url(#w-vision)" stroke="#000" stroke-width="3"/><path d="M50 40 L60 56 L40 56 Z" fill="#2447C9"/><ellipse cx="38" cy="30" rx="8" ry="9" fill="#EEF3FF"/><ellipse cx="62" cy="30" rx="8" ry="9" fill="#EEF3FF"/><circle cx="40" cy="31" r="3.6" fill="#000"/><circle cx="64" cy="31" r="3.6" fill="#000"/><circle cx="41.3" cy="29.8" r="1.1" fill="#EEF3FF"/><circle cx="65.3" cy="29.8" r="1.1" fill="#EEF3FF"/></svg>
         <h4><a href="https://huggingface.co/jbarney/circuit-vl-4b">circuit-vl-4b</a></h4>
         <p class="base">Qwen3-VL-4B · images, video frames, plus text</p>
         <dl><dt>vision grid</dt><dd>98.3% / 0.018</dd><dt>raw base</dt><dd>96.0% / 0.041</dd><dt>per image</dt><dd>90 ms</dd></dl>
-        <p class="blurb">Reads receipts, charts, tables, and forms. No cap on options, half the base's calibration error, seven minutes of training.</p>
+        <p class="blurb">Reads receipts, charts, tables, forms, and photos, and video as frames. Ask what a document says, whether a claim matches it, how many rows are flagged. No cap on options.</p>
       </article>
       <article class="card">
         <svg class="ball" width="96" height="96" viewBox="0 -8 100 108" aria-hidden="true"><defs><radialGradient id="g-audio" cx="36%" cy="28%" r="70%"><stop offset="0" stop-color="#2A2A30"/><stop offset=".55" stop-color="#0A0A0C"/><stop offset="1" stop-color="#000"/></radialGradient><radialGradient id="w-audio" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#1B3FA8"/><stop offset=".6" stop-color="#0B1F5E"/><stop offset="1" stop-color="#061340"/></radialGradient></defs><circle cx="50" cy="50" r="47" fill="url(#g-audio)"/><ellipse cx="36" cy="22" rx="14" ry="7" fill="#fff" opacity=".18" transform="rotate(-20 36 22)"/><circle cx="50" cy="50" r="22" fill="url(#w-audio)" stroke="#000" stroke-width="3"/><path d="M50 40 L60 56 L40 56 Z" fill="#2447C9"/><path d="M14 44 C14 6 86 6 86 44" fill="none" stroke="#EEF3FF" stroke-width="5" stroke-linecap="round"/><rect x="6" y="36" width="14" height="22" rx="6" fill="#2447C9" stroke="#EEF3FF" stroke-width="3"/><rect x="80" y="36" width="14" height="22" rx="6" fill="#2447C9" stroke="#EEF3FF" stroke-width="3"/></svg>
         <h4><a href="https://huggingface.co/jbarney/circuit-audio-7b">circuit-audio-7b</a></h4>
         <p class="base">Qwen2-Audio-7B · speech and sound, plus text</p>
         <dl><dt>audio grid</dt><dd>93.5% / 0.072</dd><dt>raw base</dt><dd>72.0% / 0.188</dd><dt>per clip</dt><dd>1.2 s</dd></dl>
-        <p class="blurb">Counts, negations, and comparisons the base gets wrong. Least overconfident of the family on undecidable clips. Trained on a laptop.</p>
+        <p class="blurb">Listens to calls and recordings. What kind of call is this, what amount was said, how many items were listed, is it speech or a sound. Hears the clip; no transcript needed.</p>
       </article>
     </div>
     <ul class="facts" style="margin-top:18px">
