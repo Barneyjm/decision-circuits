@@ -1,0 +1,10 @@
+name = "decisioncircuits"
+compatibility_date = "2026-09-01"
+
+# Static site served by Workers Assets: everything under docs/ (index.html is the page).
+[assets]
+directory = "./docs"
+not_found_handling = "single-page-application"
+
+# The domain: Cloudflare creates the DNS record and certificate on deploy.
+routes = [{ pattern = "decisioncircuits.com", custom_domain = true }, { pattern = "www.decisioncircuits.com", custom_domain = true }]
