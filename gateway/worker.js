@@ -22,19 +22,10 @@ function newKey() {
   return "dc-" + btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
-// KV counters are eventually consistent; these are soft limits, which is all a free tier needs.
-async function bump(kv, name, ttl = 2 * 86400) {
-  const n = (parseInt((await kv.get(name)) || "0", 10) || 0) + 1;
-  await kv.put(name, String(n), { expirationTtl: ttl });
-  return n;
-}
-
 async function issueKey(request, env) {
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  const perIp = await bump(env.KEYS, `ip:${ip}:${today()}`);
-  if (perIp > parseInt(env.KEYS_PER_IP_PER_DAY, 10)) return json({ error: "too many keys requested from this address today" }, 429);
+  const { success: okIp } = await env.SIGNUP_LIMIT.limit({ key: ip });
+  if (!okIp) return json({ error: "too many keys requested from this address; try again in a minute" }, 429);
   let email = null;
   try {
     const body = await request.json();
@@ -52,11 +43,10 @@ async function proxy(request, env) {
   const key = auth.slice(7).trim();
   const rec = await env.KEYS.get(`key:${await sha256(key)}`, { type: "json" });
   if (!rec) return json({ error: "unknown api key" }, 401);
-  const day = today();
-  const used = await bump(env.KEYS, `use:${await sha256(key)}:${day}`);
-  if (used > (rec.quota || parseInt(env.KEY_DAILY_QUOTA, 10))) return json({ error: "daily quota exhausted for this key", quota: rec.quota, resets: `${day}T24:00:00Z` }, 429);
-  const global = await bump(env.KEYS, `global:${day}`);
-  if (global > parseInt(env.GLOBAL_DAILY_QUOTA, 10)) return json({ error: "the free tier is at capacity today; try again after 00:00 UTC" }, 503);
+  const { success: okKey } = await env.KEY_LIMIT.limit({ key: await sha256(key) });
+  if (!okKey) return json({ error: "this key is over its rate (60 questions a minute); slow down" }, 429, { "retry-after": "10" });
+  const { success: okAll } = await env.GLOBAL_LIMIT.limit({ key: "all" });
+  if (!okAll) return json({ error: "the free tier is at capacity right now; retry shortly" }, 503, { "retry-after": "10" });
 
   const bodyText = await request.text();
   let body;
@@ -68,15 +58,29 @@ async function proxy(request, env) {
   const urls = JSON.parse(env.MODAL_URLS);
   const model = body.model && urls[body.model] ? body.model : env.DEFAULT_MODEL;
   body.model = model;
-  const upstream = await fetch(`${urls[model]}/v1/systemone`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${env.S1_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const headers = { "x-circuit-model": model, "x-circuit-used-today": String(used), "x-circuit-quota": String(rec.quota) };
+  let upstream;
+  try {
+    upstream = await fetch(`${urls[model]}/v1/systemone`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.S1_API_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      redirect: "follow", // Modal answers a slow first boot with a 303 to the result; follow it
+    });
+  } catch (e) {
+    return json({ error: "the model is starting up; retry in 30 s", model }, 503, { "retry-after": "30" });
+  }
+  const headers = { "x-circuit-model": model, "x-circuit-rate": "60/min per key" };
   const lat = upstream.headers.get("x-s1-latency-ms");
   if (lat) headers["x-s1-latency-ms"] = lat;
-  return json(await upstream.json().catch(() => ({ error: "upstream returned a non-JSON body" })), upstream.status, headers);
+  const text = await upstream.text();
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    // a non-JSON body is the platform, not the model: a cold start that outran a timeout. Say so and ask for a retry.
+    return json({ error: "the model is starting up; retry in 30 s", model, upstream_status: upstream.status }, 503, { ...headers, "retry-after": "30" });
+  }
+  return json(payload, upstream.status, headers);
 }
 
 export default {

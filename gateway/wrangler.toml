@@ -7,12 +7,29 @@ compatibility_date = "2026-09-01"
 routes = [{ pattern = "api.decisioncircuits.com", custom_domain = true }]
 
 [vars]
-MODAL_URLS = '{"circuit-1.7b":"https://james-73074--circuit-1-7b.modal.run","circuit-8b":"https://james-73074--circuit-8b.modal.run"}'
+MODAL_URLS = '{"circuit-1.7b":"https://james-73074--circuit-1-7b.modal.run","circuit-8b":"https://james-73074--circuit-8b.modal.run","circuit-vl-4b":"https://james-73074--circuit-vl-4b.modal.run","circuit-audio-7b":"https://james-73074--circuit-audio-7b.modal.run"}'
 DEFAULT_MODEL = "circuit-1.7b"
-KEY_DAILY_QUOTA = "1000"      # calls per key per UTC day
-GLOBAL_DAILY_QUOTA = "50000"  # calls across all keys per UTC day (a spend ceiling)
-KEYS_PER_IP_PER_DAY = "3"
+KEY_DAILY_QUOTA = "1000"      # advertised on issued keys; enforced as KEY_LIMIT per minute below
 
 [[kv_namespaces]]
 binding = "KEYS"
 id = "af80ab5a71b14172a964086fe9d5785a"
+
+# Rate limits live in Workers' own limiter (free, unmetered), not in KV writes.
+[[unsafe.bindings]]
+name = "KEY_LIMIT"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 60, period = 60 }      # calls per key per minute
+
+[[unsafe.bindings]]
+name = "GLOBAL_LIMIT"
+type = "ratelimit"
+namespace_id = "1002"
+simple = { limit = 600, period = 60 }     # calls across all keys per minute (a spend ceiling: ~860k/day at most)
+
+[[unsafe.bindings]]
+name = "SIGNUP_LIMIT"
+type = "ratelimit"
+namespace_id = "1003"
+simple = { limit = 3, period = 60 }       # key requests per address per minute
