@@ -59,20 +59,25 @@ def main() -> None:
         pick, p = model_pick(q, it["answer"])
         data.append({"ref": ref, "model": it["model"], "pick": pick, "p": round(p, 2)})
         crit = q.get("criteria") if q["type"] != "score" else {}
-        btns = "".join(f'<button type="button" data-k="{html.escape(k)}" title="{html.escape(str((crit or {}).get(k) or ""))}">{html.escape(lbl)}</button>' for k, lbl in options(q))
+        btns = "".join(
+            f'<button type="button" data-k="{html.escape(k)}" title="{html.escape(str((crit or {}).get(k) or ""))}">{html.escape(lbl)}</button>'
+            for k, lbl in options(q)
+        )
         cards.append(
             f'      <article class="qz" data-i="{i}">\n'
-            f"        <p class=\"src\">{html.escape(it['label'])} · answered by {html.escape(it['model'])}</p>\n"
+            f'        <p class="src">{html.escape(it["label"])} · answered by {html.escape(it["model"])}</p>\n'
             f"        {state_html(it)}\n"
-            f"        <p class=\"ask\">{html.escape(q['instructions'])}</p>\n"
+            f'        <p class="ask">{html.escape(q["instructions"])}</p>\n'
             f'        <div class="opts">{btns}</div>\n'
             f'        <p class="verdict" aria-live="polite"></p>\n'
             f"      </article>"
         )
     page = PAGE.read_text()
-    page, n = re.subn(r'(    <div class="qzs">\n).*?(\n    </div>\n  </section>)', lambda m: m.group(1) + "\n".join(cards) + m.group(2), page, count=1, flags=re.S)
+    page, n = re.subn(
+        r'(    <div class="qzs">\n).*?(\n    </div>\n  </section>)', lambda m: m.group(1) + "\n".join(cards) + m.group(2), page, count=1, flags=re.DOTALL
+    )
     assert n == 1, "quiz cards block not found"
-    page, n = re.subn(r"  const qz = \[.*?\];\n", "  const qz = " + json.dumps(data) + ";\n", page, count=1, flags=re.S)
+    page, n = re.subn(r"  const qz = \[.*?\];\n", "  const qz = " + json.dumps(data) + ";\n", page, count=1, flags=re.DOTALL)
     assert n == 1, "qz data not found"
     PAGE.write_text(page)
     print(f"{len(items)} items; models right on {sum(d['pick'] == d['ref'] for d in data)}")

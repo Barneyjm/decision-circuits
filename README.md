@@ -1,5 +1,7 @@
 # decision-circuits
 
+[![CI](https://github.com/Barneyjm/decision-circuits/actions/workflows/ci.yml/badge.svg)](https://github.com/Barneyjm/decision-circuits/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/decision-circuits)](https://pypi.org/project/decision-circuits/) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Deterministic decision gates over calibrated model answers.
 
 ```bash

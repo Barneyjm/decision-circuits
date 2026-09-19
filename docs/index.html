@@ -52,7 +52,8 @@
 
   header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px 24px; font-size: 14px; color: var(--mist); }
   header.top .brand { font-family: var(--serif); font-size: 18px; color: var(--ice); }
-  header.top .brand small { font-family: var(--sans); font-size: 13px; color: var(--mist); margin-left: 10px; }
+  header.top .badges { display: inline-flex; gap: 6px; margin-left: 12px; vertical-align: middle; }
+  header.top .badges img { display: block; height: 20px; border-radius: 4px; }
   header.top nav { display: flex; flex-wrap: wrap; gap: 4px 18px; }
   header.top a { color: var(--mist); text-decoration: none; }
   header.top a:hover, header.top a:focus-visible { color: var(--ice); }
@@ -218,7 +219,7 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand">Decision Circuits<small>decision-circuits 0.3</small></div>
+    <div class="brand">Decision Circuits<span class="badges"><a href="https://github.com/Barneyjm/decision-circuits/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Barneyjm/decision-circuits/ci.yml?branch=main&label=build&labelColor=0B1F5E&color=2447C9" alt="GitHub build status" height="20"></a><a href="https://pypi.org/project/decision-circuits/"><img src="https://img.shields.io/pypi/v/decision-circuits?label=pypi&labelColor=0B1F5E&color=2447C9" alt="PyPI release" height="20"></a></span></div>
     <nav>
       <a href="#family">Family</a><a href="#quiz">Quiz</a><a href="#api">API</a><a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a>
       <a href="https://github.com/Barneyjm/decision-circuits">GitHub</a><a href="https://pypi.org/project/decision-circuits/">PyPI</a>
