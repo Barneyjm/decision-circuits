@@ -324,86 +324,83 @@
    }
   },
   "ref": {
-   "billing": 1.0,
+   "billing": 0.0,
    "metering": 0.0,
    "taste and odor": 0.0,
    "outage": 0.0,
-   "leak": 0.0
+   "leak": 1.0
   },
   "answer": {
    "type": "choice",
-   "choice": "metering",
+   "choice": "leak",
    "probabilities": {
-    "billing": 0.21592135691520684,
-    "metering": 0.7831307314132262,
-    "taste and odor": 0.0001495450124650841,
-    "outage": 0.00024373482784233535,
-    "leak": 0.0005546318312596283
+    "billing": 1.6616576761125764e-08,
+    "metering": 2.07237295386981e-08,
+    "taste and odor": 2.1708364610354924e-06,
+    "outage": 5.389617052040609e-08,
+    "leak": 0.9999977379270621
    },
-   "confidence": 0.6707440942398755
+   "confidence": 0.999980032187979
   },
   "timing": {
    "circuit": {
-    "rtt_ms": 978,
-    "server_ms": 108.7
+    "rtt_ms": 363,
+    "server_ms": 107.4
    },
    "llm": {
-    "answer": "billing",
-    "wall_ms": 2761,
-    "transcribe_ms": 858,
-    "llm_ms": 1902,
-    "transcript": "Hi there, I need to set up a payment plan for my balance. What can you do about it?",
+    "answer": "leak",
+    "wall_ms": 3734,
+    "transcribe_ms": 236,
+    "llm_ms": 3498,
+    "transcript": "Hello, yes, a pipe burst in front of my house. Can someone help?",
     "model": "whisper-small + claude",
     "note": "transcribed locally with Whisper, then the transcript read by a chat model"
    }
   }
  },
  {
-  "label": "audio grid, count / list",
+  "label": "audio grid, which sentence / real recording",
   "model": "circuit-audio-7b",
   "kind": "audio",
-  "media": "bench/list.wav",
+  "media": "bench/read.wav",
   "question": {
    "type": "choice",
-   "instructions": "How many different items does the speaker list?",
+   "instructions": "Which of these did the speaker read?",
    "criteria": {
-    "1": null,
-    "2": null,
-    "3": null,
-    "4": null,
-    "5": null
+    "the second begins here an angel the third here\u2026": null,
+    "i hope you'll like him better than the frost\u2026": null,
+    "was his mind wandering into some other train of\u2026": null,
+    "very well said missus wilkins resolutely to herself ef\u2026": null
    }
   },
   "ref": {
-   "1": 0.0,
-   "2": 0.0,
-   "3": 0.0,
-   "4": 1.0,
-   "5": 0.0
+   "the second begins here an angel the third here\u2026": 0.0,
+   "i hope you'll like him better than the frost\u2026": 0.0,
+   "was his mind wandering into some other train of\u2026": 1.0,
+   "very well said missus wilkins resolutely to herself ef\u2026": 0.0
   },
   "answer": {
    "type": "choice",
-   "choice": "4",
+   "choice": "was his mind wandering into some other train of\u2026",
    "probabilities": {
-    "1": 0.003518941252916389,
-    "2": 0.0013310844465381523,
-    "3": 0.032406419317438526,
-    "4": 0.5122743386293986,
-    "5": 0.4504692163537083
+    "the second begins here an angel the third here\u2026": 3.245137038792857e-07,
+    "i hope you'll like him better than the frost\u2026": 9.934215315263036e-08,
+    "was his mind wandering into some other train of\u2026": 0.999998971295704,
+    "very well said missus wilkins resolutely to herself ef\u2026": 6.048484389348362e-07
    },
-   "confidence": 0.47700954923338623
+   "confidence": 0.9999883578123978
   },
   "timing": {
    "circuit": {
-    "rtt_ms": 813,
-    "server_ms": 118.7
+    "rtt_ms": 342,
+    "server_ms": 104.5
    },
    "llm": {
-    "answer": "4",
-    "wall_ms": 2331,
-    "transcribe_ms": 832,
-    "llm_ms": 1499,
-    "transcript": "We're out of cheese, coffee, milk and juice.",
+    "answer": "was his mind wandering into some other train of\u2026",
+    "wall_ms": 4326,
+    "transcribe_ms": 221,
+    "llm_ms": 4105,
+    "transcript": "Was his mind wandering into some other train of thought?",
     "model": "whisper-small + claude",
     "note": "transcribed locally with Whisper, then the transcript read by a chat model"
    }

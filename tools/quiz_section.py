@@ -159,7 +159,7 @@ def main() -> None:
     )
     assert n == 1, "quiz cards block not found"
     js = QUIZ_JS.replace("__DATA__", json.dumps(data))
-    page, n = re.subn(r"  // quiz:start\n.*?  // quiz:end\n", "  // quiz:start\n" + js + "  // quiz:end\n", page, count=1, flags=re.DOTALL)
+    page, n = re.subn(r"  // quiz:start\n.*?  // quiz:end\n", lambda _m: "  // quiz:start\n" + js + "  // quiz:end\n", page, count=1, flags=re.DOTALL)
     assert n == 1, "quiz script markers not found"
     PAGE.write_text(page)
     print(f"{len(items)} items; models right on {sum(d['pick'] == d['ref'] for d in data)}")
