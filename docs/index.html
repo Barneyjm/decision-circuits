@@ -127,7 +127,7 @@
   <header class="top">
     <div>decision-circuits · v0.3</div>
     <nav>
-      <a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#agents">Agents</a><a href="#models">Models</a>
+      <a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a>
       <a href="https://github.com/Barneyjm/decision-circuits">GitHub</a><a href="https://pypi.org/project/decision-circuits/">PyPI</a>
     </nav>
   </header>
@@ -210,6 +210,30 @@ out[<span class="s">"gates"</span>][<span class="s">"redact"</span>]
     <p style="margin-top:14px">And a test that didn't exist before: nine kinds of judgment (extract, compare, count, apply a rule, check a claim against a record, …) times six ways of laying out the data, every label computed by code. Jev scores 95% on it. It also gets confident on inputs built to be undecidable, which is exactly what a threshold with a band is there to catch.</p>
   </section>
 
+
+  <section id="scoreboard">
+    <h2>Scoreboard</h2>
+    <h3>Every System One model we can get our hands on, same items, same labels</h3>
+    <p>Jev is TypeSafe's API. Bespoke-Nimble-9B and kev-0.5b are open reproductions released September 18. circuit-1.7b is ours. Cells are accuracy / expected calibration error; lower ECE is better calibrated. Latency is per question, measured the same way for every row in a block.</p>
+    <div class="tbl"><table>
+      <tr><th>cold eval · 1,200 human-labeled items</th><th>MultiNLI</th><th>SMS spam</th><th>toxicity</th><th>CLINC, 151 intents</th><th>latency</th></tr>
+      <tr><td>Jev</td><td class="n">88% / 0.04</td><td class="n">96% / 0.05</td><td class="n">82% / 0.06</td><td class="n">90% / 0.05</td><td class="n">164 ms, API</td></tr>
+      <tr><td>Bespoke-Nimble-9B</td><td class="n">84% / 0.09</td><td class="n">91% / 0.06</td><td class="n">86% / 0.08</td><td class="n">unsupported (26-option cap)</td><td class="n">1.8 s, laptop</td></tr>
+      <tr><td>kev-0.5b</td><td class="n">46% / 0.28</td><td class="n">50% / 0.30</td><td class="n">62% / 0.16</td><td class="n">62% / 0.17</td><td class="n">325 ms, laptop</td></tr>
+      <tr><td><b>circuit-1.7b</b></td><td class="n">81% / 0.09</td><td class="n"><b>98% / 0.02</b></td><td class="n"><b>90%</b> / 0.16</td><td class="n">86% / 0.06</td><td class="n">175 ms, laptop</td></tr>
+    </table></div>
+    <p class="note" style="margin-top:12px">Those four tasks' public train splits are in circuit-1.7b's training data and presumably not in Jev's. The two blocks below were trained on by nobody.</p>
+    <div class="tbl" style="margin-top:14px"><table>
+      <tr><th>out of distribution</th><th>Jev</th><th>Nimble-9B</th><th>kev-0.5b</th><th>circuit-1.7b</th></tr>
+      <tr><td>the article's 100 water-utility calls, 11 types</td><td class="n">98% / 0.02</td><td class="n">93% / 0.05</td><td class="n">80% / 0.13</td><td class="n">92% / 0.08</td></tr>
+      <tr><td>546 production questions from a real site (agreement with Jev)</td><td class="n">—</td><td class="n">pending</td><td class="n">0.49 / 0.11</td><td class="n">0.70 / 0.05</td></tr>
+      <tr><td>generalization grid, 9 operations × 6 formats, labels computed by code</td><td class="n">95%</td><td class="n">85%</td><td class="n">48%</td><td class="n">97%*</td></tr>
+    </table></div>
+    <p style="margin-top:14px">* The grid generator is ours, so that row is held-out items, not held-out structure. Trained with one operation and one format withheld, the same recipe scores 91% on the unseen format and 57% on the unseen operation. Layouts transfer; new kinds of judgment have to be in the data.</p>
+    <p><b>The finding nobody else measures.</b> About five percent of grid items are built to be undecidable: a vague claim, two equal bars under "which is taller", a date with no year. The right answer is a flat distribution. Every model above, Jev included, answers those with mean confidence between 0.5 and 0.97. That is exactly the failure an uncertainty band around a threshold exists to catch, and why circuits escalate instead of trusting a number near the line.</p>
+    <p>circuit-1.7b: LoRA plus a pointer readout head on Qwen3-1.7B-Base, trained in 61 minutes on one RTX 4090 on code-labeled and CC-licensed data only. Weights and card on Hugging Face at launch.</p>
+  </section>
+
   <section id="agents">
     <h2>Agents</h2>
     <h3>The circuit sits where the agent shouldn't be trusted</h3>
@@ -229,7 +253,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <p>Circuits need calibrated probabilities. That's what a System One model produces: typed questions in, a distribution per question out, in one pass, in about 200 ms. The <code>SystemOne</code> backend talks to any server speaking that contract.</p>
     <div class="grid3">
       <div class="card"><h4>Jev · TypeSafe</h4><p>The model that made this practical. Drop in an API key.</p></div>
-      <div class="card"><h4>circuit-1.7b · open weights</h4><p>Our own S1 model, trained on code-labeled data with a pointer readout. Runs on a laptop.</p></div>
+      <div class="card"><h4>circuit-1.7b · open weights</h4><p>Our own S1 model: pointer readout, code-labeled and CC-licensed data only, 175 ms per question on a laptop. See the scoreboard.</p></div>
       <div class="card"><h4>Yours</h4><p>A backend is one method: <code>answer(state, questions)</code>. Wrap a cache, inject code-owned facts, chain fallbacks.</p></div>
     </div>
     <p class="note" style="margin-top:14px">No S1 model yet? Chat models can stand in through logprobs (OpenAI-compatible) or tool use (Claude), with the caveat that a chat model's stated confidence isn't calibrated the way an S1 model's output is.</p>
