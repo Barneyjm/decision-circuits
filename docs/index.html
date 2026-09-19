@@ -133,7 +133,7 @@
   </header>
 
   <h1>Don't ask the model to decide.<br>Ask it questions. <em>Decide in code.</em></h1>
-  <p class="lede">A decision circuit is a set of typed questions a model answers with probabilities, and a set of gates that turn those probabilities into decisions: thresholds, AND/OR/NOT, votes, verification. The model never sees the gates. Every decision carries its probability, its outcome, and a trace. When the number sits too close to a threshold to call, the gate says so and a human gets the case.</p>
+  <p class="lede">A decision circuit is a set of typed questions a model answers with probabilities, and a set of gates that turn those probabilities into decisions: thresholds, AND/OR/NOT, votes, verification. The model never sees the gates. Every decision carries its probability, its outcome, and a trace. When the number sits too close to a threshold to call, the gate says so and a human gets the case. The Magic 8-Ball figured this out in 1950: twenty answers, five of them "reply hazy, try again." It never guessed when it didn't know, and nobody minded.</p>
   <div class="install"><span>$</span><span>pip install <b>decision-circuits</b></span><span style="color:#A9BCD0"># no dependencies</span></div>
 
   <section id="try">
@@ -158,7 +158,7 @@
           <div class="gate" id="g-redact"><div class="row"><span class="name">redact</span><span class="expr">(pii &amp; ~business) ≥ 0.6, band 0.1, on_uncertain: escalate</span></div><div class="row"><span class="val" id="redact-val"></span><span class="badge" id="redact-badge"></span></div><div class="trace" id="redact-trace"></div><div class="human" id="redact-human"></div></div>
           <div class="gate" id="g-route"><div class="row"><span class="name">route</span><span class="expr">argmax(dept), min_confidence 0.35</span></div><div class="row"><span class="val" id="route-val"></span><span class="badge" id="route-badge"></span></div><div class="trace" id="route-trace"></div><div class="human" id="route-human"></div></div>
           <div class="gate" id="g-human"><div class="row"><span class="name">human</span><span class="expr">(angry | pii) ≥ 0.6</span></div><div class="row"><span class="val" id="human-val"></span><span class="badge" id="human-badge"></span></div><div class="trace" id="human-trace"></div><div class="human" id="human-human"></div></div>
-          <p class="note" style="margin:12px 0 0">Nudge <code>pii</code> to 0.65 and watch <code>redact</code> stop answering. That's the point: inside the band, the circuit escalates instead of guessing.</p>
+          <p class="note" style="margin:12px 0 0">Nudge <code>pii</code> to 0.65 and watch <code>redact</code> stop answering. That's the point: inside the band, the circuit says "ask again later" instead of guessing.</p>
         </div>
       </div>
     </div>
@@ -267,7 +267,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <div class="tbl"><table>
       <tr><th>model</th><th>base</th><th>state</th><th>status</th><th>where it stands</th></tr>
       <tr><td><b>circuit-1.7b</b></td><td>Qwen3-1.7B-Base</td><td>text, JSON, chat threads</td><td class="n">released</td><td>beats Jev on spam and toxicity, 4 points behind on 151-way intents, best calibration on the board; 175 ms per question on a laptop</td></tr>
-      <tr><td><b>circuit-8b</b></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">training</td><td>validation ECE 0.023 at the last checkpoint; the production-question benchmark is what it's for</td></tr>
+      <tr><td><b>circuit-8b</b> <span style="color:var(--muted)">· the 8-ball</span></td><td>Qwen3-8B-Base</td><td>text, JSON, chat threads</td><td class="n">training</td><td>validation ECE 0.023 at the last checkpoint; the production-question benchmark is what it's for</td></tr>
       <tr><td><b>circuit-vl-4b</b></td><td>Qwen3-VL-4B</td><td>images, multiple images, video frames, plus text</td><td class="n">training</td><td>raw base already reads receipts, charts, and forms at 97% on our rendered grid; the fine-tune adds calibration and removes the 26-option cap</td></tr>
       <tr><td><b>circuit-audio</b></td><td>Qwen2-Audio-7B</td><td>recorded speech and sound, plus text</td><td class="n">planned</td><td>raw base classifies synthesized support calls correctly and hears anger and urgency; the negative checker is its weak spot</td></tr>
     </table></div>
@@ -297,9 +297,9 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     el.classList.remove('yes', 'no', 'hold', 'block'); badge.classList.remove('yes', 'no', 'hold', 'block');
     hu.textContent = '';
     if (uncertain) {
-      el.classList.add('hold'); badge.classList.add('hold'); badge.textContent = policy;
+      el.classList.add('hold'); badge.classList.add('hold'); badge.textContent = policy === 'escalate' ? 'ask again later' : 'reply hazy, try again';
       val.textContent = (p != null ? 'p=' + f2(p) : '') + (conf != null ? '  confidence=' + f2(conf) : '') + '  value=None';
-      hu.textContent = policy === 'escalate' ? '→ a human decides this one' : '→ no decision; the caller handles it';
+      hu.textContent = policy === 'escalate' ? 'outcome: escalate → a human decides this one' : 'outcome: abstain → no decision; the caller handles it';
       tr.textContent = trace.concat(['uncertain -> ' + policy]).join('\n');
       return;
     }
