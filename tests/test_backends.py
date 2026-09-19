@@ -224,7 +224,7 @@ def test_systemone_gates_negotiation_learns_only_from_definitive_answers():
             sent.append("gates" in json)
             return _Resp(*seq.pop(0))
 
-    be = SystemOne(client=C())
+    be = SystemOne(client=C(), retry_for=0)
     with pytest.raises(SystemOneError):
         be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "threshold", "input": "u"}})
     assert be._server_gates is None  # a 503 taught nothing
@@ -239,3 +239,26 @@ def test_to_jsonable_keeps_message_identity():
 
     m = SimpleNamespace(type="tool", content="denied", name="delete_file", tool_call_id="c1", status="error", response_metadata={"big": 1})
     assert to_jsonable(m) == {"type": "tool", "content": "denied", "name": "delete_file", "tool_call_id": "c1", "status": "error"}
+
+
+def test_systemone_retries_while_the_model_starts_up():
+    seq = [(503, {"error": "starting"}), (503, {"error": "starting"}), (200, {"answers": {"u": {"type": "noul", "noul": 0.9}}})]
+
+    class C:
+        calls = 0
+
+        def post(self, url, json=None, headers=None):
+            C.calls += 1
+            status, body = seq.pop(0)
+
+            class R:
+                status_code = status
+
+                def json(self):
+                    return body
+
+            return R()
+
+    be = SystemOne(client=C(), retry_for=60, retry_wait=0)
+    assert be.answer("s", {"u": {"type": "noul", "instructions": "?"}})["u"]["noul"] == 0.9
+    assert C.calls == 3

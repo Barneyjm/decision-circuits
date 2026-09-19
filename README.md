@@ -88,7 +88,8 @@ talks to any server speaking the System One contract:
 | backend | install | server |
 |---|---|---|
 | `SystemOne("https://api.typesafe.ai/v1/systemone", api_key, model="jev-latest")` | none | TypeSafe's Jev |
-| `SystemOne("http://localhost:8901/v1/systemone", api_key)` | none | [s1proto](https://github.com/Barneyjm/s1-proto), an open-weights S1 model you can run yourself |
+| `SystemOne("https://api.decisioncircuits.com/v1/systemone", api_key)` | none | the hosted circuit family: `circuit-1.7b`, `circuit-8b`, `circuit-vl-4b` (images), `circuit-audio-7b` (sound); free keys at [decisioncircuits.com](https://decisioncircuits.com/#api) |
+| `SystemOne("http://localhost:8901/v1/systemone", api_key)` | none | [circuit](https://github.com/Barneyjm/circuit), the same open-weights models run yourself |
 
 A backend is any object with `answer(state, questions, *, model=None)`,
 so wrapping one (a cache, code-owned facts, a fallback) is a dozen
@@ -125,6 +126,21 @@ output is. Check on a labeled sample before trusting a threshold.
 
 Every gate takes `on_uncertain="abstain" | "escalate" | "default"`
 (with `default=value`) and `band=width`. `c.to_mermaid()` draws it.
+
+## Images and audio
+
+The state can be a picture or a recording; the circuit does not change.
+
+```python
+from decision_circuits import Audio, Circuit, Image, Q, argmax
+
+out = receipt_circuit.run(api, Image("receipt.png"), model="circuit-vl-4b")
+out = call_circuit.run(api, Audio("call.wav", text="Inbound, Tuesday"), model="circuit-audio-7b")
+```
+
+`Image` and `Audio` take a path, a URL, or bytes, plus an optional
+caption, and are sent as `{"image": <data URI>, "text": ...}`. See
+`examples/12_images_and_audio.py`.
 
 ## Examples
 

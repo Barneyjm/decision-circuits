@@ -143,6 +143,8 @@ def to_jsonable(x: Any) -> Any:
     on raw framework objects."""
     if x is None or isinstance(x, str | int | float | bool):
         return x
+    if callable(getattr(x, "to_jsonable", None)):  # Image / Audio, or any object that knows its wire form
+        return x.to_jsonable()
     if isinstance(x, Mapping):
         return {str(k): to_jsonable(v) for k, v in x.items()}
     if isinstance(x, list | tuple):

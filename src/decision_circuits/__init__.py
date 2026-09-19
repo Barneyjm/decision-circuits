@@ -40,6 +40,7 @@ from decision_circuits.dsl import (
     verify,
 )
 from decision_circuits.gates import Gate, GateResult, GateResultDict, evaluate_gates, result_key
+from decision_circuits.media import Audio, Image, Media
 from decision_circuits.types import Answer, Answers, Backend, Question, answer_from_probabilities, normalized_confidence, option_keys, to_jsonable
 
 __version__ = "0.3.0"
@@ -48,6 +49,7 @@ __all__ = [
     "And",
     "Answer",
     "Answers",
+    "Audio",
     "Backend",
     "Categorical",
     "Circuit",
@@ -57,6 +59,8 @@ __all__ = [
     "GateDef",
     "GateResult",
     "GateResultDict",
+    "Image",
+    "Media",
     "Not",
     "Or",
     "Q",

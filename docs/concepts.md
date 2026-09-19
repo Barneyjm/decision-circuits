@@ -12,6 +12,12 @@ tool call. Backends convert framework objects to JSON for you
 state is data to the model, never instructions; the questions should
 say so when the state might contain text written by someone else.
 
+An image or a clip can be the state: `Image("receipt.png")` or
+`Audio("call.wav", text="Inbound, Tuesday")` (a path, a URL, or bytes,
+plus an optional caption). It is sent as `{"image": <data URI or URL>,
+"text": ...}` and answered by a model built for it, chosen by name
+(`circuit-vl-4b`, `circuit-audio-7b`). Text-only requests do not change.
+
 ## Questions
 
 Three kinds, matching TypeSafe's System One API.
