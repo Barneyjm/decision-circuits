@@ -231,7 +231,7 @@ out[<span class="s">"gates"</span>][<span class="s">"redact"</span>]
     </table></div>
     <p style="margin-top:14px">* The grid generator is ours, so that row is held-out items, not held-out structure. Trained with one operation and one format withheld, the same recipe scores 91% on the unseen format and 57% on the unseen operation. Layouts transfer; new kinds of judgment have to be in the data.</p>
     <p><b>The finding nobody else measures.</b> About five percent of grid items are built to be undecidable: a vague claim, two equal bars under "which is taller", a date with no year. The right answer is a flat distribution. Every model above, Jev included, answers those with mean confidence between 0.5 and 0.97. That is exactly the failure an uncertainty band around a threshold exists to catch, and why circuits escalate instead of trusting a number near the line.</p>
-    <p>circuit-1.7b: LoRA plus a pointer readout head on Qwen3-1.7B-Base, trained in 61 minutes on one RTX 4090 on code-labeled and CC-licensed data only. Weights and card on Hugging Face at launch.</p>
+    <p>circuit-1.7b: LoRA plus a pointer readout head on Qwen3-1.7B-Base, trained in 61 minutes on one RTX 4090 on code-labeled and CC-licensed data only. Weights and card: <a href="https://huggingface.co/jbarney/circuit-1.7b">huggingface.co/jbarney/circuit-1.7b</a>. Training and evaluation code: <a href="https://github.com/Barneyjm/circuit">github.com/Barneyjm/circuit</a>.</p>
   </section>
 
   <section id="agents">
@@ -253,7 +253,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <p>Circuits need calibrated probabilities. That's what a System One model produces: typed questions in, a distribution per question out, in one pass, in about 200 ms. The <code>SystemOne</code> backend talks to any server speaking that contract.</p>
     <div class="grid3">
       <div class="card"><h4>Jev · TypeSafe</h4><p>The model that made this practical. Drop in an API key.</p></div>
-      <div class="card"><h4>circuit-1.7b · open weights</h4><p>Our own S1 model: pointer readout, code-labeled and CC-licensed data only, 175 ms per question on a laptop. See the scoreboard.</p></div>
+      <div class="card"><h4><a href="https://huggingface.co/jbarney/circuit-1.7b" style="color:inherit;text-decoration:none">circuit-1.7b · open weights</a></h4><p>Our own S1 model: pointer readout, code-labeled and CC-licensed data only, 175 ms per question on a laptop. See the scoreboard.</p></div>
       <div class="card"><h4>Yours</h4><p>A backend is one method: <code>answer(state, questions)</code>. Wrap a cache, inject code-owned facts, chain fallbacks.</p></div>
     </div>
     <p class="note" style="margin-top:14px">No S1 model yet? Chat models can stand in through logprobs (OpenAI-compatible) or tool use (Claude), with the caveat that a chat model's stated confidence isn't calibrated the way an S1 model's output is.</p>
@@ -262,6 +262,8 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
   <footer>
     <a href="https://github.com/Barneyjm/decision-circuits">github.com/Barneyjm/decision-circuits</a>
     <a href="https://pypi.org/project/decision-circuits/">pypi.org/project/decision-circuits</a>
+    <a href="https://github.com/Barneyjm/circuit">github.com/Barneyjm/circuit</a>
+    <a href="https://huggingface.co/jbarney/circuit-1.7b">huggingface.co/jbarney/circuit-1.7b</a>
     <a href="https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/">the article, May 2025</a>
     <span>MIT · James Barney</span>
   </footer>
