@@ -238,7 +238,7 @@
   <section id="api">
     <h2>API</h2>
     <h3>Call the models without running anything</h3>
-    <p>A hosted endpoint serves circuit-1.7b and circuit-8b at <code>api.decisioncircuits.com</code>, same request format as TypeSafe's <code>POST /v1/systemone</code>. Keys are free: 1,000 questions a day per key, no card, no account. The models scale to zero between calls, so the first call after a quiet spell takes about a minute while a GPU spins up; warm calls answer in under half a second.</p>
+    <p>A hosted endpoint serves all four models at <code>api.decisioncircuits.com</code>: the same request format as TypeSafe's <code>POST /v1/systemone</code>, and for circuit-vl-4b and circuit-audio-7b the state is an image or a clip. Keys are free: 1,000 questions a day per key, no card, no account. The models scale to zero between calls, so the first call after a quiet spell takes about a minute while a GPU spins up; warm calls answer in under a second.</p>
     <form class="keyform" id="keyform">
       <label for="key-email" style="display:none">Email (optional)</label>
       <input id="key-email" type="email" placeholder="email, optional" autocomplete="email">
@@ -249,7 +249,7 @@
   -H <span class="s">"Authorization: Bearer dc-..."</span> -H <span class="s">"Content-Type: application/json"</span> \
   -d <span class="s">'{"model": "circuit-8b", "state": "Card charged twice, my card ends in 4412",
        "questions": {"pii": {"type": "noul", "instructions": "Does the message contain personal information?"}}}'</span></pre>
-    <p>Or from Python: <code>SystemOne("https://api.decisioncircuits.com/v1/systemone", api_key=KEY)</code> as the backend of any circuit. Pass <code>"model": "circuit-1.7b"</code> for the faster, smaller one.</p>
+    <p>Or from Python: <code>SystemOne("https://api.decisioncircuits.com/v1/systemone", api_key=KEY)</code> as the backend of any circuit, and <code>Image("receipt.png")</code> or <code>Audio("call.wav")</code> as the state with <code>model="circuit-vl-4b"</code> or <code>"circuit-audio-7b"</code>. Pass <code>"circuit-1.7b"</code> for the fastest text model.</p>
   </section>
 
   <section id="try">
