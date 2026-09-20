@@ -20,3 +20,35 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
+
+  # The site and the API gateway are Cloudflare Workers, deployed until now from
+  # a laptop. Anything merged here that changes docs/ or gateway/ should be live
+  # without a human remembering. Needs CLOUDFLARE_API_TOKEN (Workers Scripts:Edit,
+  # Workers KV:Edit, Account Settings:Read) and CLOUDFLARE_ACCOUNT_ID; skipped
+  # when they are absent. Worker secrets set with `wrangler secret put` are not
+  # touched by a deploy, so S1_API_KEY and the Access token survive.
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy the site
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npx --yes wrangler@4 deploy
+      - name: Deploy the API gateway
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npx --yes wrangler@4 deploy -c gateway/wrangler.toml
+      - name: Check what is live
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: |
+          set -e
+          curl -fsS -o /dev/null https://decisioncircuits.com/
+          curl -fsS -o /dev/null https://decisioncircuits.com/terms
+          curl -fsS https://api.decisioncircuits.com/ | grep -q agent_skill
+      - name: Say why it was skipped
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "No CLOUDFLARE_API_TOKEN secret, so nothing was deployed. Set it and CLOUDFLARE_ACCOUNT_ID in repo settings." >> $GITHUB_STEP_SUMMARY
