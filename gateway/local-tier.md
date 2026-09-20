@@ -54,10 +54,28 @@ long a queued request waits for its turn before it declines too. Measured on
 one Mac at 3/1/8, a burst of eight arrived as three served locally in about
 three seconds each and five overflowed to Modal.
 
-To keep them across reboots, a launchd job per model
-(`~/Library/LaunchAgents/com.decisioncircuits.circuit-8b.plist`) with
-`RunAtLoad` and `KeepAlive` set, calling the same command through
-`/bin/zsh -lc` so `uv` is on the path.
+`deploy/serve_local.sh circuit-8b 8902` in the circuit repo is the same thing
+with the defaults baked in.
+
+**Surviving a reboot is awkward on macOS, and the reason is worth knowing.** A
+launchd agent cannot open anything under `~/Documents` — that directory is
+protected by the privacy system, and an agent has none of the consent a
+terminal has. Measured with a probe agent: it could stat the files and could
+not list the directory, and `zsh` reported `can't open input file` for a script
+sitting right there. So a plain launchd job pointed at a repo in `~/Documents`
+crash-loops, which is what happened here before anyone worked out why.
+
+Three ways out, in the order I would consider them:
+
+1. Keep the weights and the runner outside `~/Documents` — a copy of `runs/`
+   under `~/Library/Application Support/` with `S1_MODEL` pointing at it — and
+   let launchd start that. Nothing needs a privacy exception.
+2. Grant Full Disk Access to whatever launchd executes. It works and it is one
+   checkbox, but granting it to `/bin/zsh` grants it to every script anything
+   runs through zsh.
+3. Start it by hand after a reboot, which is what `nohup deploy/serve_local.sh`
+   is for. The gateway treats an absent local tier as overflow and sends the
+   questions to Modal, so the cost of forgetting is money, not downtime.
 
 ## 2. Put a tunnel in front of them
 
