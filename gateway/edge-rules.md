@@ -32,29 +32,43 @@ hour on 60 of those 403s before getting through. The API's real limits are in
 the Worker — 60 questions a minute per key, 600 across all keys — and those are
 unaffected by this rule. The website keeps every protection it has.
 
-## 2. Hosted sample media is fetchable by machines
+## 2. What is published for machines is fetchable by machines
 
 | | |
 |---|---|
-| Expression | `(http.host eq "decisioncircuits.com" and starts_with(http.request.uri.path, "/bench/"))` |
-| Action | Skip → Browser Integrity Check |
+| Expression | `(http.host eq "decisioncircuits.com" and (starts_with(http.request.uri.path, "/bench/") or http.request.uri.path in {"/skill.md" "/llms.txt" "/robots.txt" "/sitemap.xml"}))` |
+| Action | Skip → Browser Integrity Check (and Super Bot Fight Mode) |
 | Order | After rule 1 |
 
-**Why.** `/bench/call.wav` is in the published examples as an audio state, so
-the thing fetching it is a model server or somebody's script, never a browser.
-Our own vision and audio endpoints could not read it until the service started
-sending a named User-Agent, and every other caller has the same problem.
+**Why.** Every path here exists for something that is not a browser.
+`/bench/call.wav` is the audio state in the published example, fetched by
+whichever model server the caller points at it — our own vision and audio
+endpoints could not read it until the service started sending a named
+User-Agent. `skill.md` is written for agents and tells them how to sign up;
+`llms.txt` exists only so automated readers find the docs; `robots.txt` and
+`sitemap.xml` are for crawlers by definition. All four answered 403 to a plain
+client until this rule, which is the whole failure in one line: the edge
+refusing the exact clients a resource was published for.
 
-Everything outside `/bench/` on the website is untouched.
+The rest of the website — the front page, `/terms`, the assets — is untouched
+and still answers 403 to `Python-urllib`, which is how you can tell the rule is
+scoped rather than global.
 
 ## Checking them
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' -A 'Python-urllib/3.12' \
-  -X POST https://api.decisioncircuits.com/v1/systemone -d '{}'      # want 401, not 403
-curl -s -o /dev/null -w '%{http_code}\n' -A 'Python-urllib/3.12' \
-  https://decisioncircuits.com/bench/call.wav                        # want 200
+ua='Python-urllib/3.12'
+curl -s -o /dev/null -w '%{http_code}\n' -A "$ua" \
+  -X POST https://api.decisioncircuits.com/v1/systemone -d '{}'   # want 401, not 403
+for p in /skill.md /llms.txt /robots.txt /sitemap.xml /bench/call.wav; do
+  curl -s -o /dev/null -w "%{http_code} $p\n" -A "$ua" "https://decisioncircuits.com$p"   # want 200
+done
+curl -s -o /dev/null -w '%{http_code}\n' -A "$ua" https://decisioncircuits.com/   # want 403: still protected
 ```
+
+Measured after both rules were in place, a script using Python's `urllib` with
+no User-Agent of its own read the skill, signed itself up, asked a question and
+thresholded the answer — four steps from a bare URL, no human anywhere in it.
 
 A 403 from either means the rule is missing, disabled, or ordered below
 something that matches first.
