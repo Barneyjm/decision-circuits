@@ -41,6 +41,20 @@ the key with the date it was issued. What you send in a question is answered and
 see [terms and data use](https://decisioncircuits.com/terms). If you are handling personal or
 regulated data, download the weights and run them yourself instead.
 
+### Send a User-Agent
+
+If you are writing the HTTP call yourself rather than using a library that sets
+one, name your client:
+
+```python
+req.add_header("User-Agent", "my-agent/1.0")  # anything identifying you
+```
+
+Python's `urllib` sends `Python-urllib/3.x` by default, which edge bot protection
+(ours included, until recently) is liable to answer with a bare 403 before the
+request reaches the API — no error body, nothing to act on. `requests`, `httpx`
+and `curl` set their own and are fine. The Python SDK below sets one for you.
+
 ## 2. Ask a question
 
 ```bash
