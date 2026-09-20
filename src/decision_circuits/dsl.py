@@ -202,19 +202,19 @@ class Circuit:
     model: str | None = None  # None: the backend picks
 
     # questions ---------------------------------------------------------
-    def noul(self, qid: str, instructions: Any, true: str | None = None, false: str | None = None) -> Circuit:
+    def noul(self, qid: str, instructions: Any, true: str | None = None, false: str | None = None, **extra: Any) -> Circuit:
         q: dict[str, Any] = {"type": "noul", "instructions": instructions}
         if true or false:
             q["criteria"] = {"true": true, "false": false}
-        self.questions[qid] = q
+        self.questions[qid] = {**q, **extra}
         return self
 
-    def choice(self, qid: str, instructions: Any, criteria: dict[str, Any]) -> Circuit:
-        self.questions[qid] = {"type": "choice", "instructions": instructions, "criteria": criteria}
+    def choice(self, qid: str, instructions: Any, criteria: dict[str, Any], **extra: Any) -> Circuit:
+        self.questions[qid] = {"type": "choice", "instructions": instructions, "criteria": criteria, **extra}
         return self
 
-    def score(self, qid: str, instructions: Any, levels: list[Any]) -> Circuit:
-        self.questions[qid] = {"type": "score", "instructions": instructions, "criteria": levels}
+    def score(self, qid: str, instructions: Any, levels: list[Any], **extra: Any) -> Circuit:
+        self.questions[qid] = {"type": "score", "instructions": instructions, "criteria": levels, **extra}
         return self
 
     # gates -------------------------------------------------------------

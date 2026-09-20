@@ -133,3 +133,18 @@ def test_to_mermaid_is_a_method():
     c.noul("pii", "PII?")
     c.gate("redact", Q("pii") >= 0.7)
     assert "redact" in c.to_mermaid(plain=True)
+
+
+def test_questions_carry_fields_this_version_does_not_know_about():
+    """A server may accept per-question fields newer than this SDK. Passing one
+    through beats waiting for a release, and an unknown field is ignored by any
+    server that doesn't use it."""
+    c = Circuit()
+    c.noul("billing", "Is this about a bill?", weight=2)
+    c.choice("dept", "Which team?", {"a": None, "b": None}, weight=3)
+    c.score("urgency", "How urgent?", ["low", "high"], weight=4)
+    assert c.questions["billing"]["weight"] == 2
+    assert c.questions["dept"]["weight"] == 3
+    assert c.questions["urgency"]["weight"] == 4
+    assert c.questions["billing"]["type"] == "noul"
+    assert c.questions["dept"]["criteria"] == {"a": None, "b": None}
