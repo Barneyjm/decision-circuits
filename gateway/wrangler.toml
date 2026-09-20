@@ -9,6 +9,10 @@ routes = [{ pattern = "api.decisioncircuits.com", custom_domain = true }]
 [vars]
 MODAL_URLS = '{"circuit-1.7b":"https://james-73074--circuit-1-7b.modal.run","circuit-8b":"https://james-73074--circuit-8b.modal.run","circuit-vl-4b":"https://james-73074--circuit-vl-4b.modal.run","circuit-audio-7b":"https://james-73074--circuit-audio-7b.modal.run"}'
 DEFAULT_MODEL = "circuit-1.7b"
+# The local tier: model name -> Cloudflare Tunnel hostname of a machine at home, used only
+# while a Modal container is booting (see gateway/local-tier.md). Empty map = off, which is
+# the default. Never point this at api.decisioncircuits.com: the Worker would fetch itself.
+LOCAL_URLS = '{}'
 KEY_DAILY_QUOTA = "1000"      # advertised on issued keys; enforced as KEY_LIMIT per minute below
 
 [[kv_namespaces]]

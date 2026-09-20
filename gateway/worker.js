@@ -4,7 +4,18 @@
 //   POST /v1/systemone  Authorization: Bearer dc-...  -> the System One response from the chosen model
 //   GET  /v1/models                                    -> the models this gateway serves
 //
-// Secrets: S1_API_KEY (the bearer the Modal services require).
+// Secrets: S1_API_KEY (the bearer both upstreams require), and for the local tier
+// LOCAL_ACCESS_ID / LOCAL_ACCESS_SECRET (a Cloudflare Access service token).
+//
+// The local tier covers cold starts. Modal scales to zero, so the first call after a
+// quiet spell waits about a minute for a GPU. When LOCAL_URLS names a model, that call
+// is hedged: Modal gets HEDGE_MS to answer (a warm container needs far less), and if it
+// hasn't, the same question goes to a machine at home over a Cloudflare Tunnel and
+// whichever answers first wins. Modal's boot is never cancelled, so the caller after
+// this one lands on a warm GPU and the local tier goes quiet again.
+
+const HEDGE_MS = 1500; // a warm Modal container answers well inside this; a booting one cannot
+const LOCAL_TIMEOUT_MS = 8000; // the machine at home is asleep, updating, or gone: fail fast and let Modal have it
 
 const json = (body, status = 200, headers = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", ...headers } });
@@ -37,7 +48,7 @@ async function issueKey(request, env) {
   return json({ key, rate: "60 questions a minute", models: Object.keys(JSON.parse(env.MODAL_URLS)), endpoint: "https://api.decisioncircuits.com/v1/systemone" });
 }
 
-async function proxy(request, env) {
+async function proxy(request, env, ctx) {
   const auth = request.headers.get("authorization") || "";
   if (!auth.toLowerCase().startsWith("bearer ")) return json({ error: "missing bearer token" }, 401);
   const key = auth.slice(7).trim();
@@ -58,37 +69,80 @@ async function proxy(request, env) {
   const urls = JSON.parse(env.MODAL_URLS);
   const model = body.model && urls[body.model] ? body.model : env.DEFAULT_MODEL;
   body.model = model;
-  let upstream;
-  try {
-    upstream = await fetch(`${urls[model]}/v1/systemone`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${env.S1_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
-      redirect: "follow", // Modal answers a slow first boot with a 303 to the result; follow it
-    });
-  } catch (e) {
-    return json({ error: "the model is starting up; retry in 30 s", model }, 503, { "retry-after": "30" });
+  const payloadText = JSON.stringify(body);
+
+  const modal = ask(urls[model], { authorization: `Bearer ${env.S1_API_KEY}` }, payloadText, 120000).then(tag("modal"));
+  const localBase = localUrlFor(env, model);
+  let answer = null;
+  if (!localBase) {
+    answer = await modal.catch(() => null);
+  } else {
+    const hedge = new Promise((r) => setTimeout(() => r(null), HEDGE_MS));
+    answer = await Promise.race([modal.catch(() => null), hedge]);
+    if (!answer) {
+      // Modal is booting (or broken). Ask home, and let the boot run to completion so the next caller lands warm.
+      ctx.waitUntil(modal.catch(() => {}));
+      const local = ask(localBase, localHeaders(env), payloadText, LOCAL_TIMEOUT_MS).then(tag("local"));
+      answer = await Promise.any([modal, local]).catch(() => null);
+    }
   }
-  const headers = { "x-circuit-model": model, "x-circuit-rate": "60/min per key" };
-  const lat = upstream.headers.get("x-s1-latency-ms");
-  if (lat) headers["x-s1-latency-ms"] = lat;
-  const text = await upstream.text();
+  if (!answer) return json({ error: "the model is starting up; retry in 30 s", model }, 503, { "retry-after": "30" });
+
+  const headers = { "x-circuit-model": model, "x-circuit-rate": "60/min per key", "x-circuit-served-by": answer.via };
+  if (answer.latency) headers["x-s1-latency-ms"] = answer.latency;
+  return json(answer.payload, answer.status, headers);
+}
+
+// The tunnel hostname for a model, when one is configured. An empty map turns the tier off.
+function localUrlFor(env, model) {
+  if (!env.LOCAL_URLS) return null;
+  try {
+    return JSON.parse(env.LOCAL_URLS)[model] || null;
+  } catch {
+    return null;
+  }
+}
+
+// Access sits in front of the tunnel, so the service token rides along with the model's own bearer.
+function localHeaders(env) {
+  const h = { authorization: `Bearer ${env.S1_API_KEY}` };
+  if (env.LOCAL_ACCESS_ID && env.LOCAL_ACCESS_SECRET) {
+    h["cf-access-client-id"] = env.LOCAL_ACCESS_ID;
+    h["cf-access-client-secret"] = env.LOCAL_ACCESS_SECRET;
+  }
+  return h;
+}
+
+const tag = (via) => (r) => ({ ...r, via });
+
+// One upstream call. Rejects on anything that means "not answered" — a timeout, a dead
+// host, a 5xx, a cold start's non-JSON body — so the hedge can take the other branch.
+// A 4xx is an answer (a malformed question), and comes back as one.
+async function ask(base, headers, body, timeoutMs) {
+  const r = await fetch(`${base}/v1/systemone`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body,
+    redirect: "follow", // Modal answers a slow first boot with a 303 to the result; follow it
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const text = await r.text();
+  if (r.status >= 500) throw new Error(`upstream ${r.status}`);
   let payload;
   try {
     payload = JSON.parse(text);
   } catch {
-    // a non-JSON body is the platform, not the model: a cold start that outran a timeout. Say so and ask for a retry.
-    return json({ error: "the model is starting up; retry in 30 s", model, upstream_status: upstream.status }, 503, { ...headers, "retry-after": "30" });
+    throw new Error("non-JSON body"); // the platform, not the model: a cold start that outran a timeout
   }
-  return json(payload, upstream.status, headers);
+  return { status: r.status, payload, latency: r.headers.get("x-s1-latency-ms") };
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return cors();
     if (url.pathname === "/v1/keys" && request.method === "POST") return issueKey(request, env);
-    if (url.pathname === "/v1/systemone" && request.method === "POST") return proxy(request, env);
+    if (url.pathname === "/v1/systemone" && request.method === "POST") return proxy(request, env, ctx);
     if (url.pathname === "/v1/models") return json({ models: Object.keys(JSON.parse(env.MODAL_URLS)), default: env.DEFAULT_MODEL });
     if (url.pathname === "/") return json({ name: "circuit api", docs: "https://decisioncircuits.com", agent_skill: "https://decisioncircuits.com/skill.md", signup: "POST /v1/keys", call: "POST /v1/systemone with Authorization: Bearer <key>" });
     return json({ error: "not found" }, 404);

@@ -1,0 +1,130 @@
+# The local tier: covering Modal's cold start with a machine at home
+
+Modal scales to zero, which is why the API costs almost nothing to run and
+why the first call after a quiet spell waits about a minute for a GPU. That
+minute is the worst thing about the free API. This closes it with hardware
+you already own, without turning that hardware into production.
+
+**How it works.** Every call goes to Modal first. If Modal answers within
+`HEDGE_MS` (1.5 s — a warm container needs a fraction of that), nothing else
+happens and the machine at home is never touched. If it doesn't, the same
+question goes out over a Cloudflare Tunnel to the Mac, and whichever answers
+first is returned. Modal's boot is **never cancelled**, so the caller after
+this one lands on a warm GPU and the local tier falls silent again. It only
+ever runs during the ~60 s window it exists to cover.
+
+`x-circuit-served-by: modal | local` on every response says which answered.
+
+Tailscale can't do this job: the Workers runtime has no WireGuard, so the
+gateway cannot reach a tailnet address. Tailscale Funnel would work, but it
+puts a public `ts.net` hostname and a DERP relay hop in the path. A
+Cloudflare Tunnel keeps the traffic inside the network the gateway already
+runs in.
+
+## 1. Serve the models on the Mac
+
+One process per model, each on its own port, from the circuit repo with the
+weights already in `runs/`. `S1_API_KEY` must match the gateway's secret.
+
+```bash
+cd ~/Documents/code/s1-proto
+export S1_API_KEY=...                                    # same value as the Worker secret
+S1_MODEL=lora:runs/circuit-8b     PORT=8902 uv run python -m s1proto &
+S1_MODEL=lora:runs/circuit-vl-4b  PORT=8903 uv run python -m s1proto &
+curl -s localhost:8902/healthz
+```
+
+Host only the models worth covering. Each one holds its weights in memory
+for as long as it runs, and the audio and vision models are the largest.
+
+To keep them across reboots, a launchd job per model
+(`~/Library/LaunchAgents/com.decisioncircuits.circuit-8b.plist`) with
+`RunAtLoad` and `KeepAlive` set, calling the same command through
+`/bin/zsh -lc` so `uv` is on the path.
+
+## 2. Put a tunnel in front of them
+
+```bash
+brew install cloudflared
+cloudflared tunnel login                                  # opens a browser; pick decisioncircuits.com
+cloudflared tunnel create circuit-mac
+cloudflared tunnel route dns circuit-mac mac-8b.decisioncircuits.com
+cloudflared tunnel route dns circuit-mac mac-vl-4b.decisioncircuits.com
+```
+
+`~/.cloudflared/config.yml`:
+
+```yaml
+tunnel: circuit-mac
+credentials-file: /Users/jbarney/.cloudflared/<TUNNEL-ID>.json
+ingress:
+  - hostname: mac-8b.decisioncircuits.com
+    service: http://localhost:8902
+  - hostname: mac-vl-4b.decisioncircuits.com
+    service: http://localhost:8903
+  - service: http_status:404
+```
+
+```bash
+cloudflared tunnel run circuit-mac        # then: sudo cloudflared service install
+```
+
+Use hostnames the gateway does not serve. Pointing a tunnel at
+`api.decisioncircuits.com` makes the Worker fetch itself.
+
+## 3. Lock it to the gateway
+
+Without this, anyone who learns the hostname can run your GPU at home.
+
+1. Zero Trust → Access → Service Auth → create a service token, `circuit-gateway`.
+2. Zero Trust → Access → Applications → self-hosted, domain `mac-8b.decisioncircuits.com`
+   (one per hostname), policy action **Service Auth**, rule: that token.
+3. Give the Worker the token:
+
+```bash
+npx wrangler secret put LOCAL_ACCESS_ID -c gateway/wrangler.toml
+npx wrangler secret put LOCAL_ACCESS_SECRET -c gateway/wrangler.toml
+```
+
+The gateway sends them as `CF-Access-Client-Id` / `CF-Access-Client-Secret`
+alongside the model's own bearer token. Two locks, both required.
+
+## 4. Turn it on
+
+In `gateway/wrangler.toml`, name the models the Mac serves:
+
+```toml
+LOCAL_URLS = '{"circuit-8b":"https://mac-8b.decisioncircuits.com","circuit-vl-4b":"https://mac-vl-4b.decisioncircuits.com"}'
+```
+
+```bash
+npx wrangler deploy -c gateway/wrangler.toml
+```
+
+## 5. Check it
+
+With Modal cold (leave it more than two minutes), ask a question and watch
+the header:
+
+```bash
+curl -si https://api.decisioncircuits.com/v1/systemone \
+  -H "Authorization: Bearer dc-..." -H "Content-Type: application/json" \
+  -d '{"model":"circuit-8b","state":"the pipe burst on Elm","questions":{"urgent":{"type":"noul","instructions":"Does this need someone today?"}}}' \
+  | grep -i 'x-circuit-served-by\|HTTP/'
+```
+
+First call `served-by: local` in a couple of seconds. Repeat within two
+minutes: `served-by: modal` in well under one. That is the whole feature.
+
+## Turning it off
+
+Set `LOCAL_URLS = '{}'` and deploy. The Mac can also simply go to sleep —
+an unreachable tunnel costs one failed subrequest inside a window the caller
+was already going to spend waiting.
+
+## What this is not
+
+Not a load tier and not a failover for real traffic. It serves strangers'
+request bodies — receipts, recordings, whatever people upload — from a
+machine in your house. That is a reasonable trade for a free research API
+and the wrong one the moment real customer data shows up.
