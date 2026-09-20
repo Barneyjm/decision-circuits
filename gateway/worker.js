@@ -7,6 +7,16 @@
 // Secrets: S1_API_KEY (the bearer both upstreams require), and for the local tier
 // LOCAL_ACCESS_ID / LOCAL_ACCESS_SECRET (a Cloudflare Access service token).
 //
+// Tiers. Every key is "free" until someone writes in and says what they are doing;
+// raising one is a hand edit, so there is no billing and no accounts to run:
+//
+//   npx wrangler kv key get "pfx:dc-XXXXXXX" --namespace-id <KEYS> --remote  # -> the hash
+//   npx wrangler kv key get "key:<hash>" --namespace-id <KEYS> --remote      # -> the record
+//   npx wrangler kv key put "key:<hash>" '<record with "tier":"pro">' --namespace-id <KEYS> --remote
+//
+// The pfx: entry exists so a key can be identified from the ten characters its owner
+// can safely paste into an email, instead of from the key itself.
+//
 // Where a question goes. When LOCAL_URLS names a model, hardware at home answers it and
 // no GPU is rented at all: the occasional question costs nothing and waits for nothing.
 // Modal is the overflow, woken only when home cannot take the work —
@@ -32,6 +42,14 @@ async function sha256(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Per-minute allowance by tier. "free" is what self-serve gets; anything else is set by hand.
+const TIERS = { free: "KEY_LIMIT", pro: "PRO_LIMIT" };
+const TIER_RATE = { free: "60 questions a minute", pro: "1,200 questions a minute" };
+
+const UPGRADE =
+  "Email hello@decisioncircuits.com for a higher limit. Include the first ten characters of your key, " +
+  "what you are building, how many questions a day and at peak per minute, and which models you use.";
+
 function newKey() {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return "dc-" + btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -42,18 +60,22 @@ async function issueKey(request, env) {
   const { success: okIp } = await env.SIGNUP_LIMIT.limit({ key: ip });
   if (!okIp) return json({ error: "too many keys requested from this address; try again in a minute" }, 429);
   // An email is optional and kept only so a key has an owner to write to. Everything else
-  // about a key record is the date it was issued and what it may spend.
+  // about a key record is the date it was issued, what it may spend, and its tier.
   let email = null;
   try {
     const body = await request.json();
     if (typeof body.email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email)) email = body.email.trim().toLowerCase();
   } catch {}
   const key = newKey();
-  const record = { email, created: new Date().toISOString(), quota: parseInt(env.KEY_DAILY_QUOTA, 10) };
-  await env.KEYS.put(`key:${await sha256(key)}`, JSON.stringify(record));
+  const prefix = key.slice(0, 10);
+  const record = { email, created: new Date().toISOString(), quota: parseInt(env.KEY_DAILY_QUOTA, 10), tier: "free", prefix };
+  const hash = await sha256(key);
+  await env.KEYS.put(`key:${hash}`, JSON.stringify(record));
+  await env.KEYS.put(`pfx:${prefix}`, hash); // find a key from what its owner can safely paste
   return json({
     key,
-    rate: "60 questions a minute",
+    rate: TIER_RATE.free,
+    upgrade: UPGRADE,
     models: Object.keys(JSON.parse(env.MODAL_URLS)),
     endpoint: "https://api.decisioncircuits.com/v1/systemone",
     terms: "https://decisioncircuits.com/terms",
@@ -66,8 +88,9 @@ async function proxy(request, env, ctx) {
   const key = auth.slice(7).trim();
   const rec = await env.KEYS.get(`key:${await sha256(key)}`, { type: "json" });
   if (!rec) return json({ error: "unknown api key" }, 401);
-  const { success: okKey } = await env.KEY_LIMIT.limit({ key: await sha256(key) });
-  if (!okKey) return json({ error: "this key is over its rate (60 questions a minute); slow down" }, 429, { "retry-after": "10" });
+  const tier = TIERS[rec.tier] ? rec.tier : "free";
+  const { success: okKey } = await env[TIERS[tier]].limit({ key: await sha256(key) });
+  if (!okKey) return json({ error: `this key is over its rate (${TIER_RATE[tier]}); slow down`, tier, upgrade: UPGRADE }, 429, { "retry-after": "10" });
   const { success: okAll } = await env.GLOBAL_LIMIT.limit({ key: "all" });
   if (!okAll) return json({ error: "the free tier is at capacity right now; retry shortly" }, 503, { "retry-after": "10" });
 
@@ -102,7 +125,7 @@ async function proxy(request, env, ctx) {
   }
   if (!answer) return json({ error: "the model is starting up; retry in 30 s", model }, 503, { "retry-after": "30" });
 
-  const headers = { "x-circuit-model": model, "x-circuit-rate": "60/min per key", "x-circuit-served-by": answer.via };
+  const headers = { "x-circuit-model": model, "x-circuit-rate": TIER_RATE[tier], "x-circuit-served-by": answer.via };
   if (answer.latency) headers["x-s1-latency-ms"] = answer.latency;
   if (answer.payload && answer.payload.request_id) headers["x-request-id"] = answer.payload.request_id;
   return json(answer.payload, answer.status, headers);

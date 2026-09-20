@@ -20,20 +20,33 @@ binding = "KEYS"
 id = "af80ab5a71b14172a964086fe9d5785a"
 
 # Rate limits live in Workers' own limiter (free, unmetered), not in KV writes.
-[[unsafe.bindings]]
+# These must be [[ratelimits]]: written as [[unsafe.bindings]] with type = "ratelimit"
+# wrangler accepts them as unsafe metadata, env.X.limit() answers success on every
+# call, and nothing is ever limited. Verified after the change by exceeding each one.
+[[ratelimits]]
 name = "KEY_LIMIT"
-type = "ratelimit"
 namespace_id = "1001"
-simple = { limit = 60, period = 60 }      # calls per key per minute
+  [ratelimits.simple]
+  limit = 60          # questions per key per minute, the self-serve tier
+  period = 60
 
-[[unsafe.bindings]]
+[[ratelimits]]
+name = "PRO_LIMIT"
+namespace_id = "1004"
+  [ratelimits.simple]
+  limit = 1200        # a key raised by hand: a few thousand items read in minutes
+  period = 60
+
+[[ratelimits]]
 name = "GLOBAL_LIMIT"
-type = "ratelimit"
 namespace_id = "1002"
-simple = { limit = 600, period = 60 }     # calls across all keys per minute (a spend ceiling: ~860k/day at most)
+  [ratelimits.simple]
+  limit = 3000        # across all keys; the GPU spend ceiling is max_containers, not this
+  period = 60
 
-[[unsafe.bindings]]
+[[ratelimits]]
 name = "SIGNUP_LIMIT"
-type = "ratelimit"
 namespace_id = "1003"
-simple = { limit = 3, period = 60 }       # key requests per address per minute
+  [ratelimits.simple]
+  limit = 3           # key requests per address per minute
+  period = 60

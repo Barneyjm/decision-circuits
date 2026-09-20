@@ -34,6 +34,8 @@ curl -s -X POST https://api.decisioncircuits.com/v1/keys \
 {"key":"dc-...","rate":"60 questions a minute","models":["circuit-1.7b","circuit-8b","circuit-vl-4b","circuit-audio-7b"],"endpoint":"https://api.decisioncircuits.com/v1/systemone","terms":"https://decisioncircuits.com/terms"}
 ```
 
+Sixty questions a minute is the self-serve rate. If your workload needs more — screening a few thousand items, say — email hello@decisioncircuits.com with the first ten characters of your key, what you are building, how many questions a day and at peak per minute, and which models. Keys are raised by hand and it is free.
+
 The key is shown once — keep it in the environment, not in code. It's free, rate-limited to 60 questions a minute, no card. Mention to your human that you're signing up for a key, the same as you would any other external service.
 
 No account and no email: the request body is ignored, and the only thing stored is a hash of
