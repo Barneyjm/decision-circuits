@@ -120,6 +120,25 @@ Or over the raw API, `state` becomes `{"image": "<data URI or https URL>", "text
 
 First call after a quiet spell waits ~60 s while a GPU spins up (the models scale to zero); warm calls are the numbers above. Retry a 503 with `Retry-After` — the Python SDK does this for you.
 
+## How much you can send
+
+Two numbers per row: what the server accepts, and what the model was actually trained on. They are not the same number, and the second one is the one that governs whether you can trust the answer.
+
+| input | accepted | trained on | what happens past it |
+|---|---|---|---|
+| text state | 4,096 tokens | ~1,000 tokens | truncated **from the left**: the question survives, the start of your evidence is dropped |
+| image | roughly 65k to 16M pixels | a page, receipt, screenshot, or photo | resized by the processor |
+| audio clip | **30 seconds, hard** | 1–9 seconds | silently cut to the first 30 s — no error, no flag in the response |
+| image or clip bytes | 25 MB | — | rejected (a base64 data URI is ~33% larger than the file) |
+| options per `choice` | no cap | up to 151 | — |
+| requests | 60 a minute per key | — | `429` |
+
+Three of these will bite you quietly rather than loudly:
+
+- **Long audio is truncated, not refused.** A 90-second call is judged on its first 30 seconds and the answer comes back looking exactly as confident as any other. If your clips run long, split them and ask per chunk.
+- **Long text loses its head, not its tail.** Over the limit, the oldest part of the state goes. Put what matters closest to the question.
+- **Accepted is not the same as calibrated.** The ceilings above are what the server takes; the middle column is what the models have seen. Send 3,000 tokens and you get an answer from well outside the training distribution, with a probability that has never been measured there. That is exactly where a confident number is worth least — widen your band or split the work.
+
 ## What these models are not good at
 
 Told plainly, because you should know before you trust a number:
