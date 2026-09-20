@@ -66,12 +66,15 @@ Three question types: **noul** (yes/no, returns `noul` = P(yes)), **choice** (on
 This is the part that matters. Don't just take the top answer.
 
 ```python
-p = answers["destructive"]["noul"]        # 0.57 for the command above
+p = answers["destructive"]["noul"]  # 0.57 for the command above
 TAU, BAND = 0.6, 0.1
 
-if p >= TAU + BAND:      block("looks destructive", p)      # 0.70+
-elif p <= TAU - BAND:    proceed()                          # 0.50-
-else:                    ask_the_human(f"not sure this is safe (p={p:.2f}) — proceed?")
+if p >= TAU + BAND:
+    block("looks destructive", p)  # 0.70+
+elif p <= TAU - BAND:
+    proceed()  # 0.50-
+else:
+    ask_the_human(f"not sure this is safe (p={p:.2f}) — proceed?")
 ```
 
 The band is the point. Our example lands at 0.57, inside it, so the right move is to ask — which is very likely what a careful colleague would do with that exact command. Without a number you'd have picked a side and sounded certain either way. Do this in code and your uncertainty becomes a visible, auditable decision instead of a coin flip you narrate confidently.
