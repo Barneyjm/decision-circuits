@@ -674,6 +674,16 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     });
   });
 
+  // A section can be reached at its own path (/scoreboard) as well as its anchor, because
+  // Threads and other feeds strip #fragments out of pasted links. Same page either way.
+  (function () {
+    const seg = location.pathname.replace(/^\/+|\/+$/g, '');
+    const target = seg && document.getElementById(seg);
+    if (!target) return;
+    addEventListener('load', () => target.scrollIntoView({ behavior: 'instant', block: 'start' }));
+    target.scrollIntoView({ behavior: 'instant', block: 'start' });
+  })();
+
   // quiz:start
   // The quiz: one static card, in its own scope.
   // The clock runs while a question is open, picking stops it, and the last Next shows the board.
