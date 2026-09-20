@@ -127,7 +127,7 @@ def main() -> None:
         )
         cards.append(
             f'      <article class="qz" data-i="{i}">\n'
-            f'        <p class="src">{html.escape(it["label"])} · answered by {html.escape(it["model"])}</p>\n'
+            f'        <div class="head"><p class="src">{i + 1} of {len(items)} · {html.escape(it["label"])}</p><span class="clock">0.0 s</span></div>\n'
             f"        {state_html(it)}\n"
             f'        <p class="ask">{html.escape(q["instructions"])}</p>\n'
             f'        <div class="opts">{btns}</div>\n'
