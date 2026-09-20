@@ -324,6 +324,7 @@
 
       <div class="qz-results" id="qz-results" hidden>
         <p class="ask" id="qz-final"></p>
+        <p class="blurb" id="qz-speed"></p>
         <div class="tbl"><table class="sheet" id="qz-board"></table></div>
         <div class="tbl"><table id="qz-table"></table></div>
         <div class="nav">
@@ -578,8 +579,10 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     const qz = [{"label": "the article's water-utility calls", "ask": "Extract the category of this customer service call to a water utility.", "opts": [{"k": "RESTORE", "l": "RESTORE", "t": "Water service was shut off (repairs, construction, non-payment) and needs to be turned back on"}, {"k": "ABATEMENT", "l": "ABATEMENT", "t": "A property, often vacant or abandoned, with a leak or running water that needs to be stopped"}, {"k": "AMR (METERING)", "l": "AMR (METERING)", "t": "Water meter or automatic meter reading problems: blank display, wrong readings, replacement"}, {"k": "BILLING", "l": "BILLING", "t": "Charges, payment, account balance, bill amount disputes, payment plans"}, {"k": "BPCS (BROKEN PIPE)", "l": "BPCS (BROKEN PIPE)", "t": "A broken or leaking water main or service pipe, water coming up through the street or ground"}, {"k": "BTR/O (BAD TASTE & ODOR)", "l": "BTR/O (BAD TASTE & ODOR)", "t": "Water tastes or smells bad: chlorine, rotten eggs, metallic, discolored"}, {"k": "C/I - DEP (CAVE IN/DEPRESSION)", "l": "C/I - DEP (CAVE IN/DEPRESSION)", "t": "A sinkhole, cave-in, or depression in the street or sidewalk"}, {"k": "CEMENT", "l": "CEMENT", "t": "Restoring pavement, sidewalk, or driveway concrete after utility work"}, {"k": "CHOKED DRAIN", "l": "CHOKED DRAIN", "t": "A storm drain, inlet, or catch basin that is clogged and not draining"}, {"k": "CLAIMS", "l": "CLAIMS", "t": "Compensation for damage caused by the utility's work or a water incident"}, {"k": "COMPOST", "l": "COMPOST", "t": "Compost bins, yard waste, or composting program questions"}], "ref": "RESTORE", "model": "circuit-8b", "pick": "RESTORE", "p": 1.0, "circuit_ms": 55.2, "rtt_ms": 1400, "llm": {"answer": "RESTORE", "wall_ms": 1451, "api_ms": 650, "model": "claude-fable-5-1"}}, {"label": "text grid, count / string", "ask": "How many items are returned?", "opts": [{"k": "0", "l": "0", "t": ""}, {"k": "1", "l": "1", "t": ""}, {"k": "2", "l": "2", "t": ""}, {"k": "3", "l": "3 or more", "t": ""}], "ref": "1", "model": "circuit-8b", "pick": "1", "p": 1.0, "circuit_ms": 70.0, "rtt_ms": 1183, "llm": {"answer": "1", "wall_ms": 3561, "api_ms": 1530, "model": "claude-haiku-4-5-20251001"}}, {"label": "text grid, temporal / document", "ask": "Was the support call earlier than the payment?", "opts": [{"k": "yes", "l": "Yes", "t": ""}, {"k": "no", "l": "No", "t": ""}], "ref": "yes", "model": "circuit-8b", "pick": "yes", "p": 0.99, "circuit_ms": 45.1, "rtt_ms": 967, "llm": {"answer": "yes", "wall_ms": 3486, "api_ms": 1513, "model": "claude-haiku-4-5-20251001"}}, {"label": "text grid, compare / thread", "ask": "Which option has the lowest price?", "opts": [{"k": "r1", "l": "r1", "t": ""}, {"k": "r2", "l": "r2", "t": ""}, {"k": "r3", "l": "r3", "t": ""}], "ref": "r2", "model": "circuit-8b", "pick": "r2", "p": 1.0, "circuit_ms": 75.8, "rtt_ms": 1564, "llm": {"answer": "r2", "wall_ms": 3576, "api_ms": 1567, "model": "claude-haiku-4-5-20251001"}}, {"label": "vision grid, extract / receipt", "ask": "What is the total on the receipt?", "opts": [{"k": "100.52", "l": "100.52", "t": ""}, {"k": "90.47", "l": "90.47", "t": ""}, {"k": "Cannot tell", "l": "Cannot tell", "t": ""}, {"k": "7.50", "l": "7.50", "t": ""}, {"k": "103.62", "l": "103.62", "t": ""}], "ref": "100.52", "model": "circuit-vl-4b", "pick": "100.52", "p": 1.0, "circuit_ms": 125.2, "rtt_ms": 303, "llm": {"answer": "100.52", "wall_ms": 4257, "api_ms": 4208, "model": "claude-haiku-4-5-20251001"}}, {"label": "vision grid, real photo (photo by Damian Gadal, CC BY 2.0, via Open Images)", "ask": "Is there a car in the photo?", "opts": [{"k": "yes", "l": "Yes", "t": ""}, {"k": "no", "l": "No", "t": ""}], "ref": "yes", "model": "circuit-vl-4b", "pick": "yes", "p": 0.73, "circuit_ms": 129.5, "rtt_ms": 405, "llm": {"answer": "yes", "wall_ms": 5057, "api_ms": 3015, "model": "claude"}}, {"label": "audio grid, classify / call", "ask": "Which kind of water-utility call is this?", "opts": [{"k": "billing", "l": "billing", "t": ""}, {"k": "metering", "l": "metering", "t": ""}, {"k": "taste and odor", "l": "taste and odor", "t": ""}, {"k": "outage", "l": "outage", "t": ""}, {"k": "leak", "l": "leak", "t": ""}], "ref": "leak", "model": "circuit-audio-7b", "pick": "leak", "p": 1.0, "circuit_ms": 107.4, "rtt_ms": 363, "llm": {"answer": "leak", "wall_ms": 3734, "transcribe_ms": 236, "llm_ms": 3498, "transcript": "Hello, yes, a pipe burst in front of my house. Can someone help?", "model": "whisper-small + claude", "note": "transcribed locally with Whisper, then the transcript read by a chat model"}}, {"label": "audio grid, which sentence / real recording", "ask": "Which of these did the speaker read?", "opts": [{"k": "the second begins here an angel the third here\u2026", "l": "the second begins here an angel the third here\u2026", "t": ""}, {"k": "i hope you'll like him better than the frost\u2026", "l": "i hope you'll like him better than the frost\u2026", "t": ""}, {"k": "was his mind wandering into some other train of\u2026", "l": "was his mind wandering into some other train of\u2026", "t": ""}, {"k": "very well said missus wilkins resolutely to herself ef\u2026", "l": "very well said missus wilkins resolutely to herself ef\u2026", "t": ""}], "ref": "was his mind wandering into some other train of\u2026", "model": "circuit-audio-7b", "pick": "was his mind wandering into some other train of\u2026", "p": 1.0, "circuit_ms": 104.5, "rtt_ms": 342, "llm": {"answer": "was his mind wandering into some other train of\u2026", "wall_ms": 4326, "transcribe_ms": 221, "llm_ms": 4105, "transcript": "Was his mind wandering into some other train of thought?", "model": "whisper-small + claude", "note": "transcribed locally with Whisper, then the transcript read by a chat model"}}];
     const N = qz.length, picks = qz.map(() => null);
     let at = 0, t0 = 0, tick = null;
-    const fmt = ms => ms == null ? '?' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
-    const secs = ms => (ms / 1000).toFixed(1) + ' s';
+    const fmt = ms => ms == null ? '?' : (ms / 1000).toFixed(ms < 1000 ? 2 : 1) + ' s';   // seconds, always, so the gap reads at a glance
+    const secs = fmt;
+    const ratio = (slow, fast) => !slow || !fast ? null : slow / fast;
+    const xs = r => (r >= 10 ? Math.round(r) : r.toFixed(1)) + '×';
     const esc = s => String(s == null ? '—' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
     const mark = ok => '<span class="' + (ok ? 'ok' : 'no') + '">' + (ok ? '✓' : '✗') + '</span>';
     const right = (d, g) => !!g && g.k === d.ref;
@@ -592,10 +595,13 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     }
     function verdict(i) {
       const d = qz[i], g = picks[i], modelRight = d.pick === d.ref, llmRight = !!(d.llm && d.llm.answer === d.ref);
-      let v = '<b>' + (right(d, g) ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + secs(g.ms) + '</span>. Label: <b>' + esc(lab(d, d.ref)) + '</b>.<br>'
-        + esc(d.model) + ': <b>' + esc(lab(d, d.pick)) + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server, ' + fmt(d.rtt_ms) + ' round trip from a laptop.<br>';
+      const vsYou = ratio(g.ms, d.circuit_ms), vsLlm = ratio(d.llm && d.llm.wall_ms, d.circuit_ms);
+      let v = '<b>' + (right(d, g) ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + fmt(g.ms) + '</span>. Label: <b>' + esc(lab(d, d.ref)) + '</b>.<br>'
+        + esc(d.model) + ': <b>' + esc(lab(d, d.pick)) + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ' in <span class="t">' + fmt(d.circuit_ms) + '</span> on the server'
+        + (vsYou ? ', <b>' + xs(vsYou) + ' faster than you</b>' : '') + ' (' + fmt(d.rtt_ms) + ' round trip from a laptop).<br>';
       if (d.llm && d.llm.answer != null) {
-        v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + esc(lab(d, d.llm.answer)) + '</b>' + (llmRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
+        v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + esc(lab(d, d.llm.answer)) + '</b>' + (llmRight ? '' : ', wrong') + ' in <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
+          + (vsLlm ? ', <b>' + xs(vsLlm) + ' slower than the circuit model</b>' : '')
           + (d.llm.transcribe_ms ? ' (' + fmt(d.llm.transcribe_ms) + ' of it transcribing: “' + esc(d.llm.transcript) + '”)' : '') + '.';
       }
       return v;
@@ -649,18 +655,25 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
       const circuit = qz.filter(d => d.pick === d.ref).length;
       const llm = qz.filter(d => d.llm && d.llm.answer === d.ref).length;
       $('qz-final').textContent = 'You ' + you + '/' + N + ', circuit models ' + circuit + '/' + N + ', chat model ' + llm + '/' + N + '.';
-      const cell = (ans, ok, ms, f) => '<td><span class="a">' + esc(ans) + '</span> ' + mark(ok) + '<br><span class="t">' + (ms == null ? '?' : (f || fmt)(ms)) + '</span></td>';
+      const cell = (ans, ok, ms) => '<td><span class="a">' + esc(ans) + '</span> ' + mark(ok) + '<br><span class="t">' + fmt(ms) + '</span></td>';
       $('qz-board').innerHTML = '<tr><th></th><th>question</th><th>you</th><th>circuit model</th><th>chat model</th></tr>'
         + qz.map((d, i) => {
           const g = picks[i] || {};
           return '<tr><td class="n">' + (i + 1) + '</td><td>' + esc(d.label) + '</td>'
-            + cell(g.k == null ? null : lab(d, g.k), right(d, g), g.ms, secs)
+            + cell(g.k == null ? null : lab(d, g.k), right(d, g), g.ms)
             + cell(lab(d, d.pick), d.pick === d.ref, d.circuit_ms)
             + cell(d.llm && d.llm.answer != null ? lab(d, d.llm.answer) : null, !!(d.llm && d.llm.answer === d.ref), d.llm && d.llm.wall_ms) + '</tr>';
         }).join('');
-      const row = (who, r, ms, f) => '<tr><td>' + who + '</td><td class="n">' + r + '/' + N + '</td><td class="n">' + (f || fmt)(ms / answered) + '</td><td class="n">' + (f || fmt)(ms) + '</td></tr>';
-      $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th></tr>'
-        + row('you', you, yourMs, secs) + row('circuit models, server time', circuit, cMs) + row('chat model, wall time', llm, lMs);
+      const row = (who, r, ms) => {
+        const x = ratio(ms, cMs);
+        return '<tr><td>' + who + '</td><td class="n">' + r + '/' + N + '</td><td class="n">' + fmt(ms / answered) + '</td><td class="n">' + fmt(ms) + '</td>'
+          + '<td class="n">' + (x == null || Math.abs(x - 1) < 0.05 ? '—' : xs(x) + ' slower') + '</td></tr>';
+      };
+      $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th><th>against the circuit models</th></tr>'
+        + row('you', you, yourMs) + row('circuit models, server time', circuit, cMs) + row('chat model, wall time', llm, lMs);
+      const vsYou = ratio(yourMs, cMs), vsLlm = ratio(lMs, cMs);
+      $('qz-speed').textContent = 'The circuit models answered all ' + N + ' in ' + fmt(cMs) + ' of server time'
+        + (vsYou ? ' — ' + xs(vsYou) + ' faster than you' : '') + (vsLlm ? ' and ' + xs(vsLlm) + ' faster than the chat model' : '') + '.';
     }
     $('qz-start').addEventListener('click', () => showQ(0));
     $('qz-prev').addEventListener('click', () => showQ(Math.max(0, at - 1)));

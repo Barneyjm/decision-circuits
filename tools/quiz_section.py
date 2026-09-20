@@ -80,6 +80,7 @@ CARD = """    <div class="qz" id="qzcard">
 
       <div class="qz-results" id="qz-results" hidden>
         <p class="ask" id="qz-final"></p>
+        <p class="blurb" id="qz-speed"></p>
         <div class="tbl"><table class="sheet" id="qz-board"></table></div>
         <div class="tbl"><table id="qz-table"></table></div>
         <div class="nav">
@@ -98,8 +99,10 @@ QUIZ_JS = r"""// The quiz: one static card, in its own scope.
   const qz = __DATA__;
   const N = qz.length, picks = qz.map(() => null);
   let at = 0, t0 = 0, tick = null;
-  const fmt = ms => ms == null ? '?' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
-  const secs = ms => (ms / 1000).toFixed(1) + ' s';
+  const fmt = ms => ms == null ? '?' : (ms / 1000).toFixed(ms < 1000 ? 2 : 1) + ' s';   // seconds, always, so the gap reads at a glance
+  const secs = fmt;
+  const ratio = (slow, fast) => !slow || !fast ? null : slow / fast;
+  const xs = r => (r >= 10 ? Math.round(r) : r.toFixed(1)) + '×';
   const esc = s => String(s == null ? '—' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
   const mark = ok => '<span class="' + (ok ? 'ok' : 'no') + '">' + (ok ? '✓' : '✗') + '</span>';
   const right = (d, g) => !!g && g.k === d.ref;
@@ -112,10 +115,13 @@ QUIZ_JS = r"""// The quiz: one static card, in its own scope.
   }
   function verdict(i) {
     const d = qz[i], g = picks[i], modelRight = d.pick === d.ref, llmRight = !!(d.llm && d.llm.answer === d.ref);
-    let v = '<b>' + (right(d, g) ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + secs(g.ms) + '</span>. Label: <b>' + esc(lab(d, d.ref)) + '</b>.<br>'
-      + esc(d.model) + ': <b>' + esc(lab(d, d.pick)) + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server, ' + fmt(d.rtt_ms) + ' round trip from a laptop.<br>';
+    const vsYou = ratio(g.ms, d.circuit_ms), vsLlm = ratio(d.llm && d.llm.wall_ms, d.circuit_ms);
+    let v = '<b>' + (right(d, g) ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + fmt(g.ms) + '</span>. Label: <b>' + esc(lab(d, d.ref)) + '</b>.<br>'
+      + esc(d.model) + ': <b>' + esc(lab(d, d.pick)) + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ' in <span class="t">' + fmt(d.circuit_ms) + '</span> on the server'
+      + (vsYou ? ', <b>' + xs(vsYou) + ' faster than you</b>' : '') + ' (' + fmt(d.rtt_ms) + ' round trip from a laptop).<br>';
     if (d.llm && d.llm.answer != null) {
-      v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + esc(lab(d, d.llm.answer)) + '</b>' + (llmRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
+      v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + esc(lab(d, d.llm.answer)) + '</b>' + (llmRight ? '' : ', wrong') + ' in <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
+        + (vsLlm ? ', <b>' + xs(vsLlm) + ' slower than the circuit model</b>' : '')
         + (d.llm.transcribe_ms ? ' (' + fmt(d.llm.transcribe_ms) + ' of it transcribing: “' + esc(d.llm.transcript) + '”)' : '') + '.';
     }
     return v;
@@ -169,18 +175,25 @@ QUIZ_JS = r"""// The quiz: one static card, in its own scope.
     const circuit = qz.filter(d => d.pick === d.ref).length;
     const llm = qz.filter(d => d.llm && d.llm.answer === d.ref).length;
     $('qz-final').textContent = 'You ' + you + '/' + N + ', circuit models ' + circuit + '/' + N + ', chat model ' + llm + '/' + N + '.';
-    const cell = (ans, ok, ms, f) => '<td><span class="a">' + esc(ans) + '</span> ' + mark(ok) + '<br><span class="t">' + (ms == null ? '?' : (f || fmt)(ms)) + '</span></td>';
+    const cell = (ans, ok, ms) => '<td><span class="a">' + esc(ans) + '</span> ' + mark(ok) + '<br><span class="t">' + fmt(ms) + '</span></td>';
     $('qz-board').innerHTML = '<tr><th></th><th>question</th><th>you</th><th>circuit model</th><th>chat model</th></tr>'
       + qz.map((d, i) => {
         const g = picks[i] || {};
         return '<tr><td class="n">' + (i + 1) + '</td><td>' + esc(d.label) + '</td>'
-          + cell(g.k == null ? null : lab(d, g.k), right(d, g), g.ms, secs)
+          + cell(g.k == null ? null : lab(d, g.k), right(d, g), g.ms)
           + cell(lab(d, d.pick), d.pick === d.ref, d.circuit_ms)
           + cell(d.llm && d.llm.answer != null ? lab(d, d.llm.answer) : null, !!(d.llm && d.llm.answer === d.ref), d.llm && d.llm.wall_ms) + '</tr>';
       }).join('');
-    const row = (who, r, ms, f) => '<tr><td>' + who + '</td><td class="n">' + r + '/' + N + '</td><td class="n">' + (f || fmt)(ms / answered) + '</td><td class="n">' + (f || fmt)(ms) + '</td></tr>';
-    $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th></tr>'
-      + row('you', you, yourMs, secs) + row('circuit models, server time', circuit, cMs) + row('chat model, wall time', llm, lMs);
+    const row = (who, r, ms) => {
+      const x = ratio(ms, cMs);
+      return '<tr><td>' + who + '</td><td class="n">' + r + '/' + N + '</td><td class="n">' + fmt(ms / answered) + '</td><td class="n">' + fmt(ms) + '</td>'
+        + '<td class="n">' + (x == null || Math.abs(x - 1) < 0.05 ? '—' : xs(x) + ' slower') + '</td></tr>';
+    };
+    $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th><th>against the circuit models</th></tr>'
+      + row('you', you, yourMs) + row('circuit models, server time', circuit, cMs) + row('chat model, wall time', llm, lMs);
+    const vsYou = ratio(yourMs, cMs), vsLlm = ratio(lMs, cMs);
+    $('qz-speed').textContent = 'The circuit models answered all ' + N + ' in ' + fmt(cMs) + ' of server time'
+      + (vsYou ? ' — ' + xs(vsYou) + ' faster than you' : '') + (vsLlm ? ' and ' + xs(vsLlm) + ' faster than the chat model' : '') + '.';
   }
   $('qz-start').addEventListener('click', () => showQ(0));
   $('qz-prev').addEventListener('click', () => showQ(Math.max(0, at - 1)));
