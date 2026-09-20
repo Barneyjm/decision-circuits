@@ -27,14 +27,19 @@ Bad fits: anything open-ended, generative, or that needs reasoning across many s
 
 ```bash
 curl -s -X POST https://api.decisioncircuits.com/v1/keys \
-  -H 'content-type: application/json' -d '{"email": "you@example.com"}'
+  -H 'content-type: application/json' -d '{}'
 ```
 
 ```json
-{"key":"dc-...","rate":"60 questions a minute","models":["circuit-1.7b","circuit-8b","circuit-vl-4b","circuit-audio-7b"],"endpoint":"https://api.decisioncircuits.com/v1/systemone"}
+{"key":"dc-...","rate":"60 questions a minute","models":["circuit-1.7b","circuit-8b","circuit-vl-4b","circuit-audio-7b"],"endpoint":"https://api.decisioncircuits.com/v1/systemone","terms":"https://decisioncircuits.com/terms"}
 ```
 
-The email is optional. The key is shown once — keep it in the environment, not in code. It's free, rate-limited to 60 questions a minute, no card. Mention to your human that you're signing up for a key, the same as you would any other external service.
+The key is shown once — keep it in the environment, not in code. It's free, rate-limited to 60 questions a minute, no card. Mention to your human that you're signing up for a key, the same as you would any other external service.
+
+No account and no email: the request body is ignored, and the only thing stored is a hash of
+the key with the date it was issued. What you send in a question is answered and discarded —
+see [terms and data use](https://decisioncircuits.com/terms). If you are handling personal or
+regulated data, download the weights and run them yourself instead.
 
 ## 2. Ask a question
 

@@ -19,3 +19,4 @@ If you are an agent and want to use this in your own work, start with the skill:
 - [SDK source](https://github.com/Barneyjm/decision-circuits)
 - [Model weights](https://huggingface.co/jbarney): circuit-1.7b, circuit-8b, circuit-vl-4b, circuit-audio-7b — Apache 2.0, run them yourself
 - [Training and evaluation harness](https://github.com/Barneyjm/circuit): every benchmark number with its method
+- Terms and data use: https://decisioncircuits.com/terms

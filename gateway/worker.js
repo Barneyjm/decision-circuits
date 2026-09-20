@@ -1,6 +1,6 @@
 // Circuit API gateway: self-serve keys, per-key and global daily quotas, proxy to the Modal endpoints.
 //
-//   POST /v1/keys      {"email": "you@example.com"}   -> {"key": "dc-...", ...}   (shown once; only its hash is stored)
+//   POST /v1/keys      {"email": "you@example.com"}   -> {"key": "dc-...", ...}   (key shown once; only its hash is stored)
 //   POST /v1/systemone  Authorization: Bearer dc-...  -> the System One response from the chosen model
 //   GET  /v1/models                                    -> the models this gateway serves
 //
@@ -37,6 +37,8 @@ async function issueKey(request, env) {
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   const { success: okIp } = await env.SIGNUP_LIMIT.limit({ key: ip });
   if (!okIp) return json({ error: "too many keys requested from this address; try again in a minute" }, 429);
+  // An email is optional and kept only so a key has an owner to write to. Everything else
+  // about a key record is the date it was issued and what it may spend.
   let email = null;
   try {
     const body = await request.json();
@@ -45,7 +47,13 @@ async function issueKey(request, env) {
   const key = newKey();
   const record = { email, created: new Date().toISOString(), quota: parseInt(env.KEY_DAILY_QUOTA, 10) };
   await env.KEYS.put(`key:${await sha256(key)}`, JSON.stringify(record));
-  return json({ key, rate: "60 questions a minute", models: Object.keys(JSON.parse(env.MODAL_URLS)), endpoint: "https://api.decisioncircuits.com/v1/systemone" });
+  return json({
+    key,
+    rate: "60 questions a minute",
+    models: Object.keys(JSON.parse(env.MODAL_URLS)),
+    endpoint: "https://api.decisioncircuits.com/v1/systemone",
+    terms: "https://decisioncircuits.com/terms",
+  });
 }
 
 async function proxy(request, env, ctx) {
@@ -144,7 +152,7 @@ export default {
     if (url.pathname === "/v1/keys" && request.method === "POST") return issueKey(request, env);
     if (url.pathname === "/v1/systemone" && request.method === "POST") return proxy(request, env, ctx);
     if (url.pathname === "/v1/models") return json({ models: Object.keys(JSON.parse(env.MODAL_URLS)), default: env.DEFAULT_MODEL });
-    if (url.pathname === "/") return json({ name: "circuit api", docs: "https://decisioncircuits.com", agent_skill: "https://decisioncircuits.com/skill.md", signup: "POST /v1/keys", call: "POST /v1/systemone with Authorization: Bearer <key>" });
+    if (url.pathname === "/") return json({ name: "circuit api", docs: "https://decisioncircuits.com", agent_skill: "https://decisioncircuits.com/skill.md", terms: "https://decisioncircuits.com/terms", signup: "POST /v1/keys", call: "POST /v1/systemone with Authorization: Bearer <key>" });
     return json({ error: "not found" }, 404);
   },
 };

@@ -21,8 +21,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23000%22/><circle cx=%2250%22 cy=%2250%22 r=%2222%22 fill=%22%230B1F5E%22/><path d=%22M50 36 L63 58 L37 58 Z%22 fill=%22%232447C9%22/></svg>">
 <meta name="theme-color" content="#000000">
 <title>Decision Circuits</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/fonts.css">
 <style>
   :root {
     color-scheme: dark;
@@ -235,6 +234,7 @@
   figure img { display: block; width: 100%; max-width: 820px; height: auto; border-radius: 12px; background: #fff; }
   figcaption { font-size: 13.5px; color: var(--mist); margin-top: 8px; }
   .note { border-left: 2px solid var(--die-edge); padding: 2px 0 2px 16px; color: var(--mist); font-size: 15px; }
+  .keynote { font-size: 13.5px; color: var(--mist); }
   .keyform { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0; }
   .keyform input { font: inherit; font-size: 15px; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--code-bg); color: var(--ice); min-width: min(320px, 100%); }
   .keyform button { font: inherit; font-size: 15px; padding: 10px 18px; border-radius: 999px; border: 1px solid var(--die-edge); background: var(--die); color: var(--ice); cursor: pointer; }
@@ -250,7 +250,7 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand">Decision Circuits<span class="badges"><a href="https://github.com/Barneyjm/decision-circuits/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Barneyjm/decision-circuits/ci.yml?branch=main&label=build&labelColor=0B1F5E&color=2447C9" alt="GitHub build status" height="20"></a><a href="https://pypi.org/project/decision-circuits/"><img src="https://img.shields.io/pypi/v/decision-circuits?label=pypi&labelColor=0B1F5E&color=2447C9" alt="PyPI release" height="20"></a></span></div>
+    <div class="brand">Decision Circuits</div>
     <nav>
       <a href="#family">Family</a><a href="#quiz">Quiz</a><a href="#api">API</a><a href="#try">Try it</a><a href="#write">Write one</a><a href="#numbers">Numbers</a><a href="#scoreboard">Scoreboard</a><a href="#agents">Agents</a><a href="#models">Models</a>
       <a href="https://github.com/Barneyjm/decision-circuits">GitHub</a><a href="https://pypi.org/project/decision-circuits/">PyPI</a>
@@ -377,6 +377,7 @@ We appreciate your patience while we migrate to the new billing system.</pre></t
       <label for="key-email" style="display:none">Email (optional)</label>
       <input id="key-email" type="email" placeholder="email, optional" autocomplete="email">
       <button type="submit" id="key-btn">Get an API key</button>
+      <span class="keynote">No account. An email is optional, and only so your key has somewhere to reach you.</span>
     </form>
     <div class="keyout" id="keyout"></div>
 <div class="ways" data-kind="text">
@@ -418,6 +419,7 @@ print(out[<span class="s">"gates"</span>][<span class="s">"redact"</span>])
       </div>
     </div>
     <p class="note" style="margin:14px 0 0">Two ways to send the same question. The output under each is what these exact calls return — 0.81 clears the gate's 0.6 threshold by more than its band, so the circuit decides rather than escalating. Shorten that message and the probability slides toward the band; that is the model being honest, not broken.</p>
+    <p class="note" style="margin:18px 0">What happens to what you send: your inputs answer your request and are discarded, never stored and never trained on. The key record holds a hash of the key, the date, and an email if you give one. <a href="/terms">Terms and data use</a>.</p>
     <p class="note" style="margin:18px 0">Reading this as an agent? <a href="/skill.md">decisioncircuits.com/skill.md</a> is written for you: when a calibrated judgment beats a guess, how to get a key without a human, and how to turn the probability into a decision you can defend.</p>
     <h4 class="sub">A clip instead of a sentence</h4>
     <p>Nothing about the call changes when the state is sound or a picture: the state becomes <code>{"audio": "&lt;url or data URI&gt;"}</code>, or <code>Audio(...)</code> and <code>Image(...)</code> in Python. This example runs as written — the clip is a synthesized water-utility call hosted on this site, and the model hears it without a transcript.</p>
@@ -585,6 +587,8 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <a href="https://huggingface.co/jbarney/circuit-1.7b">huggingface.co/jbarney/circuit-1.7b</a>
     <a href="https://huggingface.co/jbarney/circuit-8b">huggingface.co/jbarney/circuit-8b</a>
     <a href="/skill.md">for agents: skill.md</a>
+    <a href="/terms">terms and data use</a>
+    <a href="mailto:hello@decisioncircuits.com">hello@decisioncircuits.com</a>
     <a href="https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/">the article, May 2025</a>
     <span>MIT, James Barney</span>
   </footer>
