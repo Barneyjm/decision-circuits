@@ -3,8 +3,14 @@
     uv run python tools/quiz_section.py
 
 items.json holds real grid items with the family's answers from the hosted
-API (see the circuit repo for how they are fetched). This rewrites the
-<section id="quiz"> cards and the `const qz = [...]` data in docs/index.html.
+API (see the circuit repo for how they are fetched). This rewrites the card
+markup between the quiz:html markers and the `const qz = [...]` data in
+docs/index.html.
+
+The quiz is one static card. Top to bottom: where you are and the clock,
+the question, the answer buttons, then previous/next. Picking stops the
+clock and prints the breakdown under the buttons; the last Next shows the
+whole board.
 """
 
 from __future__ import annotations
@@ -50,67 +56,155 @@ def state_html(it):
     return f'<pre class="state">{html.escape(json.dumps(st, ensure_ascii=False, indent=1))}</pre>'
 
 
-QUIZ_JS = r"""  // The quiz: a carousel. Each card starts its clock when it slides in and stops it when you pick; the last card averages.
+CARD = """    <div class="qz" id="qzcard">
+      <div class="qz-intro" id="qz-intro">
+        <p class="ask">__N__ questions from the benchmark, one at a time, on the clock.</p>
+        <p class="blurb">The clock starts when a question appears and stops when you pick. Each answer shows what the circuit model said and how long it took, against a chat model on the same question. The last card puts every answer and every time side by side.</p>
+        <button type="button" class="next" id="qz-start">Start the quiz</button>
+      </div>
+
+      <div class="qz-play" id="qz-play" hidden>
+        <div class="head">
+          <p class="src"><span id="qz-pos"></span> · <span id="qz-label"></span></p>
+          <span class="clock" id="qz-clock">0.0 s</span>
+        </div>
+        <div class="qz-body" id="qz-body"></div>
+        <p class="ask" id="qz-ask"></p>
+        <div class="opts" id="qz-opts"></div>
+        <p class="verdict" id="qz-verdict" aria-live="polite"></p>
+        <div class="nav">
+          <button type="button" class="next ghost" id="qz-prev">Previous</button>
+          <button type="button" class="next" id="qz-next">Next question</button>
+        </div>
+      </div>
+
+      <div class="qz-results" id="qz-results" hidden>
+        <p class="ask" id="qz-final"></p>
+        <div class="tbl"><table class="sheet" id="qz-board"></table></div>
+        <div class="tbl"><table id="qz-table"></table></div>
+        <div class="nav">
+          <button type="button" class="next ghost" id="qz-back">Back to the questions</button>
+          <button type="button" class="next" id="qz-again">Play again</button>
+        </div>
+      </div>
+
+__TEMPLATES__
+    </div>
+"""
+
+QUIZ_JS = r"""// The quiz: one static card, in its own scope.
+// The clock runs while a question is open, picking stops it, and the last Next shows the board.
+(function () {
   const qz = __DATA__;
-  const track = $('track'), slides = [...track.children], cards = slides.filter(s => s.dataset.i !== undefined);
-  const fmt = ms => ms == null ? '?' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
+  const N = qz.length, picks = qz.map(() => null);
   let at = 0, t0 = 0, tick = null;
-  const tally = { you: 0, circuit: 0, llm: 0, yourMs: 0, circuitMs: 0, llmMs: 0, n: 0 };
-  function goTo(i) {
-    at = i; track.style.transform = 'translateX(' + (-100 * i) + '%)';
-    track.style.height = slides[i].offsetHeight + 'px';
-    slides.forEach((s, j) => { s.setAttribute('aria-hidden', j === i ? 'false' : 'true'); });
-    const card = slides[i];
-    if (card.dataset.i !== undefined) {
-      t0 = performance.now(); const clock = card.querySelector('.clock');
-      clearInterval(tick); tick = setInterval(() => { clock.textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' s'; }, 100);
+  const fmt = ms => ms == null ? '?' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
+  const secs = ms => (ms / 1000).toFixed(1) + ' s';
+  const esc = s => String(s == null ? '—' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  const mark = ok => '<span class="' + (ok ? 'ok' : 'no') + '">' + (ok ? '✓' : '✗') + '</span>';
+  const right = (d, g) => !!g && g.k === d.ref;
+  const lab = (d, k) => { const o = d.opts.find(o => o.k === k); return o ? o.l : k; };
+
+  function stopClock() { clearInterval(tick); tick = null; }
+  function startClock() {
+    stopClock(); t0 = performance.now(); $('qz-clock').textContent = '0.0 s';
+    tick = setInterval(() => { $('qz-clock').textContent = secs(performance.now() - t0); }, 100);
+  }
+  function verdict(i) {
+    const d = qz[i], g = picks[i], modelRight = d.pick === d.ref, llmRight = !!(d.llm && d.llm.answer === d.ref);
+    let v = '<b>' + (right(d, g) ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + secs(g.ms) + '</span>. Label: <b>' + esc(lab(d, d.ref)) + '</b>.<br>'
+      + esc(d.model) + ': <b>' + esc(lab(d, d.pick)) + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server, ' + fmt(d.rtt_ms) + ' round trip from a laptop.<br>';
+    if (d.llm && d.llm.answer != null) {
+      v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + esc(lab(d, d.llm.answer)) + '</b>' + (llmRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
+        + (d.llm.transcribe_ms ? ' (' + fmt(d.llm.transcribe_ms) + ' of it transcribing: “' + esc(d.llm.transcript) + '”)' : '') + '.';
     }
-    if (card.classList.contains('end')) finish();
+    return v;
   }
-  cards.forEach(card => {
-    const d = qz[+card.dataset.i];
-    card.querySelectorAll('.opts button').forEach(btn => btn.addEventListener('click', () => {
-      if (slides[at] !== card || btn.disabled) return;
-      clearInterval(tick); const took = performance.now() - t0;
-      card.querySelector('.clock').textContent = (took / 1000).toFixed(1) + ' s';
-      card.querySelectorAll('.opts button').forEach(b => { b.disabled = true; if (b.dataset.k === d.ref) b.classList.add('right'); });
-      btn.classList.add('you');
-      const k = btn.dataset.k, youRight = k === d.ref, modelRight = d.pick === d.ref, llmRight = !!(d.llm && d.llm.answer === d.ref);
-      tally.n += 1; tally.you += youRight; tally.circuit += modelRight; tally.llm += llmRight; tally.yourMs += took; tally.circuitMs += d.circuit_ms || 0; tally.llmMs += (d.llm && d.llm.wall_ms) || 0;
-      let v = '<b>' + (youRight ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + fmt(took) + '</span>. Label: <b>' + d.ref + '</b>.<br>'
-        + d.model + ': <b>' + d.pick + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server, ' + fmt(d.rtt_ms) + ' round trip from a laptop.<br>';
-      if (d.llm && d.llm.answer != null) {
-        v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + d.llm.answer + '</b>' + (llmRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
-          + (d.llm.transcribe_ms ? ' (' + fmt(d.llm.transcribe_ms) + ' of it transcribing: “' + d.llm.transcript + '”)' : '') + '.';
-      }
-      card.querySelector('.verdict').innerHTML = v;
-      card.querySelector('.next').hidden = false;
-    }));
-    card.querySelector('.next').addEventListener('click', () => goTo(at + 1));
-  });
-  function finish() {
-    const n = tally.n || 1;
-    $('qz-final').textContent = 'You ' + tally.you + '/' + tally.n + ', circuit models ' + tally.circuit + '/' + tally.n + ', chat model ' + tally.llm + '/' + tally.n + '.';
-    const row = (who, right, ms) => '<tr><td>' + who + '</td><td class="n">' + right + '/' + tally.n + '</td><td class="n">' + fmt(ms / n) + '</td><td class="n">' + fmt(ms) + '</td></tr>';
-    $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th></tr>' + row('you', tally.you, tally.yourMs) + row('circuit models, server time', tally.circuit, tally.circuitMs) + row('chat model, wall time', tally.llm, tally.llmMs);
+  function paint(i) {
+    const d = qz[i], g = picks[i];
+    [...$('qz-opts').children].forEach((b, j) => {
+      b.disabled = true;
+      if (d.opts[j].k === d.ref) b.classList.add('right');
+      if (d.opts[j].k === g.k) b.classList.add('you');
+    });
+    $('qz-clock').textContent = secs(g.ms);
+    $('qz-verdict').innerHTML = verdict(i);
   }
-  $('qz-start').addEventListener('click', () => goTo(1));
+  function pick(i, k) {
+    if (picks[i] || i !== at) return;
+    stopClock(); picks[i] = { k: k, ms: performance.now() - t0 };
+    paint(i); nav();
+  }
+  function nav() {
+    $('qz-prev').disabled = at === 0;
+    $('qz-next').disabled = !picks[at];
+    $('qz-next').textContent = at === N - 1 ? 'See the results' : 'Next question';
+  }
+  function showQ(i) {
+    at = i;
+    $('qz-intro').hidden = true; $('qz-results').hidden = true; $('qz-play').hidden = false;
+    const d = qz[i];
+    $('qz-pos').textContent = 'Question ' + (i + 1) + ' of ' + N;
+    $('qz-label').textContent = d.label;
+    const body = $('qz-body');
+    body.replaceChildren(document.querySelector('template[data-i="' + i + '"]').content.cloneNode(true));
+    $('qz-ask').textContent = d.ask;
+    const opts = $('qz-opts'); opts.replaceChildren();
+    d.opts.forEach(o => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o.l; if (o.t) b.title = o.t;
+      b.addEventListener('click', () => pick(i, o.k));
+      opts.appendChild(b);
+    });
+    if (picks[i]) { stopClock(); paint(i); } else { $('qz-verdict').innerHTML = ''; startClock(); }
+    nav();
+  }
+  function results() {
+    stopClock();
+    $('qz-play').hidden = true; $('qz-results').hidden = false;
+    const answered = picks.filter(Boolean).length || 1;
+    const sum = f => qz.reduce((a, d, i) => a + (f(d, picks[i]) || 0), 0);
+    const yourMs = sum((d, g) => g && g.ms), cMs = sum(d => d.circuit_ms), lMs = sum(d => d.llm && d.llm.wall_ms);
+    const you = qz.filter((d, i) => right(d, picks[i])).length;
+    const circuit = qz.filter(d => d.pick === d.ref).length;
+    const llm = qz.filter(d => d.llm && d.llm.answer === d.ref).length;
+    $('qz-final').textContent = 'You ' + you + '/' + N + ', circuit models ' + circuit + '/' + N + ', chat model ' + llm + '/' + N + '.';
+    const cell = (ans, ok, ms, f) => '<td><span class="a">' + esc(ans) + '</span> ' + mark(ok) + '<br><span class="t">' + (ms == null ? '?' : (f || fmt)(ms)) + '</span></td>';
+    $('qz-board').innerHTML = '<tr><th></th><th>question</th><th>you</th><th>circuit model</th><th>chat model</th></tr>'
+      + qz.map((d, i) => {
+        const g = picks[i] || {};
+        return '<tr><td class="n">' + (i + 1) + '</td><td>' + esc(d.label) + '</td>'
+          + cell(g.k == null ? null : lab(d, g.k), right(d, g), g.ms, secs)
+          + cell(lab(d, d.pick), d.pick === d.ref, d.circuit_ms)
+          + cell(d.llm && d.llm.answer != null ? lab(d, d.llm.answer) : null, !!(d.llm && d.llm.answer === d.ref), d.llm && d.llm.wall_ms) + '</tr>';
+      }).join('');
+    const row = (who, r, ms, f) => '<tr><td>' + who + '</td><td class="n">' + r + '/' + N + '</td><td class="n">' + (f || fmt)(ms / answered) + '</td><td class="n">' + (f || fmt)(ms) + '</td></tr>';
+    $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th></tr>'
+      + row('you', you, yourMs, secs) + row('circuit models, server time', circuit, cMs) + row('chat model, wall time', llm, lMs);
+  }
+  $('qz-start').addEventListener('click', () => showQ(0));
+  $('qz-prev').addEventListener('click', () => showQ(Math.max(0, at - 1)));
+  $('qz-next').addEventListener('click', () => { if (at === N - 1) results(); else showQ(at + 1); });
+  $('qz-back').addEventListener('click', () => showQ(N - 1));
   $('qz-again').addEventListener('click', () => location.reload());
-  goTo(0);
-  window.addEventListener('resize', () => { track.style.height = slides[at].offsetHeight + 'px'; });
+})();
 """
 
 
 def main() -> None:
     items = json.loads(ITEMS.read_text())
-    cards, data = [], []
+    templates, data = [], []
     for i, it in enumerate(items):
         q = it["question"]
         ref = max(it["ref"], key=it["ref"].get)
         pick, p = model_pick(q, it["answer"])
         t = it.get("timing", {})
+        crit = q.get("criteria") if q["type"] != "score" else {}
         data.append(
             {
+                "label": it["label"],
+                "ask": q["instructions"],
+                "opts": [{"k": k, "l": lbl, "t": str((crit or {}).get(k) or "")} for k, lbl in options(q)],
                 "ref": ref,
                 "model": it["model"],
                 "pick": pick,
@@ -120,45 +214,19 @@ def main() -> None:
                 "llm": t.get("llm"),
             }
         )
-        crit = q.get("criteria") if q["type"] != "score" else {}
-        btns = "".join(
-            f'<button type="button" data-k="{html.escape(k)}" title="{html.escape(str((crit or {}).get(k) or ""))}">{html.escape(lbl)}</button>'
-            for k, lbl in options(q)
-        )
-        cards.append(
-            f'      <article class="qz" data-i="{i}">\n'
-            f'        <div class="head"><p class="src">{i + 1} of {len(items)} · {html.escape(it["label"])}</p><span class="clock">0.0 s</span></div>\n'
-            f"        {state_html(it)}\n"
-            f'        <p class="ask">{html.escape(q["instructions"])}</p>\n'
-            f'        <div class="opts">{btns}</div>\n'
-            f'        <p class="verdict" aria-live="polite"></p>\n'
-            f'        <button type="button" class="next" hidden>Next</button>\n'
-            f"      </article>"
-        )
+        templates.append(f'      <template data-i="{i}">{state_html(it)}</template>')
+
+    card = CARD.replace("__N__", str(len(items))).replace("__TEMPLATES__", "\n".join(templates))
     page = PAGE.read_text()
-    intro = (
-        '      <article class="qz intro">\n'
-        '        <p class="ask">Eight questions from the benchmark, one at a time, on the clock.</p>\n'
-        '        <p class="blurb">Each card starts timing when it appears and stops when you pick. Then it shows what the circuit model answered and how long it took, and what a chat model answered and how long that took. The last card averages it all.</p>\n'
-        '        <button type="button" class="next" id="qz-start">Start the quiz</button>\n'
-        "      </article>"
-    )
-    end = (
-        '      <article class="qz end">\n'
-        '        <p class="ask" id="qz-final"></p>\n'
-        '        <div class="tbl"><table id="qz-table"></table></div>\n'
-        '        <button type="button" class="next" id="qz-again">Play again</button>\n'
-        "      </article>"
-    )
     page, n = re.subn(
-        r'(    <div class="track" id="track">\n).*?(\n    </div>\n    </div>\n  </section>)',
-        lambda m: m.group(1) + "\n".join([intro, *cards]) + "\n" + end + m.group(2),
+        r"(    <!-- quiz:html:start -->\n).*?(    <!-- quiz:html:end -->)",
+        lambda m: m.group(1) + card + m.group(2),
         page,
         count=1,
         flags=re.DOTALL,
     )
-    assert n == 1, "quiz cards block not found"
-    js = QUIZ_JS.replace("__DATA__", json.dumps(data))
+    assert n == 1, "quiz card markers not found"
+    js = "\n".join(("  " + ln if ln.strip() else ln) for ln in QUIZ_JS.replace("__DATA__", json.dumps(data)).splitlines()) + "\n"
     page, n = re.subn(r"  // quiz:start\n.*?  // quiz:end\n", lambda _m: "  // quiz:start\n" + js + "  // quiz:end\n", page, count=1, flags=re.DOTALL)
     assert n == 1, "quiz script markers not found"
     PAGE.write_text(page)

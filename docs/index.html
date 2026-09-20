@@ -180,13 +180,12 @@
   .card dt { color: var(--mist); }
   .card dd { margin: 0; font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
   .card .blurb { font-size: 14px; color: var(--mist); margin: 0; }
-  .carousel { overflow: hidden; margin-top: 18px; max-width: 760px; border-radius: 16px; }
-  .track { display: flex; align-items: flex-start; transition: transform .45s cubic-bezier(.2,.7,.2,1), height .3s ease; }
-  @media (prefers-reduced-motion: reduce) { .track { transition: none; } }
-  .qz { flex: 0 0 100%; min-width: 0; box-sizing: border-box; }
-  .qz.intro .ask, .qz.end .ask { font-size: 22px; }
+  .qz { margin-top: 18px; max-width: 760px; box-sizing: border-box; background: linear-gradient(180deg, #0E2A72, var(--window-deep)); border-radius: 16px; padding: 16px 18px; }
+  .qz-intro, .qz-play, .qz-results { display: flex; flex-direction: column; gap: 10px; }
+  .qz-intro[hidden], .qz-play[hidden], .qz-results[hidden] { display: none; }
+  .qz-intro .ask, .qz-results .ask { font-size: 22px; }
   .qz .blurb { font-size: 15px; color: var(--mist); margin: 0; }
-  .qz { background: linear-gradient(180deg, #0E2A72, var(--window-deep)); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .qz-body:empty { display: none; }
   .qz .src { font-size: 12.5px; color: var(--haze); margin: 0; }
   .qz .state, .qz .thread { font-size: 13.5px; background: rgba(0,0,0,.35); border-radius: 10px; padding: 10px 12px; margin: 0; max-height: 220px; overflow: auto; }
   .qz .state { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -210,8 +209,16 @@
   .qz .clock { font-family: var(--mono); font-size: 14px; color: var(--ice); font-variant-numeric: tabular-nums; }
   .qz .verdict { line-height: 1.5; }
   .qz .verdict .t { font-family: var(--mono); font-size: 13px; }
-  .qz .next { align-self: flex-start; }
-  .qz .next[hidden] { display: none; }
+  .qz .nav { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+  .qz .nav .ghost { background: transparent; }
+  .qz .nav .ghost:hover:not(:disabled) { background: var(--die); }
+  .qz .nav button:disabled { opacity: .35; cursor: default; }
+  .qz .nav button:disabled:hover { background: var(--die); }
+  .qz .nav .ghost:disabled:hover { background: transparent; }
+  .qz .sheet td { font-size: 13.5px; }
+  .qz .sheet .a { color: var(--ice); }
+  .qz .sheet .t, .qz .sheet td.n { font-family: var(--mono); font-size: 12.5px; color: var(--mist); font-variant-numeric: tabular-nums; }
+  .ok { color: #8FE3B0; } .no { color: #FF9D9D; }
   figure { margin: 18px 0 0; }
   figure img { display: block; width: 100%; max-width: 820px; height: auto; border-radius: 12px; background: #fff; }
   figcaption { font-size: 13.5px; color: var(--mist); margin-top: 8px; }
@@ -292,32 +299,42 @@
     <h2>Think you're better than the model?</h2>
     <h3>Eight questions straight from the benchmark, on the clock.</h3>
     <p>Real items from the text, vision, and audio grids and the article's water-utility calls, labels assigned by the code that built them. Chat-model times were measured here through the Claude CLI; audio went through a local Whisper first, because a chat model has to read a transcript.</p>
-    <div class="carousel" id="qzs">
-    <div class="track" id="track">
-      <article class="qz intro">
-        <p class="ask">Eight questions from the benchmark, one at a time, on the clock.</p>
-        <p class="blurb">Each card starts timing when it appears and stops when you pick. Then it shows what the circuit model answered and how long it took, and what a chat model answered and how long that took. The last card averages it all.</p>
+    <!-- quiz:html:start -->
+    <div class="qz" id="qzcard">
+      <div class="qz-intro" id="qz-intro">
+        <p class="ask">8 questions from the benchmark, one at a time, on the clock.</p>
+        <p class="blurb">The clock starts when a question appears and stops when you pick. Each answer shows what the circuit model said and how long it took, against a chat model on the same question. The last card puts every answer and every time side by side.</p>
         <button type="button" class="next" id="qz-start">Start the quiz</button>
-      </article>
-      <article class="qz" data-i="0">
-        <div class="head"><p class="src">1 of 8 · the article&#x27;s water-utility calls</p><span class="clock">0.0 s</span></div>
-        <pre class="state">Hi, my water was shut off yesterday for repairs on my street, but it still hasn&#x27;t been turned back on. Can someone come restore my service?</pre>
-        <p class="ask">Extract the category of this customer service call to a water utility.</p>
-        <div class="opts"><button type="button" data-k="RESTORE" title="Water service was shut off (repairs, construction, non-payment) and needs to be turned back on">RESTORE</button><button type="button" data-k="ABATEMENT" title="A property, often vacant or abandoned, with a leak or running water that needs to be stopped">ABATEMENT</button><button type="button" data-k="AMR (METERING)" title="Water meter or automatic meter reading problems: blank display, wrong readings, replacement">AMR (METERING)</button><button type="button" data-k="BILLING" title="Charges, payment, account balance, bill amount disputes, payment plans">BILLING</button><button type="button" data-k="BPCS (BROKEN PIPE)" title="A broken or leaking water main or service pipe, water coming up through the street or ground">BPCS (BROKEN PIPE)</button><button type="button" data-k="BTR/O (BAD TASTE &amp; ODOR)" title="Water tastes or smells bad: chlorine, rotten eggs, metallic, discolored">BTR/O (BAD TASTE &amp; ODOR)</button><button type="button" data-k="C/I - DEP (CAVE IN/DEPRESSION)" title="A sinkhole, cave-in, or depression in the street or sidewalk">C/I - DEP (CAVE IN/DEPRESSION)</button><button type="button" data-k="CEMENT" title="Restoring pavement, sidewalk, or driveway concrete after utility work">CEMENT</button><button type="button" data-k="CHOKED DRAIN" title="A storm drain, inlet, or catch basin that is clogged and not draining">CHOKED DRAIN</button><button type="button" data-k="CLAIMS" title="Compensation for damage caused by the utility&#x27;s work or a water incident">CLAIMS</button><button type="button" data-k="COMPOST" title="Compost bins, yard waste, or composting program questions">COMPOST</button></div>
-        <p class="verdict" aria-live="polite"></p>
-        <button type="button" class="next" hidden>Next</button>
-      </article>
-      <article class="qz" data-i="1">
-        <div class="head"><p class="src">2 of 8 · text grid, count / string</p><span class="clock">0.0 s</span></div>
-        <pre class="state">t1 blender (not returned); t2 wireless headphones (not returned); t3 notebook set (is returned); t4 rain jacket (not returned)</pre>
-        <p class="ask">How many items are returned?</p>
-        <div class="opts"><button type="button" data-k="0" title="">0</button><button type="button" data-k="1" title="">1</button><button type="button" data-k="2" title="">2</button><button type="button" data-k="3" title="">3 or more</button></div>
-        <p class="verdict" aria-live="polite"></p>
-        <button type="button" class="next" hidden>Next</button>
-      </article>
-      <article class="qz" data-i="2">
-        <div class="head"><p class="src">3 of 8 · text grid, temporal / document</p><span class="clock">0.0 s</span></div>
-        <pre class="state">The knowledge base has a new article on setting up two-factor authentication.
+      </div>
+
+      <div class="qz-play" id="qz-play" hidden>
+        <div class="head">
+          <p class="src"><span id="qz-pos"></span> · <span id="qz-label"></span></p>
+          <span class="clock" id="qz-clock">0.0 s</span>
+        </div>
+        <div class="qz-body" id="qz-body"></div>
+        <p class="ask" id="qz-ask"></p>
+        <div class="opts" id="qz-opts"></div>
+        <p class="verdict" id="qz-verdict" aria-live="polite"></p>
+        <div class="nav">
+          <button type="button" class="next ghost" id="qz-prev">Previous</button>
+          <button type="button" class="next" id="qz-next">Next question</button>
+        </div>
+      </div>
+
+      <div class="qz-results" id="qz-results" hidden>
+        <p class="ask" id="qz-final"></p>
+        <div class="tbl"><table class="sheet" id="qz-board"></table></div>
+        <div class="tbl"><table id="qz-table"></table></div>
+        <div class="nav">
+          <button type="button" class="next ghost" id="qz-back">Back to the questions</button>
+          <button type="button" class="next" id="qz-again">Play again</button>
+        </div>
+      </div>
+
+      <template data-i="0"><pre class="state">Hi, my water was shut off yesterday for repairs on my street, but it still hasn&#x27;t been turned back on. Can someone come restore my service?</pre></template>
+      <template data-i="1"><pre class="state">t1 blender (not returned); t2 wireless headphones (not returned); t3 notebook set (is returned); t4 rain jacket (not returned)</pre></template>
+      <template data-i="2"><pre class="state">The knowledge base has a new article on setting up two-factor authentication.
 
 If you have feedback on the new dashboard, reply to this message.
 
@@ -325,59 +342,14 @@ The support call was on January 11, 2026. The payment was on 12 Mar 2026.
 
 Weather permitting, deliveries in the region continue on the usual schedule.
 
-We appreciate your patience while we migrate to the new billing system.</pre>
-        <p class="ask">Was the support call earlier than the payment?</p>
-        <div class="opts"><button type="button" data-k="yes" title="">Yes</button><button type="button" data-k="no" title="">No</button></div>
-        <p class="verdict" aria-live="polite"></p>
-        <button type="button" class="next" hidden>Next</button>
-      </article>
-      <article class="qz" data-i="3">
-        <div class="head"><p class="src">4 of 8 · text grid, compare / thread</p><span class="clock">0.0 s</span></div>
-        <div class="thread"><p><b>customer</b> Here are the options.</p><p><b>customer</b> r1: blender, price 492</p><p><b>customer</b> r2: board game, price 100</p><p><b>customer</b> r3: board game, price 217</p></div>
-        <p class="ask">Which option has the lowest price?</p>
-        <div class="opts"><button type="button" data-k="r1" title="">r1</button><button type="button" data-k="r2" title="">r2</button><button type="button" data-k="r3" title="">r3</button></div>
-        <p class="verdict" aria-live="polite"></p>
-        <button type="button" class="next" hidden>Next</button>
-      </article>
-      <article class="qz" data-i="4">
-        <div class="head"><p class="src">5 of 8 · vision grid, extract / receipt</p><span class="clock">0.0 s</span></div>
-        <img src="bench/receipt.png" alt="a rendered document from the vision benchmark" loading="lazy">
-        <p class="ask">What is the total on the receipt?</p>
-        <div class="opts"><button type="button" data-k="100.52" title="">100.52</button><button type="button" data-k="90.47" title="">90.47</button><button type="button" data-k="Cannot tell" title="">Cannot tell</button><button type="button" data-k="7.50" title="">7.50</button><button type="button" data-k="103.62" title="">103.62</button></div>
-        <p class="verdict" aria-live="polite"></p>
-        <button type="button" class="next" hidden>Next</button>
-      </article>
-      <article class="qz" data-i="5">
-        <div class="head"><p class="src">6 of 8 · vision grid, real photo (photo by Damian Gadal, CC BY 2.0, via Open Images)</p><span class="clock">0.0 s</span></div>
-        <img src="bench/photo.jpg" alt="a rendered document from the vision benchmark" loading="lazy">
-        <p class="ask">Is there a car in the photo?</p>
-        <div class="opts"><button type="button" data-k="yes" title="">Yes</button><button type="button" data-k="no" title="">No</button></div>
-        <p class="verdict" aria-live="polite"></p>
-        <button type="button" class="next" hidden>Next</button>
-      </article>
-      <article class="qz" data-i="6">
-        <div class="head"><p class="src">7 of 8 · audio grid, classify / call</p><span class="clock">0.0 s</span></div>
-        <audio controls preload="none" src="bench/call.wav"></audio>
-        <p class="ask">Which kind of water-utility call is this?</p>
-        <div class="opts"><button type="button" data-k="billing" title="">billing</button><button type="button" data-k="metering" title="">metering</button><button type="button" data-k="taste and odor" title="">taste and odor</button><button type="button" data-k="outage" title="">outage</button><button type="button" data-k="leak" title="">leak</button></div>
-        <p class="verdict" aria-live="polite"></p>
-        <button type="button" class="next" hidden>Next</button>
-      </article>
-      <article class="qz" data-i="7">
-        <div class="head"><p class="src">8 of 8 · audio grid, which sentence / real recording</p><span class="clock">0.0 s</span></div>
-        <audio controls preload="none" src="bench/read.wav"></audio>
-        <p class="ask">Which of these did the speaker read?</p>
-        <div class="opts"><button type="button" data-k="the second begins here an angel the third here…" title="">the second begins here an angel the third here…</button><button type="button" data-k="i hope you&#x27;ll like him better than the frost…" title="">i hope you&#x27;ll like him better than the frost…</button><button type="button" data-k="was his mind wandering into some other train of…" title="">was his mind wandering into some other train of…</button><button type="button" data-k="very well said missus wilkins resolutely to herself ef…" title="">very well said missus wilkins resolutely to herself ef…</button></div>
-        <p class="verdict" aria-live="polite"></p>
-        <button type="button" class="next" hidden>Next</button>
-      </article>
-      <article class="qz end">
-        <p class="ask" id="qz-final"></p>
-        <div class="tbl"><table id="qz-table"></table></div>
-        <button type="button" class="next" id="qz-again">Play again</button>
-      </article>
+We appreciate your patience while we migrate to the new billing system.</pre></template>
+      <template data-i="3"><div class="thread"><p><b>customer</b> Here are the options.</p><p><b>customer</b> r1: blender, price 492</p><p><b>customer</b> r2: board game, price 100</p><p><b>customer</b> r3: board game, price 217</p></div></template>
+      <template data-i="4"><img src="bench/receipt.png" alt="a rendered document from the vision benchmark" loading="lazy"></template>
+      <template data-i="5"><img src="bench/photo.jpg" alt="a rendered document from the vision benchmark" loading="lazy"></template>
+      <template data-i="6"><audio controls preload="none" src="bench/call.wav"></audio></template>
+      <template data-i="7"><audio controls preload="none" src="bench/read.wav"></audio></template>
     </div>
-    </div>
+    <!-- quiz:html:end -->
   </section>
 
   <section id="api">
@@ -600,54 +572,102 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
   $('sphere').addEventListener('click', askAgain);
 
   // quiz:start
-  // The quiz: a carousel. Each card starts its clock when it slides in and stops it when you pick; the last card averages.
-  const qz = [{"ref": "RESTORE", "model": "circuit-8b", "pick": "RESTORE", "p": 1.0, "circuit_ms": 55.2, "rtt_ms": 1400, "llm": {"answer": "RESTORE", "wall_ms": 1451, "api_ms": 650, "model": "claude-fable-5-1"}}, {"ref": "1", "model": "circuit-8b", "pick": "1", "p": 1.0, "circuit_ms": 70.0, "rtt_ms": 1183, "llm": {"answer": "1", "wall_ms": 3561, "api_ms": 1530, "model": "claude-haiku-4-5-20251001"}}, {"ref": "yes", "model": "circuit-8b", "pick": "yes", "p": 0.99, "circuit_ms": 45.1, "rtt_ms": 967, "llm": {"answer": "yes", "wall_ms": 3486, "api_ms": 1513, "model": "claude-haiku-4-5-20251001"}}, {"ref": "r2", "model": "circuit-8b", "pick": "r2", "p": 1.0, "circuit_ms": 75.8, "rtt_ms": 1564, "llm": {"answer": "r2", "wall_ms": 3576, "api_ms": 1567, "model": "claude-haiku-4-5-20251001"}}, {"ref": "100.52", "model": "circuit-vl-4b", "pick": "100.52", "p": 1.0, "circuit_ms": 125.2, "rtt_ms": 303, "llm": {"answer": "100.52", "wall_ms": 4257, "api_ms": 4208, "model": "claude-haiku-4-5-20251001"}}, {"ref": "yes", "model": "circuit-vl-4b", "pick": "yes", "p": 0.73, "circuit_ms": 129.5, "rtt_ms": 405, "llm": {"answer": "yes", "wall_ms": 5057, "api_ms": 3015, "model": "claude"}}, {"ref": "leak", "model": "circuit-audio-7b", "pick": "leak", "p": 1.0, "circuit_ms": 107.4, "rtt_ms": 363, "llm": {"answer": "leak", "wall_ms": 3734, "transcribe_ms": 236, "llm_ms": 3498, "transcript": "Hello, yes, a pipe burst in front of my house. Can someone help?", "model": "whisper-small + claude", "note": "transcribed locally with Whisper, then the transcript read by a chat model"}}, {"ref": "was his mind wandering into some other train of\u2026", "model": "circuit-audio-7b", "pick": "was his mind wandering into some other train of\u2026", "p": 1.0, "circuit_ms": 104.5, "rtt_ms": 342, "llm": {"answer": "was his mind wandering into some other train of\u2026", "wall_ms": 4326, "transcribe_ms": 221, "llm_ms": 4105, "transcript": "Was his mind wandering into some other train of thought?", "model": "whisper-small + claude", "note": "transcribed locally with Whisper, then the transcript read by a chat model"}}];
-  const track = $('track'), slides = [...track.children], cards = slides.filter(s => s.dataset.i !== undefined);
-  const fmt = ms => ms == null ? '?' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
-  let at = 0, t0 = 0, tick = null;
-  const tally = { you: 0, circuit: 0, llm: 0, yourMs: 0, circuitMs: 0, llmMs: 0, n: 0 };
-  function goTo(i) {
-    at = i; track.style.transform = 'translateX(' + (-100 * i) + '%)';
-    track.style.height = slides[i].offsetHeight + 'px';
-    slides.forEach((s, j) => { s.setAttribute('aria-hidden', j === i ? 'false' : 'true'); });
-    const card = slides[i];
-    if (card.dataset.i !== undefined) {
-      t0 = performance.now(); const clock = card.querySelector('.clock');
-      clearInterval(tick); tick = setInterval(() => { clock.textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' s'; }, 100);
+  // The quiz: one static card, in its own scope.
+  // The clock runs while a question is open, picking stops it, and the last Next shows the board.
+  (function () {
+    const qz = [{"label": "the article's water-utility calls", "ask": "Extract the category of this customer service call to a water utility.", "opts": [{"k": "RESTORE", "l": "RESTORE", "t": "Water service was shut off (repairs, construction, non-payment) and needs to be turned back on"}, {"k": "ABATEMENT", "l": "ABATEMENT", "t": "A property, often vacant or abandoned, with a leak or running water that needs to be stopped"}, {"k": "AMR (METERING)", "l": "AMR (METERING)", "t": "Water meter or automatic meter reading problems: blank display, wrong readings, replacement"}, {"k": "BILLING", "l": "BILLING", "t": "Charges, payment, account balance, bill amount disputes, payment plans"}, {"k": "BPCS (BROKEN PIPE)", "l": "BPCS (BROKEN PIPE)", "t": "A broken or leaking water main or service pipe, water coming up through the street or ground"}, {"k": "BTR/O (BAD TASTE & ODOR)", "l": "BTR/O (BAD TASTE & ODOR)", "t": "Water tastes or smells bad: chlorine, rotten eggs, metallic, discolored"}, {"k": "C/I - DEP (CAVE IN/DEPRESSION)", "l": "C/I - DEP (CAVE IN/DEPRESSION)", "t": "A sinkhole, cave-in, or depression in the street or sidewalk"}, {"k": "CEMENT", "l": "CEMENT", "t": "Restoring pavement, sidewalk, or driveway concrete after utility work"}, {"k": "CHOKED DRAIN", "l": "CHOKED DRAIN", "t": "A storm drain, inlet, or catch basin that is clogged and not draining"}, {"k": "CLAIMS", "l": "CLAIMS", "t": "Compensation for damage caused by the utility's work or a water incident"}, {"k": "COMPOST", "l": "COMPOST", "t": "Compost bins, yard waste, or composting program questions"}], "ref": "RESTORE", "model": "circuit-8b", "pick": "RESTORE", "p": 1.0, "circuit_ms": 55.2, "rtt_ms": 1400, "llm": {"answer": "RESTORE", "wall_ms": 1451, "api_ms": 650, "model": "claude-fable-5-1"}}, {"label": "text grid, count / string", "ask": "How many items are returned?", "opts": [{"k": "0", "l": "0", "t": ""}, {"k": "1", "l": "1", "t": ""}, {"k": "2", "l": "2", "t": ""}, {"k": "3", "l": "3 or more", "t": ""}], "ref": "1", "model": "circuit-8b", "pick": "1", "p": 1.0, "circuit_ms": 70.0, "rtt_ms": 1183, "llm": {"answer": "1", "wall_ms": 3561, "api_ms": 1530, "model": "claude-haiku-4-5-20251001"}}, {"label": "text grid, temporal / document", "ask": "Was the support call earlier than the payment?", "opts": [{"k": "yes", "l": "Yes", "t": ""}, {"k": "no", "l": "No", "t": ""}], "ref": "yes", "model": "circuit-8b", "pick": "yes", "p": 0.99, "circuit_ms": 45.1, "rtt_ms": 967, "llm": {"answer": "yes", "wall_ms": 3486, "api_ms": 1513, "model": "claude-haiku-4-5-20251001"}}, {"label": "text grid, compare / thread", "ask": "Which option has the lowest price?", "opts": [{"k": "r1", "l": "r1", "t": ""}, {"k": "r2", "l": "r2", "t": ""}, {"k": "r3", "l": "r3", "t": ""}], "ref": "r2", "model": "circuit-8b", "pick": "r2", "p": 1.0, "circuit_ms": 75.8, "rtt_ms": 1564, "llm": {"answer": "r2", "wall_ms": 3576, "api_ms": 1567, "model": "claude-haiku-4-5-20251001"}}, {"label": "vision grid, extract / receipt", "ask": "What is the total on the receipt?", "opts": [{"k": "100.52", "l": "100.52", "t": ""}, {"k": "90.47", "l": "90.47", "t": ""}, {"k": "Cannot tell", "l": "Cannot tell", "t": ""}, {"k": "7.50", "l": "7.50", "t": ""}, {"k": "103.62", "l": "103.62", "t": ""}], "ref": "100.52", "model": "circuit-vl-4b", "pick": "100.52", "p": 1.0, "circuit_ms": 125.2, "rtt_ms": 303, "llm": {"answer": "100.52", "wall_ms": 4257, "api_ms": 4208, "model": "claude-haiku-4-5-20251001"}}, {"label": "vision grid, real photo (photo by Damian Gadal, CC BY 2.0, via Open Images)", "ask": "Is there a car in the photo?", "opts": [{"k": "yes", "l": "Yes", "t": ""}, {"k": "no", "l": "No", "t": ""}], "ref": "yes", "model": "circuit-vl-4b", "pick": "yes", "p": 0.73, "circuit_ms": 129.5, "rtt_ms": 405, "llm": {"answer": "yes", "wall_ms": 5057, "api_ms": 3015, "model": "claude"}}, {"label": "audio grid, classify / call", "ask": "Which kind of water-utility call is this?", "opts": [{"k": "billing", "l": "billing", "t": ""}, {"k": "metering", "l": "metering", "t": ""}, {"k": "taste and odor", "l": "taste and odor", "t": ""}, {"k": "outage", "l": "outage", "t": ""}, {"k": "leak", "l": "leak", "t": ""}], "ref": "leak", "model": "circuit-audio-7b", "pick": "leak", "p": 1.0, "circuit_ms": 107.4, "rtt_ms": 363, "llm": {"answer": "leak", "wall_ms": 3734, "transcribe_ms": 236, "llm_ms": 3498, "transcript": "Hello, yes, a pipe burst in front of my house. Can someone help?", "model": "whisper-small + claude", "note": "transcribed locally with Whisper, then the transcript read by a chat model"}}, {"label": "audio grid, which sentence / real recording", "ask": "Which of these did the speaker read?", "opts": [{"k": "the second begins here an angel the third here\u2026", "l": "the second begins here an angel the third here\u2026", "t": ""}, {"k": "i hope you'll like him better than the frost\u2026", "l": "i hope you'll like him better than the frost\u2026", "t": ""}, {"k": "was his mind wandering into some other train of\u2026", "l": "was his mind wandering into some other train of\u2026", "t": ""}, {"k": "very well said missus wilkins resolutely to herself ef\u2026", "l": "very well said missus wilkins resolutely to herself ef\u2026", "t": ""}], "ref": "was his mind wandering into some other train of\u2026", "model": "circuit-audio-7b", "pick": "was his mind wandering into some other train of\u2026", "p": 1.0, "circuit_ms": 104.5, "rtt_ms": 342, "llm": {"answer": "was his mind wandering into some other train of\u2026", "wall_ms": 4326, "transcribe_ms": 221, "llm_ms": 4105, "transcript": "Was his mind wandering into some other train of thought?", "model": "whisper-small + claude", "note": "transcribed locally with Whisper, then the transcript read by a chat model"}}];
+    const N = qz.length, picks = qz.map(() => null);
+    let at = 0, t0 = 0, tick = null;
+    const fmt = ms => ms == null ? '?' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
+    const secs = ms => (ms / 1000).toFixed(1) + ' s';
+    const esc = s => String(s == null ? '—' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+    const mark = ok => '<span class="' + (ok ? 'ok' : 'no') + '">' + (ok ? '✓' : '✗') + '</span>';
+    const right = (d, g) => !!g && g.k === d.ref;
+    const lab = (d, k) => { const o = d.opts.find(o => o.k === k); return o ? o.l : k; };
+
+    function stopClock() { clearInterval(tick); tick = null; }
+    function startClock() {
+      stopClock(); t0 = performance.now(); $('qz-clock').textContent = '0.0 s';
+      tick = setInterval(() => { $('qz-clock').textContent = secs(performance.now() - t0); }, 100);
     }
-    if (card.classList.contains('end')) finish();
-  }
-  cards.forEach(card => {
-    const d = qz[+card.dataset.i];
-    card.querySelectorAll('.opts button').forEach(btn => btn.addEventListener('click', () => {
-      if (slides[at] !== card || btn.disabled) return;
-      clearInterval(tick); const took = performance.now() - t0;
-      card.querySelector('.clock').textContent = (took / 1000).toFixed(1) + ' s';
-      card.querySelectorAll('.opts button').forEach(b => { b.disabled = true; if (b.dataset.k === d.ref) b.classList.add('right'); });
-      btn.classList.add('you');
-      const k = btn.dataset.k, youRight = k === d.ref, modelRight = d.pick === d.ref, llmRight = !!(d.llm && d.llm.answer === d.ref);
-      tally.n += 1; tally.you += youRight; tally.circuit += modelRight; tally.llm += llmRight; tally.yourMs += took; tally.circuitMs += d.circuit_ms || 0; tally.llmMs += (d.llm && d.llm.wall_ms) || 0;
-      let v = '<b>' + (youRight ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + fmt(took) + '</span>. Label: <b>' + d.ref + '</b>.<br>'
-        + d.model + ': <b>' + d.pick + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server, ' + fmt(d.rtt_ms) + ' round trip from a laptop.<br>';
+    function verdict(i) {
+      const d = qz[i], g = picks[i], modelRight = d.pick === d.ref, llmRight = !!(d.llm && d.llm.answer === d.ref);
+      let v = '<b>' + (right(d, g) ? 'You got it' : 'Not this one') + '</b> in <span class="t">' + secs(g.ms) + '</span>. Label: <b>' + esc(lab(d, d.ref)) + '</b>.<br>'
+        + esc(d.model) + ': <b>' + esc(lab(d, d.pick)) + '</b> at p ' + d.p.toFixed(2) + (modelRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.circuit_ms) + '</span> on the server, ' + fmt(d.rtt_ms) + ' round trip from a laptop.<br>';
       if (d.llm && d.llm.answer != null) {
-        v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + d.llm.answer + '</b>' + (llmRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
-          + (d.llm.transcribe_ms ? ' (' + fmt(d.llm.transcribe_ms) + ' of it transcribing: “' + d.llm.transcript + '”)' : '') + '.';
+        v += (d.llm.model === 'whisper-small + claude' ? 'Whisper, then Claude on the transcript' : 'Claude, via the CLI') + ': <b>' + esc(lab(d, d.llm.answer)) + '</b>' + (llmRight ? '' : ', wrong') + ', <span class="t">' + fmt(d.llm.wall_ms) + '</span>'
+          + (d.llm.transcribe_ms ? ' (' + fmt(d.llm.transcribe_ms) + ' of it transcribing: “' + esc(d.llm.transcript) + '”)' : '') + '.';
       }
-      card.querySelector('.verdict').innerHTML = v;
-      card.querySelector('.next').hidden = false;
-    }));
-    card.querySelector('.next').addEventListener('click', () => goTo(at + 1));
-  });
-  function finish() {
-    const n = tally.n || 1;
-    $('qz-final').textContent = 'You ' + tally.you + '/' + tally.n + ', circuit models ' + tally.circuit + '/' + tally.n + ', chat model ' + tally.llm + '/' + tally.n + '.';
-    const row = (who, right, ms) => '<tr><td>' + who + '</td><td class="n">' + right + '/' + tally.n + '</td><td class="n">' + fmt(ms / n) + '</td><td class="n">' + fmt(ms) + '</td></tr>';
-    $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th></tr>' + row('you', tally.you, tally.yourMs) + row('circuit models, server time', tally.circuit, tally.circuitMs) + row('chat model, wall time', tally.llm, tally.llmMs);
-  }
-  $('qz-start').addEventListener('click', () => goTo(1));
-  $('qz-again').addEventListener('click', () => location.reload());
-  goTo(0);
-  window.addEventListener('resize', () => { track.style.height = slides[at].offsetHeight + 'px'; });
+      return v;
+    }
+    function paint(i) {
+      const d = qz[i], g = picks[i];
+      [...$('qz-opts').children].forEach((b, j) => {
+        b.disabled = true;
+        if (d.opts[j].k === d.ref) b.classList.add('right');
+        if (d.opts[j].k === g.k) b.classList.add('you');
+      });
+      $('qz-clock').textContent = secs(g.ms);
+      $('qz-verdict').innerHTML = verdict(i);
+    }
+    function pick(i, k) {
+      if (picks[i] || i !== at) return;
+      stopClock(); picks[i] = { k: k, ms: performance.now() - t0 };
+      paint(i); nav();
+    }
+    function nav() {
+      $('qz-prev').disabled = at === 0;
+      $('qz-next').disabled = !picks[at];
+      $('qz-next').textContent = at === N - 1 ? 'See the results' : 'Next question';
+    }
+    function showQ(i) {
+      at = i;
+      $('qz-intro').hidden = true; $('qz-results').hidden = true; $('qz-play').hidden = false;
+      const d = qz[i];
+      $('qz-pos').textContent = 'Question ' + (i + 1) + ' of ' + N;
+      $('qz-label').textContent = d.label;
+      const body = $('qz-body');
+      body.replaceChildren(document.querySelector('template[data-i="' + i + '"]').content.cloneNode(true));
+      $('qz-ask').textContent = d.ask;
+      const opts = $('qz-opts'); opts.replaceChildren();
+      d.opts.forEach(o => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = o.l; if (o.t) b.title = o.t;
+        b.addEventListener('click', () => pick(i, o.k));
+        opts.appendChild(b);
+      });
+      if (picks[i]) { stopClock(); paint(i); } else { $('qz-verdict').innerHTML = ''; startClock(); }
+      nav();
+    }
+    function results() {
+      stopClock();
+      $('qz-play').hidden = true; $('qz-results').hidden = false;
+      const answered = picks.filter(Boolean).length || 1;
+      const sum = f => qz.reduce((a, d, i) => a + (f(d, picks[i]) || 0), 0);
+      const yourMs = sum((d, g) => g && g.ms), cMs = sum(d => d.circuit_ms), lMs = sum(d => d.llm && d.llm.wall_ms);
+      const you = qz.filter((d, i) => right(d, picks[i])).length;
+      const circuit = qz.filter(d => d.pick === d.ref).length;
+      const llm = qz.filter(d => d.llm && d.llm.answer === d.ref).length;
+      $('qz-final').textContent = 'You ' + you + '/' + N + ', circuit models ' + circuit + '/' + N + ', chat model ' + llm + '/' + N + '.';
+      const cell = (ans, ok, ms, f) => '<td><span class="a">' + esc(ans) + '</span> ' + mark(ok) + '<br><span class="t">' + (ms == null ? '?' : (f || fmt)(ms)) + '</span></td>';
+      $('qz-board').innerHTML = '<tr><th></th><th>question</th><th>you</th><th>circuit model</th><th>chat model</th></tr>'
+        + qz.map((d, i) => {
+          const g = picks[i] || {};
+          return '<tr><td class="n">' + (i + 1) + '</td><td>' + esc(d.label) + '</td>'
+            + cell(g.k == null ? null : lab(d, g.k), right(d, g), g.ms, secs)
+            + cell(lab(d, d.pick), d.pick === d.ref, d.circuit_ms)
+            + cell(d.llm && d.llm.answer != null ? lab(d, d.llm.answer) : null, !!(d.llm && d.llm.answer === d.ref), d.llm && d.llm.wall_ms) + '</tr>';
+        }).join('');
+      const row = (who, r, ms, f) => '<tr><td>' + who + '</td><td class="n">' + r + '/' + N + '</td><td class="n">' + (f || fmt)(ms / answered) + '</td><td class="n">' + (f || fmt)(ms) + '</td></tr>';
+      $('qz-table').innerHTML = '<tr><th></th><th>right</th><th>average per question</th><th>total</th></tr>'
+        + row('you', you, yourMs, secs) + row('circuit models, server time', circuit, cMs) + row('chat model, wall time', llm, lMs);
+    }
+    $('qz-start').addEventListener('click', () => showQ(0));
+    $('qz-prev').addEventListener('click', () => showQ(Math.max(0, at - 1)));
+    $('qz-next').addEventListener('click', () => { if (at === N - 1) results(); else showQ(at + 1); });
+    $('qz-back').addEventListener('click', () => showQ(N - 1));
+    $('qz-again').addEventListener('click', () => location.reload());
+  })();
   // quiz:end
   const show = new URLSearchParams(location.search).get('show');
   if (show !== null) { $('die').style.animation = 'none'; $('window').classList.remove('stir'); surfaceAnswer(answers[+show][0], answers[+show][1]); }
