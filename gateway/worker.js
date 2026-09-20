@@ -7,15 +7,19 @@
 // Secrets: S1_API_KEY (the bearer both upstreams require), and for the local tier
 // LOCAL_ACCESS_ID / LOCAL_ACCESS_SECRET (a Cloudflare Access service token).
 //
-// The local tier covers cold starts. Modal scales to zero, so the first call after a
-// quiet spell waits about a minute for a GPU. When LOCAL_URLS names a model, that call
-// is hedged: Modal gets HEDGE_MS to answer (a warm container needs far less), and if it
-// hasn't, the same question goes to a machine at home over a Cloudflare Tunnel and
-// whichever answers first wins. Modal's boot is never cancelled, so the caller after
-// this one lands on a warm GPU and the local tier goes quiet again.
+// Where a question goes. When LOCAL_URLS names a model, hardware at home answers it and
+// no GPU is rented at all: the occasional question costs nothing and waits for nothing.
+// Modal is the overflow, woken only when home cannot take the work —
+//
+//   home answers                -> done, and Modal stays asleep
+//   home says it is at capacity -> Modal, immediately (it declines with 503 + x-s1-busy)
+//   home is unreachable         -> Modal, immediately
+//   home is merely slow         -> Modal starts after LOCAL_PATIENCE_MS, first answer wins
+//
+// so a burst that outruns one machine spills onto GPUs, and a quiet day never touches them.
 
-const HEDGE_MS = 1500; // a warm Modal container answers well inside this; a booting one cannot
-const LOCAL_TIMEOUT_MS = 8000; // the machine at home is asleep, updating, or gone: fail fast and let Modal have it
+const LOCAL_PATIENCE_MS = 4000; // home is answering, just slowly: past this, waking a GPU beats waiting
+const LOCAL_TIMEOUT_MS = 20000; // home is asleep, updating, or gone: give up on it entirely
 
 const json = (body, status = 200, headers = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", ...headers } });
@@ -79,19 +83,21 @@ async function proxy(request, env, ctx) {
   body.model = model;
   const payloadText = JSON.stringify(body);
 
-  const modal = ask(urls[model], { authorization: `Bearer ${env.S1_API_KEY}` }, payloadText, 120000).then(tag("modal"));
+  const toModal = () => ask(urls[model], { authorization: `Bearer ${env.S1_API_KEY}` }, payloadText, 120000).then(tag("modal"));
   const localBase = localUrlFor(env, model);
   let answer = null;
   if (!localBase) {
-    answer = await modal.catch(() => null);
+    answer = await toModal().catch(() => null);
   } else {
-    const hedge = new Promise((r) => setTimeout(() => r(null), HEDGE_MS));
-    answer = await Promise.race([modal.catch(() => null), hedge]);
-    if (!answer) {
-      // Modal is booting (or broken). Ask home, and let the boot run to completion so the next caller lands warm.
-      ctx.waitUntil(modal.catch(() => {}));
-      const local = ask(localBase, localHeaders(env), payloadText, LOCAL_TIMEOUT_MS).then(tag("local"));
-      answer = await Promise.any([modal, local]).catch(() => null);
+    const local = ask(localBase, localHeaders(env), payloadText, LOCAL_TIMEOUT_MS).then(tag("local"));
+    const waited = Symbol("slow");
+    const first = await Promise.race([local.catch(() => null), new Promise((r) => setTimeout(() => r(waited), LOCAL_PATIENCE_MS))]);
+    if (first && first !== waited) {
+      answer = first; // home took it: no GPU was rented for this question
+    } else if (first === waited) {
+      answer = await Promise.any([local, toModal()]).catch(() => null); // slow, not refused: let both run
+    } else {
+      answer = await toModal().catch(() => null); // at capacity or unreachable
     }
   }
   if (!answer) return json({ error: "the model is starting up; retry in 30 s", model }, 503, { "retry-after": "30" });

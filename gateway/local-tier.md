@@ -5,13 +5,18 @@ why the first call after a quiet spell waits about a minute for a GPU. That
 minute is the worst thing about the free API. This closes it with hardware
 you already own, without turning that hardware into production.
 
-**How it works.** Every call goes to Modal first. If Modal answers within
-`HEDGE_MS` (1.5 s — a warm container needs a fraction of that), nothing else
-happens and the machine at home is never touched. If it doesn't, the same
-question goes out over a Cloudflare Tunnel to the Mac, and whichever answers
-first is returned. Modal's boot is **never cancelled**, so the caller after
-this one lands on a warm GPU and the local tier falls silent again. It only
-ever runs during the ~60 s window it exists to cover.
+**How it works.** Home answers first, and a GPU is rented only when home can't
+take the work:
+
+| what happens at home | where the question goes |
+|---|---|
+| it answers | done — no GPU is woken |
+| it declines: at capacity (503 with `x-s1-busy`) | Modal, immediately |
+| it is unreachable | Modal, immediately |
+| it is merely slow | Modal starts after `LOCAL_PATIENCE_MS` (4 s); first answer wins |
+
+So occasional traffic costs nothing and waits for nothing, and a burst that
+outruns one machine spills onto GPUs rather than queueing behind it.
 
 `x-circuit-served-by: modal | local` on every response says which answered.
 
@@ -29,13 +34,25 @@ weights already in `runs/`. `S1_API_KEY` must match the gateway's secret.
 ```bash
 cd ~/Documents/code/s1-proto
 export S1_API_KEY=...                                    # same value as the Worker secret
-S1_MODEL=lora:runs/circuit-8b     PORT=8902 uv run python -m s1proto &
-S1_MODEL=lora:runs/circuit-vl-4b  PORT=8903 uv run python -m s1proto &
+S1_MODEL=lora:runs/circuit-8b PORT=8902 \
+  S1_MAX_INFLIGHT=3 S1_CONCURRENCY=1 S1_QUEUE_WAIT_S=8 \
+  uv run python -m s1proto &
 curl -s localhost:8902/healthz
+# {"ok":true,"model":"lora:circuit-8b","inflight":0,"max_inflight":3,"concurrency":1}
 ```
 
 Host only the models worth covering. Each one holds its weights in memory
 for as long as it runs, and the audio and vision models are the largest.
+
+**The three numbers are the whole capacity policy.** `S1_CONCURRENCY` is how
+many forward passes run at once: **leave it at 1 on Apple silicon**. Two
+concurrent passes on MPS do not run twice as fast, they hang, holding both
+requests until the process is killed — which then makes the box permanently
+"busy" and sends everything to Modal. `S1_MAX_INFLIGHT` is running plus
+waiting, past which the box declines instantly, and `S1_QUEUE_WAIT_S` caps how
+long a queued request waits for its turn before it declines too. Measured on
+one Mac at 3/1/8, a burst of eight arrived as three served locally in about
+three seconds each and five overflowed to Modal.
 
 To keep them across reboots, a launchd job per model
 (`~/Library/LaunchAgents/com.decisioncircuits.circuit-8b.plist`) with
