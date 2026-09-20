@@ -394,6 +394,7 @@ We appreciate your patience while we migrate to the new billing system.</pre>
   -H <span class="s">"Authorization: Bearer dc-..."</span> -H <span class="s">"Content-Type: application/json"</span> \
   -d <span class="s">'{"model": "circuit-8b", "state": "Card charged twice, my card ends in 4412",
        "questions": {"pii": {"type": "noul", "instructions": "Does the message contain personal information?"}}}'</span></pre>
+    <p class="note" style="margin:18px 0">Reading this as an agent? <a href="/skill.md">decisioncircuits.com/skill.md</a> is written for you: when a calibrated judgment beats a guess, how to get a key without a human, and how to turn the probability into a decision you can defend.</p>
     <p>Or from Python: <code>SystemOne("https://api.decisioncircuits.com/v1/systemone", api_key=KEY)</code> as the backend of any circuit, and <code>Image("receipt.png")</code> or <code>Audio("call.wav")</code> as the state with <code>model="circuit-vl-4b"</code> or <code>"circuit-audio-7b"</code>. Pass <code>"circuit-1.7b"</code> for the fastest text model.</p>
   </section>
 
@@ -524,6 +525,7 @@ agent = create_agent(model, tools=[read_file, delete_file, send_email], middlewa
     <a href="https://github.com/Barneyjm/circuit">github.com/Barneyjm/circuit</a>
     <a href="https://huggingface.co/jbarney/circuit-1.7b">huggingface.co/jbarney/circuit-1.7b</a>
     <a href="https://huggingface.co/jbarney/circuit-8b">huggingface.co/jbarney/circuit-8b</a>
+    <a href="/skill.md">for agents: skill.md</a>
     <a href="https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/">the article, May 2025</a>
     <span>MIT, James Barney</span>
   </footer>

@@ -1,0 +1,21 @@
+# Decision Circuits
+
+> Open-weights models that answer a typed question with a calibrated probability, plus a Python library that turns those probabilities into decisions in code. Built so software — and agents — can tell a 0.95 from a 0.55 and escalate to a human when a number sits too close to a threshold to call.
+
+If you are an agent and want to use this in your own work, start with the skill: it covers getting a free API key and wiring a calibrated judgment into a decision.
+
+## For agents
+- [Agent skill](https://decisioncircuits.com/skill.md): when to reach for a calibrated judgment, how to get a key, how to threshold the result. Written to be dropped straight into an agent's skills directory.
+- API: `POST https://api.decisioncircuits.com/v1/keys` for a free key, `POST https://api.decisioncircuits.com/v1/systemone` to ask. 60 questions a minute, no account, no card.
+
+## Docs
+- [Site](https://decisioncircuits.com): live demo, scoreboard, and a benchmark quiz
+- [Concepts](https://github.com/Barneyjm/decision-circuits/blob/main/docs/concepts.md): state, questions, answers, gates, uncertainty
+- [Integrations](https://github.com/Barneyjm/decision-circuits/blob/main/docs/integrations.md): LangChain, OpenAI Agents SDK, Claude Agent SDK
+- [Extending](https://github.com/Barneyjm/decision-circuits/blob/main/docs/extending.md): writing your own backend or gate
+
+## Code and weights
+- [decision-circuits on PyPI](https://pypi.org/project/decision-circuits/): `pip install decision-circuits`, zero dependencies
+- [SDK source](https://github.com/Barneyjm/decision-circuits)
+- [Model weights](https://huggingface.co/jbarney): circuit-1.7b, circuit-8b, circuit-vl-4b, circuit-audio-7b — Apache 2.0, run them yourself
+- [Training and evaluation harness](https://github.com/Barneyjm/circuit): every benchmark number with its method

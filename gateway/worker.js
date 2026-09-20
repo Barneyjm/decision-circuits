@@ -90,7 +90,7 @@ export default {
     if (url.pathname === "/v1/keys" && request.method === "POST") return issueKey(request, env);
     if (url.pathname === "/v1/systemone" && request.method === "POST") return proxy(request, env);
     if (url.pathname === "/v1/models") return json({ models: Object.keys(JSON.parse(env.MODAL_URLS)), default: env.DEFAULT_MODEL });
-    if (url.pathname === "/") return json({ name: "circuit api", docs: "https://decisioncircuits.com", signup: "POST /v1/keys", call: "POST /v1/systemone with Authorization: Bearer <key>" });
+    if (url.pathname === "/") return json({ name: "circuit api", docs: "https://decisioncircuits.com", agent_skill: "https://decisioncircuits.com/skill.md", signup: "POST /v1/keys", call: "POST /v1/systemone with Authorization: Bearer <key>" });
     return json({ error: "not found" }, 404);
   },
 };
