@@ -104,6 +104,7 @@ async function proxy(request, env, ctx) {
 
   const headers = { "x-circuit-model": model, "x-circuit-rate": "60/min per key", "x-circuit-served-by": answer.via };
   if (answer.latency) headers["x-s1-latency-ms"] = answer.latency;
+  if (answer.payload && answer.payload.request_id) headers["x-request-id"] = answer.payload.request_id;
   return json(answer.payload, answer.status, headers);
 }
 
