@@ -163,6 +163,13 @@ Three of these will bite you quietly rather than loudly:
 - **Long text loses its head, not its tail.** Over the limit, the oldest part of the state goes. Put what matters closest to the question.
 - **Accepted is not the same as calibrated.** The ceilings above are what the server takes; the middle column is what the models have seen. Send 3,000 tokens and you get an answer from well outside the training distribution, with a probability that has never been measured there. That is exactly where a confident number is worth least — widen your band or split the work.
 
+## Will I get the same number twice?
+
+On the same hardware, yes: there is no sampling, so the same request returns the same probabilities, bit for bit. But a question may be answered by one of two kinds of hardware, and between them the same request can differ by a point or two in the second decimal (0.616 on one, 0.631 on the other, for the same command). The `x-circuit-served-by` response header says which answered.
+
+- If you decide with a band, as in section 3, this never changes a decision. That is the reason to use a band.
+- If you have to reproduce a number later — an audit, a dispute, a regression test — send `x-circuit-reproducible: 1`. The request is pinned to one GPU type, scored alone, and returns the same probabilities every time for a given model version. It can be slower when that tier is starting up. Keep the `x-request-id` header with the result.
+
 ## What these models are not good at
 
 Told plainly, because you should know before you trust a number:

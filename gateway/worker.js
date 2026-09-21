@@ -35,7 +35,7 @@ const json = (body, status = 200, headers = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*", ...headers } });
 
 const cors = () =>
-  new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "authorization, content-type" } });
+  new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "authorization, content-type, x-circuit-reproducible" } });
 
 async function sha256(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -107,7 +107,11 @@ async function proxy(request, env, ctx) {
   const payloadText = JSON.stringify(body);
 
   const toModal = () => ask(urls[model], { authorization: `Bearer ${env.S1_API_KEY}` }, payloadText, 120000).then(tag("modal"));
-  const localBase = localUrlFor(env, model);
+  // Two tiers are two kinds of hardware, and the same question differs between them by a point
+  // or two in the second decimal. A caller who has to reproduce a number pins the rented tier, where each
+  // model runs on one GPU type and one request at a time.
+  const pinned = (request.headers.get("x-circuit-reproducible") || "") === "1";
+  const localBase = pinned ? null : localUrlFor(env, model);
   let answer = null;
   if (!localBase) {
     answer = await toModal().catch(() => null);
