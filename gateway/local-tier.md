@@ -34,11 +34,11 @@ weights already in `runs/`. `S1_API_KEY` must match the gateway's secret.
 ```bash
 cd ~/Documents/code/s1-proto
 export S1_API_KEY=...                                    # same value as the Worker secret
-S1_MODEL=lora:runs/circuit-8b PORT=8902 \
+S1_MODEL=lora:runs/circuit-8b-v1.1 PORT=8902 \
   S1_MAX_INFLIGHT=3 S1_CONCURRENCY=1 S1_QUEUE_WAIT_S=8 \
   uv run python -m s1proto &
 curl -s localhost:8902/healthz
-# {"ok":true,"model":"lora:circuit-8b","inflight":0,"max_inflight":3,"concurrency":1}
+# {"ok":true,"model":"lora:circuit-8b-v1.1","inflight":0,"max_inflight":3,"concurrency":1}
 ```
 
 Host only the models worth covering. Each one holds its weights in memory
@@ -54,7 +54,7 @@ long a queued request waits for its turn before it declines too. Measured on
 one Mac at 3/1/8, a burst of eight arrived as three served locally in about
 three seconds each and five overflowed to Modal.
 
-`deploy/serve_local.sh circuit-8b 8902` in the circuit repo is the same thing
+`deploy/serve_local.sh circuit-8b-v1.1 8902` in the circuit repo is the same thing
 with the defaults baked in.
 
 **Surviving a reboot is awkward on macOS, and the reason is worth knowing.** A
@@ -163,3 +163,13 @@ Not a load tier and not a failover for real traffic. It serves strangers'
 request bodies — receipts, recordings, whatever people upload — from a
 machine in your house. That is a reasonable trade for a free research API
 and the wrong one the moment real customer data shows up.
+
+## Releasing a new model version
+
+Both tiers have to move together, or the same request gets a different model depending
+on who answered. The rented tier pins a Hub tag per model in `deploy/modal_app.py` in the
+circuit repo (`"revision": "v1.1"`); change it and `modal deploy`. The home tier serves a
+run directory named in each launchd agent's `S1_MODEL`
+(`lora:runs/circuit-8b-v1.1`); edit the plist, then `launchctl unload` and `load` it.
+Check with one pinned and one unpinned request: the response's `model` field should name
+the same version from both (`circuit-8b@v1.1` from Modal, `circuit-8b-v1.1` from home).
