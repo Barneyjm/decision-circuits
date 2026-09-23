@@ -40,7 +40,7 @@ from decision_circuits.dsl import (
     verify,
 )
 from decision_circuits.gates import Gate, GateResult, GateResultDict, evaluate_gates, result_key
-from decision_circuits.interventions import Interventions, drop, inject, set_to
+from decision_circuits.interventions import Interventions, drop, set_to
 from decision_circuits.media import Audio, Image, Media
 from decision_circuits.types import Answer, Answers, Backend, Question, answer_from_probabilities, normalized_confidence, option_keys, to_jsonable
 
@@ -74,7 +74,6 @@ __all__ = [
     "argmax",
     "drop",
     "evaluate_gates",
-    "inject",
     "majority",
     "normalized_confidence",
     "option_keys",
