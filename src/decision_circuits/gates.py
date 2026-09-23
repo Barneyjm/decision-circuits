@@ -23,6 +23,16 @@ Gate ops (inputs may reference question ids or earlier gate ids):
              P(check) < tau or the choice is below min_confidence
   order      input: score id, cutpoints: [c1, c2, ...]  value: bucket index (0..len)
              bucket = number of cutpoints <= expected score
+  consistent inputs: [a, b], relation                   value: bool
+             checks two answers against each other: "same" (one question asked two
+             ways: P(a) = P(b)), "complement" (a question and its negation: P(a) +
+             P(b) = 1), "implies" (a implies b: P(a) <= P(b)). p = 1 - the violation;
+             uncertain, so on_uncertain applies, when the violation exceeds band.
+             Catches a model that is confused about the case, which calibration of
+             each answer on its own cannot show.
+
+References may also name a multi option ("multi_id:option") or a locate question's
+"none" ("locate_id:none").
 
 Every gate has `on_uncertain`: "abstain" | "escalate" | "default" (with
 `default` value). A gate is uncertain when the probability it acts on
@@ -36,7 +46,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, TypedDict
 
-OPS = ("threshold", "not", "and", "or", "majority", "argmax", "verify", "order")
+OPS = ("threshold", "not", "and", "or", "majority", "argmax", "verify", "order", "consistent")
+RELATIONS = ("same", "complement", "implies")
 POLICIES = ("abstain", "escalate", "default")
 OUTCOMES = ("decided", "abstain", "escalate", "default")
 
@@ -55,6 +66,7 @@ class Gate:
     cutpoints: list[float] | None = None
     on_uncertain: str = "abstain"
     default: Any = None
+    relation: str | None = None
 
     def __post_init__(self) -> None:
         if self.op not in OPS:
@@ -69,6 +81,11 @@ class Gate:
             raise ValueError("gate op 'verify' needs `check`")
         if self.op == "order" and self.cutpoints is None:
             raise ValueError("gate op 'order' needs `cutpoints`")
+        if self.op == "consistent":
+            if not self.inputs or len(self.inputs) != 2:
+                raise ValueError("gate op 'consistent' needs exactly two `inputs`")
+            if self.relation not in RELATIONS:
+                raise ValueError(f"gate op 'consistent' needs `relation`, one of {RELATIONS}")
         self.tau = float(self.tau)
         self.band = float(self.band)
         self.min_confidence = float(self.min_confidence)
@@ -151,10 +168,13 @@ def _noul_p(answers: dict[str, Any], results: dict[str, GateResult], ref: str) -
             note = " (uncertain)" if r.uncertain else ""
             return pm, f"gate {qid}={r.value} -> P({opt})={pm:.2f}{note}", r.uncertain
         a = answers[qid]
-        if a["type"] in ("choice", "score"):
+        if a["type"] in ("choice", "score", "multi"):
             p = float(a["probabilities"][opt])
             return p, f"{qid}[{opt}] p={p:.2f}", False
-        raise ValueError(f"{qid!r} is not a choice or score")
+        if a["type"] == "locate" and opt == "none":
+            p = float(a["none"])
+            return p, f"{qid}[none] p={p:.2f}", False
+        raise ValueError(f"{qid!r} is not a choice, score or multi (or a locate's 'none')")
     a = answers[ref]
     if a["type"] != "noul":
         raise ValueError(f"{ref!r} is not a noul; use 'choice_id:option' for a choice option")
@@ -245,4 +265,9 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             near = any(abs(s - c) < g.band for c in cuts)
             trace.append(f"{g.input} score={s:.2f} cutpoints={cuts} -> bucket {bucket}" + (" (near a cutpoint)" if near else ""))
             results[gid] = _settle(g, bucket, None, near, trace, confidence=float(a["confidence"]))
+        elif g.op == "consistent":
+            (pa, ta, ua), (pb, tb, ub) = (_noul_p(answers, results, ref) for ref in g.inputs or [])
+            gap = {"same": abs(pa - pb), "complement": abs(pa + pb - 1.0), "implies": max(0.0, pa - pb)}[g.relation or "same"]
+            trace += [ta, tb, f"{g.relation}: violation {gap:.2f} (band {g.band})"]
+            results[gid] = _settle(g, gap <= g.band, 1.0 - gap, ua or ub or gap > g.band, trace)
     return results

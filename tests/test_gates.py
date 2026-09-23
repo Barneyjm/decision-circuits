@@ -80,3 +80,44 @@ def test_order_buckets_and_cutpoint_band():
 def test_forward_reference_is_an_error():
     with pytest.raises(KeyError):
         evaluate_gates({"a": g(op="and", inputs=["b"]), "b": g(op="threshold", input="pii")}, ANSWERS)
+
+
+CONSISTENCY = {
+    "refund": {"type": "noul", "noul": 0.80},
+    "refund_reworded": {"type": "noul", "noul": 0.74},
+    "no_refund": {"type": "noul", "noul": 0.55},
+    "tags": {"type": "multi", "selected": ["billing"], "probabilities": {"billing": 0.9, "outage": 0.3}},
+    "both": {"type": "noul", "noul": 0.6},
+    "where": {"type": "locate", "located": [{"path": "a", "text": "x", "probability": 0.7}], "none": 0.3, "confidence": 0.4},
+}
+
+
+def test_consistent_same_within_band():
+    r = evaluate_gates({"c": g(op="consistent", inputs=["refund", "refund_reworded"], relation="same")}, CONSISTENCY)["c"]
+    assert r.value is True and r.outcome == "decided" and abs(r.p - 0.94) < 1e-9
+
+
+def test_consistent_complement_violation_escalates():
+    gates = {"c": g(op="consistent", inputs=["refund", "no_refund"], relation="complement", on_uncertain="escalate")}
+    r = evaluate_gates(gates, CONSISTENCY)["c"]
+    assert r.outcome == "escalate" and r.uncertain and abs(r.p - 0.65) < 1e-9  # 0.80 + 0.55 - 1 = 0.35 over
+
+
+def test_consistent_implies_reads_multi_options():
+    # "billing and outage" (0.6) cannot be likelier than "outage" (0.3)
+    r = evaluate_gates({"c": g(op="consistent", inputs=["both", "tags:outage"], relation="implies")}, CONSISTENCY)["c"]
+    assert r.outcome == "abstain" and "violation 0.30" in r.trace[-2]
+    ok = evaluate_gates({"c": g(op="consistent", inputs=["both", "tags:billing"], relation="implies")}, CONSISTENCY)["c"]
+    assert ok.value is True
+
+
+def test_threshold_on_locate_none():
+    r = evaluate_gates({"missing": g(op="threshold", input="where:none", tau=0.5)}, CONSISTENCY)["missing"]
+    assert r.value is False and abs(r.p - 0.3) < 1e-9
+
+
+def test_consistent_needs_two_inputs_and_a_relation():
+    with pytest.raises(ValueError):
+        g(op="consistent", inputs=["refund"], relation="same")
+    with pytest.raises(ValueError):
+        g(op="consistent", inputs=["refund", "no_refund"])
