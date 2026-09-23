@@ -27,7 +27,8 @@ anthropic = ["anthropic>=1.0,<2"]
 langchain = ["langchain>=1.4,<2"]
 openai-agents = ["openai-agents>=0.22"]
 claude = ["claude-agent-sdk>=0.2"]
-all = ["openai>=2.44,<4", "anthropic>=1.0,<2", "langchain>=1.4,<2", "openai-agents>=0.22", "claude-agent-sdk>=0.2"]
+otel = ["opentelemetry-api>=1.20"]
+all = ["opentelemetry-api>=1.20", "openai>=2.44,<4", "anthropic>=1.0,<2", "langchain>=1.4,<2", "openai-agents>=0.22", "claude-agent-sdk>=0.2"]
 
 [project.urls]
 Homepage = "https://decisioncircuits.com"
@@ -39,7 +40,7 @@ Models = "https://huggingface.co/jbarney"
 Article = "https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "httpx>=0.25", "langchain>=1.4,<2", "openai-agents>=0.22", "claude-agent-sdk>=0.2"]
+dev = ["pytest>=8", "opentelemetry-sdk>=1.20", "ruff>=0.6", "httpx>=0.25", "langchain>=1.4,<2", "openai-agents>=0.22", "claude-agent-sdk>=0.2"]
 
 [build-system]
 requires = ["hatchling"]

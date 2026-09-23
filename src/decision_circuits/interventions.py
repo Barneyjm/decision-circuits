@@ -31,6 +31,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from decision_circuits import tracing
 from decision_circuits.gates import result_key
 from decision_circuits.types import answer_distributions
 
@@ -138,16 +139,19 @@ def intervene(
     An intervention is a function of the state (`drop`, `set_to`, or your own) or a
     replacement state. Pass `baseline` to reuse a run you already have."""
     names = list(interventions)
-    states = [v(state) if callable(v) else v for v in interventions.values()]
-    jobs = ([] if baseline else [state]) + states
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        runs = list(pool.map(lambda s: circuit.run(backend, s, model=model), jobs))
-    base = baseline or runs.pop(0)
-    effects: dict[str, Effect] = {}
-    for name, s, run in zip(names, states, runs, strict=True):
-        flipped, gates, answers = compare(base, run)
-        effects[name] = {"state": s, "run": run, "flipped": flipped, "gates": gates, "answers": answers}
-    return {"baseline": base, "effects": effects}
+    with tracing.span("decision_circuits.intervene", **{"decision_circuits.interventions": names}) as span:
+        states = [v(state) if callable(v) else v for v in interventions.values()]
+        jobs = ([] if baseline else [state]) + states
+        run = tracing.in_context(circuit.run)  # bound here, in this span, so each pooled run is its child
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            runs = list(pool.map(lambda s: run(backend, s, model=model), jobs))
+        base = baseline or runs.pop(0)
+        effects: dict[str, Effect] = {}
+        for name, s, run in zip(names, states, runs, strict=True):
+            flipped, gates, answers = compare(base, run)
+            effects[name] = {"state": s, "run": run, "flipped": flipped, "gates": gates, "answers": answers}
+            tracing.event(span, "decision_circuits.intervention", name=name, flipped=flipped)
+        return {"baseline": base, "effects": effects}
 
 
 def segments(state: Any, unit: str = "auto", limit: int = 12) -> dict[str, Edit]:

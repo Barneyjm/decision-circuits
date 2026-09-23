@@ -175,6 +175,26 @@ c.gate("says_what", ~Q("ask")["none"] >= 0.5)
 field, a list element or a sentence of the state, or at "none". See
 `examples/13_what_v2_reads.py`.
 
+## Tracing
+
+With `pip install "decision-circuits[otel]"` and any OpenTelemetry SDK and exporter
+configured, every run is a span:
+
+```
+decision_circuits.run                  gen_ai.request.model, gen_ai.response.id, gen_ai.usage.input_tokens,
+│                                      decision_circuits.escalated = ["pay"], decision_circuits.abstained = []
+│   event decision_circuits.answer     question, type, pick, p           (one per answer; per option for a multi)
+│   event decision_circuits.gate       gate, value, outcome, p, trace    (one per gate)
+└── decision_circuits.backend          the model call
+```
+
+`intervene` and `ablate` add a `decision_circuits.intervene` span over one run per edited
+state, threads included. `SystemOne` sends `traceparent`, so a traced server joins the same
+trace. Circuits called inside LangChain, LangGraph or an agent SDK nest under that
+framework's spans. The state is never recorded; question ids, option names, probabilities
+and gate traces are. Without OpenTelemetry installed, nothing is imported and nothing is
+recorded.
+
 ## Images and audio
 
 The state can be a picture or a recording; the circuit does not change.

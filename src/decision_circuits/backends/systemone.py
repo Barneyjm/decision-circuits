@@ -22,6 +22,7 @@ from typing import Any
 USER_AGENT = "decision-circuits/0.4"
 RETRY_STATUSES = (502, 503, 504, 524)  # a model starting up, or a platform timeout in front of it
 
+from decision_circuits import tracing
 from decision_circuits.types import Answers, to_jsonable
 
 
@@ -71,10 +72,10 @@ class SystemOne:
 
     def _post_once(self, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         if self.client is not None:
-            r = self.client.post(self.url, json=body, headers=self.headers)
+            r = self.client.post(self.url, json=body, headers=tracing.inject(dict(self.headers)))
             return getattr(r, "status_code", 200), r.json()
         data = json.dumps(body, default=to_jsonable).encode()
-        req = urllib.request.Request(self.url, data=data, headers=self.headers, method="POST")
+        req = urllib.request.Request(self.url, data=data, headers=tracing.inject(dict(self.headers)), method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 return resp.status, json.loads(resp.read().decode())

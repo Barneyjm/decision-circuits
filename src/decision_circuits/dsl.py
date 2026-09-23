@@ -43,8 +43,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from decision_circuits import tracing
 from decision_circuits.gates import Gate, GateResultDict, evaluate_gates
-from decision_circuits.types import Answers, Backend
+from decision_circuits.types import Answers, Backend, answer_distributions
 
 if TYPE_CHECKING:
     from decision_circuits.interventions import Interventions
@@ -378,13 +379,36 @@ class Circuit:
         to let a server evaluate the circuit itself; `SystemOne` does,
         and falls back to answering when the server rejects gates."""
         model = model or self.model or getattr(backend, "model", None)
+        public = [g.name for g in self.gates]
+        with tracing.span(
+            "decision_circuits.run",
+            **{
+                "gen_ai.operation.name": "decision_circuits.run",
+                "gen_ai.request.model": model,
+                "decision_circuits.backend": type(backend).__name__,
+                "decision_circuits.questions": list(self.questions),
+                "decision_circuits.question_types": [q["type"] for q in self.questions.values()],
+                "decision_circuits.gates": public,
+            },
+        ) as span:
+            out = self._run(backend, state, model)
+            _record(span, backend, out)
+            return out
+
+    def _run(self, backend: Backend, state: Any, model: str | None) -> RunOutput:
         with_gates = getattr(backend, "answer_with_gates", None)
-        if callable(with_gates):
-            answers, gates = with_gates(state, self.questions, self.compile(), model=model)
-            if gates is not None:
-                return {"model": model, "answers": answers, "gates": {k: v for k, v in gates.items() if not k.startswith("_")}, "gates_evaluated_by": "server"}
-        else:
-            answers = backend.answer(state, self.questions, model=model)
+        with tracing.span("decision_circuits.backend", **{"decision_circuits.backend": type(backend).__name__, "gen_ai.request.model": model}):
+            if callable(with_gates):
+                answers, gates = with_gates(state, self.questions, self.compile(), model=model)
+                if gates is not None:
+                    return {
+                        "model": model,
+                        "answers": answers,
+                        "gates": {k: v for k, v in gates.items() if not k.startswith("_")},
+                        "gates_evaluated_by": "server",
+                    }
+            else:
+                answers = backend.answer(state, self.questions, model=model)
         return {"model": model, "answers": answers, "gates": self.evaluate(answers), "gates_evaluated_by": "client"}
 
     def intervene(self, backend: Backend, state: Any, interventions: Mapping[str, Any], **kw: Any) -> Interventions:
@@ -399,6 +423,38 @@ class Circuit:
         from decision_circuits.interventions import ablate
 
         return ablate(self, backend, state, **kw)
+
+
+def _record(span: Any, backend: Any, out: RunOutput) -> None:
+    """A run's result on its span: the response ids, an event per answer and per gate, and
+    the gates that went to a person or held back. Never the state."""
+    last = getattr(backend, "last_response", None) or {}
+    span.set_attribute("decision_circuits.gates_evaluated_by", out["gates_evaluated_by"])
+    for key, value in (("gen_ai.response.model", last.get("model")), ("gen_ai.response.id", last.get("request_id"))):
+        if value:
+            span.set_attribute(key, value)
+    if (last.get("usage") or {}).get("input_tokens") is not None:
+        span.set_attribute("gen_ai.usage.input_tokens", int(last["usage"]["input_tokens"]))
+    for qid, a in out["answers"].items():
+        for suffix, dist in answer_distributions(a).items():
+            pick = max(dist, key=dist.__getitem__)
+            tracing.event(span, "decision_circuits.answer", question=qid + suffix, type=a.get("type"), pick=pick, p=round(dist[pick], 4))
+    held: dict[str, list[str]] = {"escalate": [], "abstain": []}
+    for gid, g in out["gates"].items():
+        tracing.event(
+            span,
+            "decision_circuits.gate",
+            gate=gid,
+            value=g.get("value"),
+            outcome=g.get("outcome"),
+            p=g.get("p"),
+            uncertain=g.get("uncertain"),
+            trace="; ".join(g.get("trace") or []),
+        )
+        if g.get("outcome") in held:
+            held[g["outcome"]].append(gid)
+    span.set_attribute("decision_circuits.escalated", held["escalate"])
+    span.set_attribute("decision_circuits.abstained", held["abstain"])
 
 
 # ---------------------------------------------------------------- rendering
