@@ -17,6 +17,13 @@ Answers (what a System One server returns, and what a backend must produce):
     {"type": "choice", "choice": option, "probabilities": {option: p, ...}, "confidence": c}
     {"type": "score",  "score": expected, "probabilities": {"0": p, "1": p, ...}, "confidence": c}
 
+Circuit v2 servers also return these (text states only):
+
+    {"type": "multi",  "selected": [option, ...], "probabilities": {option: p, ...}}   independent per option
+    {"type": "locate", "located": [{"path", "text", "probability"}, ...], "none": p, "confidence": c}
+    {"type": "rank",   "order": [option, ...], "probabilities": {option: P(first)}, "above": [p, ...]}
+    {"type": "match",  "matches": {item: {"match": option|"none", "probabilities": {...}, "confidence": c}}}
+
 `confidence` is 1 - H(p) / log N: 1.0 when all mass is on one option,
 0.0 when uniform. `normalized_confidence` computes it.
 """
@@ -69,7 +76,32 @@ class ScoreAnswer(TypedDict):
     confidence: float
 
 
-Answer = NoulAnswer | ChoiceAnswer | ScoreAnswer
+class MultiAnswer(TypedDict):
+    type: Literal["multi"]
+    selected: list[str]
+    probabilities: dict[str, float]
+
+
+class LocateAnswer(TypedDict):
+    type: Literal["locate"]
+    located: list[dict[str, Any]]
+    none: float
+    confidence: float
+
+
+class RankAnswer(TypedDict):
+    type: Literal["rank"]
+    order: list[str]
+    probabilities: dict[str, float]
+    above: list[float]
+
+
+class MatchAnswer(TypedDict):
+    type: Literal["match"]
+    matches: dict[str, dict[str, Any]]
+
+
+Answer = NoulAnswer | ChoiceAnswer | ScoreAnswer | MultiAnswer | LocateAnswer | RankAnswer | MatchAnswer
 Answers = dict[str, Answer]
 
 
@@ -93,6 +125,24 @@ def option_keys(question: Mapping[str, Any]) -> list[str]:
     if kind == "choice":
         return list(question["criteria"].keys())
     return [str(i) for i in range(len(question["criteria"]))]
+
+
+def answer_distributions(answer: Mapping[str, Any]) -> dict[str, dict[str, float]]:
+    """Any answer as named distributions, the one place that knows how each type carries its
+    probabilities. Most types give one, keyed "": a noul {yes, no}, a locate {found, none}, a
+    choice, score or rank its `probabilities`. A multi gives one per option ("[option]": {yes,
+    no}), since each applies or not on its own; a match one per item ("[item]": its options)."""
+    t = answer.get("type")
+    if t == "noul":
+        p = float(answer["noul"])
+        return {"": {"yes": p, "no": 1.0 - p}}
+    if t == "multi":
+        return {f"[{k}]": {"yes": float(v), "no": 1.0 - float(v)} for k, v in answer["probabilities"].items()}
+    if t == "locate":
+        return {"": {"found": 1.0 - float(answer["none"]), "none": float(answer["none"])}}
+    if t == "match":
+        return {f"[{k}]": {o: float(v) for o, v in m["probabilities"].items()} for k, m in answer["matches"].items()}
+    return {"": {k: float(v) for k, v in answer["probabilities"].items()}}
 
 
 def normalized_confidence(probabilities: Mapping[str, float]) -> float:

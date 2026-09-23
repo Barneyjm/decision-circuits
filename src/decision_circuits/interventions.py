@@ -32,6 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from decision_circuits.gates import result_key
+from decision_circuits.types import answer_distributions
 
 if TYPE_CHECKING:
     from decision_circuits.dsl import Circuit, RunOutput
@@ -41,20 +42,26 @@ Edit = Callable[[Any], Any]
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
 
-def drop(*path: str | int) -> Edit:
-    """Remove the value at `path` (keys and list indices) from a dict or list state."""
-    if not path:
-        raise ValueError("drop needs a path")
+def _at(path: tuple[Any, ...], act: Callable[[Any, Any], None]) -> Edit:
+    """An edit that copies the state, walks to the container holding `path`'s last key, and
+    applies `act(container, key)` there."""
 
     def edit(state: Any) -> Any:
         out = copy.deepcopy(state)
         parent = out
         for k in path[:-1]:
             parent = parent[k]
-        del parent[path[-1]]
+        act(parent, path[-1])
         return out
 
     return edit
+
+
+def drop(*path: str | int) -> Edit:
+    """Remove the value at `path` (keys and list indices) from a dict or list state."""
+    if not path:
+        raise ValueError("drop needs a path")
+    return _at(path, lambda parent, key: parent.__delitem__(key))
 
 
 def set_to(*path_and_value: Any) -> Edit:
@@ -62,16 +69,7 @@ def set_to(*path_and_value: Any) -> Edit:
     *path, value = path_and_value
     if not path:
         raise ValueError("set_to needs a path and a value")
-
-    def edit(state: Any) -> Any:
-        out = copy.deepcopy(state)
-        parent = out
-        for k in path[:-1]:
-            parent = parent[k]
-        parent[path[-1]] = value
-        return out
-
-    return edit
+    return _at(tuple(path), lambda parent, key: parent.__setitem__(key, value))
 
 
 class GateEffect(TypedDict):
@@ -104,22 +102,6 @@ class Interventions(TypedDict):
     effects: dict[str, Effect]
 
 
-def distributions(answer: Mapping[str, Any]) -> dict[str, dict[str, float]]:
-    """An answer as named distributions: one for most types, one per option for multi
-    (applies or not), one per item for match. Keys are "" or "[option]" / "[item]"."""
-    t = answer.get("type")
-    if t == "noul":
-        p = float(answer["noul"])
-        return {"": {"yes": p, "no": 1.0 - p}}
-    if t == "multi":
-        return {f"[{k}]": {"yes": float(v), "no": 1.0 - float(v)} for k, v in answer["probabilities"].items()}
-    if t == "locate":
-        return {"": {"found": 1.0 - float(answer["none"]), "none": float(answer["none"])}}
-    if t == "match":
-        return {f"[{k}]": {o: float(v) for o, v in m["probabilities"].items()} for k, m in answer["matches"].items()}
-    return {"": {k: float(v) for k, v in answer["probabilities"].items()}}
-
-
 def compare(baseline: RunOutput, run: RunOutput) -> tuple[list[str], dict[str, GateEffect], dict[str, AnswerEffect]]:
     """What changed between two runs of the same circuit."""
     gates: dict[str, GateEffect] = {}
@@ -133,8 +115,8 @@ def compare(baseline: RunOutput, run: RunOutput) -> tuple[list[str], dict[str, G
             flipped.append(gid)
     answers: dict[str, AnswerEffect] = {}
     for qid, a in baseline["answers"].items():
-        after = distributions(run["answers"][qid])
-        for suffix, dist in distributions(a).items():
+        after = answer_distributions(run["answers"][qid])
+        for suffix, dist in answer_distributions(a).items():
             option = max(dist, key=dist.__getitem__)
             pb, pa = dist[option], after.get(suffix, {}).get(option, 0.0)
             answers[qid + suffix] = {"option": option, "p_before": pb, "p_after": pa, "dp": pa - pb}
@@ -196,6 +178,7 @@ def segments(state: Any, unit: str = "auto", limit: int = 12) -> dict[str, Edit]
     return {f"-[{n}] {spans[i].strip()}": without(i) for n, i in enumerate(real[:limit])}  # the first `limit`; the rest stay in
 
 
-def ablate(circuit: Circuit, backend: Backend, state: Any, *, unit: str = "auto", limit: int = 12, model: str | None = None, workers: int = 4) -> Interventions:
-    """Remove each segment in turn (see `segments`) and report what the decision does."""
-    return intervene(circuit, backend, state, segments(state, unit, limit), model=model, workers=workers)
+def ablate(circuit: Circuit, backend: Backend, state: Any, *, unit: str = "auto", limit: int = 12, **kw: Any) -> Interventions:
+    """Remove each segment in turn (see `segments`) and report what the decision does;
+    `model`, `workers` and `baseline` pass through to `intervene`."""
+    return intervene(circuit, backend, state, segments(state, unit, limit), **kw)
