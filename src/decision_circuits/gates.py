@@ -12,8 +12,14 @@ Gate ops (inputs may reference question ids or earlier gate ids):
              or "gate_id:value" for a categorical gate   value: bool
              p = P(input); passes if p >= tau
   not        input: noul or gate                       value: bool, p = 1 - p_in
-  and / or   inputs: k nouls/gates                     value: bool
+  and / or   inputs: k nouls/gates, or input: a multi id (all its options)   value: bool
              p = product / 1 - product(1-p) (independence assumption; reported as such)
+  at_least   inputs or input (as and/or), k               value: bool
+             p = P(at least k of the inputs hold), from the count distribution under
+             independence; k=1 is `or`, k=len is `and`, "at most k" is `not` over k+1
+  count      inputs or input (as and/or)                 value: most likely count
+             p = P(that count); confidence = the same; expected count in the trace;
+             `probabilities` holds the whole distribution, so "count_id:k" reads P(exactly k)
   majority   inputs: k choice ids over the same option set   value: option
              votes by argmax; p = mean probability of the winner; margin reported
   argmax     input: choice id                           value: option or abstain
@@ -46,7 +52,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, TypedDict
 
-OPS = ("threshold", "not", "and", "or", "majority", "argmax", "verify", "order", "consistent")
+OPS = ("threshold", "not", "and", "or", "at_least", "count", "majority", "argmax", "verify", "order", "consistent")
+POOLED = ("and", "or", "at_least", "count")  # ops that read a set: `inputs`, or every option of a multi `input`
 RELATIONS = ("same", "complement", "implies")
 POLICIES = ("abstain", "escalate", "default")
 OUTCOMES = ("decided", "abstain", "escalate", "default")
@@ -67,6 +74,7 @@ class Gate:
     on_uncertain: str = "abstain"
     default: Any = None
     relation: str | None = None
+    k: int | None = None
 
     def __post_init__(self) -> None:
         if self.op not in OPS:
@@ -75,8 +83,14 @@ class Gate:
             raise ValueError(f"on_uncertain must be one of {POLICIES}, got {self.on_uncertain!r}")
         if self.op in ("threshold", "not", "argmax", "verify", "order") and not self.input:
             raise ValueError(f"gate op {self.op!r} needs `input`")
-        if self.op in ("and", "or", "majority") and not self.inputs:
-            raise ValueError(f"gate op {self.op!r} needs `inputs`")
+        if self.op == "majority" and not self.inputs:
+            raise ValueError("gate op 'majority' needs `inputs`")
+        if self.op in POOLED and not (self.inputs or self.input):
+            raise ValueError(f"gate op {self.op!r} needs `inputs` (or a multi `input`)")
+        if self.op == "at_least":
+            if self.k is None or int(self.k) != self.k or self.k < 0:
+                raise ValueError("gate op 'at_least' needs `k`, a whole number >= 0")
+            self.k = int(self.k)
         if self.op == "verify" and not self.check:
             raise ValueError("gate op 'verify' needs `check`")
         if self.op == "order" and self.cutpoints is None:
@@ -118,6 +132,7 @@ class GateResultDict(TypedDict):
     uncertain: bool
     outcome: str
     trace: list[str]
+    probabilities: dict[str, float] | None
 
 
 @dataclass
@@ -128,6 +143,7 @@ class GateResult:
     uncertain: bool = False
     outcome: str = "decided"
     trace: list[str] = field(default_factory=list)
+    probabilities: dict[str, float] | None = None  # per value, when the gate has a distribution (count)
 
     def to_dict(self) -> GateResultDict:
         return asdict(self)  # type: ignore[return-value]
@@ -162,6 +178,10 @@ def _noul_p(answers: dict[str, Any], results: dict[str, GateResult], ref: str) -
         qid, opt = ref.split(":", 1)
         if qid in results:
             r = results[qid]
+            if r.probabilities is not None:
+                pm = float(r.probabilities.get(opt, 0.0))
+                note = " (uncertain)" if r.uncertain else ""
+                return pm, f"gate {qid} P({opt})={pm:.2f}{note}", r.uncertain
             p = float(r.p if r.p is not None else 1.0)
             match = str(r.value) == opt
             pm = p if match else max(0.0, 1.0 - p)
@@ -179,6 +199,31 @@ def _noul_p(answers: dict[str, Any], results: dict[str, GateResult], ref: str) -
     if a["type"] != "noul":
         raise ValueError(f"{ref!r} is not a noul; use 'choice_id:option' for a choice option")
     return float(a["noul"]), f"{ref} p={a['noul']:.2f}", False
+
+
+def _pooled(g: Gate, answers: dict[str, Any], results: dict[str, GateResult], trace: list[str]) -> tuple[list[float], bool]:
+    """Probabilities behind a pooled gate: its `inputs`, or every option of its multi `input`."""
+    refs = g.inputs
+    if not refs:
+        a = answers.get(g.input or "")
+        if not a or a["type"] != "multi":
+            raise ValueError(f"gate op {g.op!r} reads `inputs`, or a multi as `input`; {g.input!r} is neither")
+        refs = [f"{g.input}:{opt}" for opt in a["probabilities"]]
+    ps, unc = [], False
+    for ref in refs:
+        p, t, u = _noul_p(answers, results, ref)
+        ps.append(p)
+        unc = unc or u
+        trace.append(t)
+    return ps, unc
+
+
+def _count_dist(ps: list[float]) -> list[float]:
+    """P(exactly j hold) for j = 0..len(ps), independence assumed (Poisson binomial)."""
+    dist = [1.0]
+    for p in ps:
+        dist = [(dist[j] if j < len(dist) else 0.0) * (1 - p) + (dist[j - 1] * p if j else 0.0) for j in range(len(dist) + 1)]
+    return dist
 
 
 def _settle(g: Gate, value: Any, p: float | None, uncertain: bool, trace: list[str], confidence: float | None = None) -> GateResult:
@@ -205,14 +250,22 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             p, t, unc = _noul_p(answers, results, g.input)
             trace += [t, f"not -> p={1 - p:.2f}"]
             results[gid] = _settle(g, (1 - p) >= g.tau, 1 - p, unc or abs((1 - p) - g.tau) < g.band, trace)
+        elif g.op in ("at_least", "count"):
+            ps, unc = _pooled(g, answers, results, trace)
+            dist = _count_dist(ps)
+            expected = sum(ps)
+            if g.op == "at_least":
+                p = sum(dist[g.k :])
+                trace.append(f"at least {g.k} of {len(ps)} under independence -> p={p:.2f} (expected {expected:.2f})")
+                results[gid] = _settle(g, p >= g.tau, p, unc or abs(p - g.tau) < g.band, trace)
+            else:
+                n = max(range(len(dist)), key=dist.__getitem__)
+                trace.append(f"count of {len(ps)} under independence -> {n} p={dist[n]:.2f} (expected {expected:.2f})")
+                res = _settle(g, n, dist[n], unc or dist[n] < g.min_confidence, trace, confidence=dist[n])
+                res.probabilities = {str(j): q for j, q in enumerate(dist)}
+                results[gid] = res
         elif g.op in ("and", "or"):
-            ps = []
-            unc = False
-            for ref in g.inputs or []:
-                p, t, u = _noul_p(answers, results, ref)
-                ps.append(p)
-                unc = unc or u
-                trace.append(t)
+            ps, unc = _pooled(g, answers, results, trace)
             if g.op == "and":
                 p = 1.0
                 for x in ps:

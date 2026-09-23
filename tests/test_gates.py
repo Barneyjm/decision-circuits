@@ -121,3 +121,53 @@ def test_consistent_needs_two_inputs_and_a_relation():
         g(op="consistent", inputs=["refund"], relation="same")
     with pytest.raises(ValueError):
         g(op="consistent", inputs=["refund", "no_refund"])
+
+
+POOL = {
+    "flags": {"type": "multi", "selected": ["late", "damaged"], "probabilities": {"late": 0.9, "damaged": 0.8, "wrong_item": 0.1}},
+    "angry": {"type": "noul", "noul": 0.5},
+}
+
+
+def test_or_and_and_read_every_option_of_a_multi():
+    r = evaluate_gates({"any": g(op="or", input="flags"), "all": g(op="and", input="flags")}, POOL)
+    assert abs(r["any"].p - (1 - 0.1 * 0.2 * 0.9)) < 1e-9
+    assert abs(r["all"].p - 0.9 * 0.8 * 0.1) < 1e-9 and r["all"].value is False
+
+
+def test_at_least_k_matches_or_and_and_at_the_ends():
+    r = evaluate_gates(
+        {
+            "one": g(op="at_least", input="flags", k=1),
+            "two": g(op="at_least", input="flags", k=2, tau=0.6),
+            "three": g(op="at_least", input="flags", k=3),
+            "any": g(op="or", input="flags"),
+        },
+        POOL,
+    )
+    assert abs(r["one"].p - r["any"].p) < 1e-9
+    # two or more: 0.9*0.8 (both, any third) + 0.9*0.2*0.1 + 0.1*0.8*0.1
+    assert abs(r["two"].p - (0.72 + 0.018 + 0.008)) < 1e-9 and r["two"].value is True
+    assert abs(r["three"].p - 0.072) < 1e-9
+
+
+def test_count_reports_the_mode_and_exposes_the_distribution():
+    gates = {
+        "n": g(op="count", inputs=["flags:late", "flags:damaged", "angry"]),
+        "exactly_three": g(op="threshold", input="n:3", tau=0.2),
+    }
+    r = evaluate_gates(gates, POOL)
+    dist = r["n"].probabilities
+    assert abs(sum(dist.values()) - 1) < 1e-9
+    assert r["n"].value == 2 and abs(dist["2"] - (0.72 * 0.5 + 0.9 * 0.2 * 0.5 + 0.1 * 0.8 * 0.5)) < 1e-9
+    assert "expected 2.20" in r["n"].trace[-1]
+    assert abs(r["exactly_three"].p - 0.36) < 1e-9 and r["exactly_three"].value is True
+
+
+def test_pooled_gates_need_a_set():
+    with pytest.raises(ValueError):
+        g(op="at_least", input="flags")
+    with pytest.raises(ValueError):
+        g(op="count")
+    with pytest.raises(ValueError):
+        evaluate_gates({"x": g(op="or", input="angry")}, POOL)
