@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 (2026-09-23)
 
 - OpenTelemetry tracing, optional (`decision-circuits[otel]`): a `decision_circuits.run` span per run with the model call as a child, GenAI attributes (`gen_ai.request.model`, `gen_ai.response.id`, `gen_ai.usage.input_tokens`), an event per answer and per gate, and the gates that escalated or abstained. `intervene`/`ablate` runs nest under a `decision_circuits.intervene` span across threads. `SystemOne` propagates `traceparent`. The state is never recorded. Nothing changes without OpenTelemetry installed.
 
