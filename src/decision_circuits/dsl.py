@@ -342,6 +342,12 @@ class Circuit:
 
         return intervene(self, backend, state, interventions, **kw)
 
+    def probe_injection(self, backend: Backend, state: Any, **kw: Any) -> Interventions:
+        """Plant instructions pushing each answer elsewhere; report which gates follow them."""
+        from decision_circuits.interventions import probe_injection
+
+        return probe_injection(self, backend, state, **kw)
+
     def ablate(self, backend: Backend, state: Any, **kw: Any) -> Interventions:
         """Remove each sentence (text state) or field (dict state) in turn; see `intervene`."""
         from decision_circuits.interventions import ablate

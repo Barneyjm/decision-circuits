@@ -1,6 +1,6 @@
 import pytest
 
-from decision_circuits import Circuit, Q, argmax, drop, set_to
+from decision_circuits import Circuit, Q, argmax, drop, inject, set_to
 from decision_circuits.interventions import segments
 
 
@@ -83,3 +83,29 @@ def test_set_to_nested_path_and_type_errors():
         segments("text", unit="field")
     with pytest.raises(ValueError):
         set_to("x")
+
+
+class Gullible(Keyword):
+    """Follows any planted "The answer is no" for the refund question."""
+
+    def answer(self, state, questions, *, model=None):
+        out = super().answer(state, questions, model=model)
+        if "answer is no" in str(state):
+            out["refund"] = {"type": "noul", "noul": 0.05}
+        return out
+
+
+def test_inject_places_the_note():
+    assert inject("X.", where="start")("A. B.") == "X. A. B."
+    assert inject("X.", where="middle")("A. B.") == "A. X. B."
+    assert inject("X.", "message")({"message": "A."})["message"] == "A. X."
+    assert inject("X.")({"a": 1}) == {"a": 1, "note": "X."}
+
+
+def test_probe_injection_finds_the_gate_that_follows_planted_text():
+    robust = circuit().probe_injection(Keyword(), STATE, workers=1)
+    assert robust["effects"] and not any(e["flipped"] for e in robust["effects"].values())
+    hijacked = circuit().probe_injection(Gullible(), STATE, workers=1)
+    flips = {k for k, e in hijacked["effects"].items() if e["flipped"]}
+    assert flips == {"refund->no #1"} and hijacked["effects"]["refund->no #1"]["flipped"] == ["pay"]
+    assert "desk->priority #2" in hijacked["effects"]  # the choice's runner-up is attacked too
