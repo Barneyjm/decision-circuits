@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.4 (2026-09-23)
+
+- **Gates are always evaluated by the SDK.** `Circuit.run` sends the questions only and
+  evaluates the gates itself, so the gate code that decides is the version you installed (the
+  one `proofs/` proves), and a circuit decides the same way whichever backend answered it.
+  Before, a System One server that knew gates evaluated them with its own copy of this
+  package, so a hosted user could get an older version's gates, and new gate types fell back
+  to the client after a refused request.
+- Removed: `SystemOne.answer_with_gates`, the gate-support negotiation behind it, and
+  `RunOutput["gates_evaluated_by"]`. Raw-HTTP callers can still send a `gates` block to a
+  server that accepts one.
+
 ## 0.5.3 (2026-09-23)
 
 Found by proving pick dominance in Lean (`proofs/`): a decided categorical gate must never read

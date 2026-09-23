@@ -3,9 +3,9 @@
 Build a circuit with the DSL, send it to any System One style server
 (TypeSafe's Jev, or an open model speaking the same contract), and get
 back typed decisions with probabilities, traces, and explicit
-uncertainty handling. Gates are evaluated by the server when it
-supports them and here on the client otherwise, so the result is the
-same either way.
+uncertainty handling. The model answers the questions; the gates are
+always evaluated here, by the version of this package you installed, so a
+circuit decides the same way whichever backend answered it.
 
     from decision_circuits import Circuit, Q, argmax
 

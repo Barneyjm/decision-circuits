@@ -58,7 +58,6 @@ class SystemOne:
         if api_key:
             self.headers["Authorization"] = f"Bearer {api_key}"
         self.last_response: dict[str, Any] | None = None  # full body of the last call (usage, model)
-        self._server_gates: bool | None = None  # learned on first use: does this server evaluate gates?
 
     def _post(self, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         deadline = time.monotonic() + self.retry_for
@@ -98,31 +97,3 @@ class SystemOne:
             raise SystemOneError(status, body)
         self.last_response = body
         return body["answers"]
-
-    def answer_with_gates(
-        self, state: Any, questions: Mapping[str, Any], gates: Mapping[str, Any], *, model: str | None = None
-    ) -> tuple[Answers, dict[str, Any] | None]:
-        """Send the circuit's gates too. A server that evaluates circuits
-        (s1proto) returns `gates`; one that rejects the extra field or
-        ignores it (TypeSafe today) gets the plain request instead, and
-        the answer is (answers, None) so the circuit evaluates locally.
-        Which kind the server is gets remembered after the first call."""
-        if self._server_gates is not False:
-            status, body = self._post({"state": to_jsonable(state), "model": model or self.model, "questions": dict(questions), "gates": dict(gates)})
-            if status < 400 and "answers" in body and "gates" in body:
-                self._server_gates = True
-                self.last_response = body
-                return body["answers"], body["gates"]
-            if status < 400 and "answers" in body:  # ignored the field: a plain server, no second request needed
-                self._server_gates = False
-                self.last_response = body
-                return body["answers"], None
-            if status not in (400, 422):  # auth, rate limit, outage: report it, learn nothing
-                raise SystemOneError(status, body)
-            # Refused. It may be the gates field (a plain server) or this request's questions or
-            # gates: ask without gates, and only a success says the gates were the problem.
-            answers = self.answer(state, questions, model=model)  # a question the server refuses raises here, and nothing is learned
-            if self._server_gates is None:  # never seen it evaluate gates: it is a plain server
-                self._server_gates = False
-            return answers, None  # a gates server that refused these gates: evaluate them here, this once
-        return self.answer(state, questions, model=model), None

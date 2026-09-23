@@ -1,7 +1,7 @@
 """A small expression language for decision circuits.
 
 Symbolic references combine with Python operators and compile to the
-`gates` block the server evaluates. Same idiom as Django `Q` objects
+`gates` block (evaluated here; a System One server that knows gates accepts the same block). Same idiom as Django `Q` objects
 or Polars expressions: build an expression, hand it to the request.
 
     from decision_circuits import Circuit, Q, G, argmax, majority, verify, order
@@ -56,8 +56,7 @@ class RunOutput(TypedDict):
 
     model: str | None
     answers: Answers
-    gates: dict[str, GateResultDict]
-    gates_evaluated_by: str  # "client" (here) or "server" (a server that evaluates circuits)
+    gates: dict[str, GateResultDict]  # evaluated here, by this package
 
 
 # ---------------------------------------------------------------- expressions
@@ -378,14 +377,12 @@ class Circuit:
         return {k: v.to_dict() for k, v in res.items() if not k.startswith("_")}
 
     def run(self, backend: Backend, state: Any, *, model: str | None = None) -> RunOutput:
-        """Answer the questions with `backend` and evaluate the gates.
+        """Answer the questions with `backend` and evaluate the gates here.
 
-        A backend is anything with `answer(state, questions, model=...)`
-        (see `decision_circuits.backends`; `SystemOne` wraps any System
-        One HTTP server, TypeSafe's Jev included). A backend may also
-        implement `answer_with_gates(state, questions, gates, model=...)`
-        to let a server evaluate the circuit itself; `SystemOne` does,
-        and falls back to answering when the server rejects gates."""
+        A backend is anything with `answer(state, questions, model=...)` (see
+        `decision_circuits.backends`; `SystemOne` wraps any System One HTTP server, TypeSafe's
+        Jev included). The gates never leave this process: they are the version of this
+        package you installed, the same arithmetic whichever backend answered."""
         model = model or self.model or getattr(backend, "model", None)
         public = [g.name for g in self.gates]
         with tracing.span(
@@ -399,28 +396,14 @@ class Circuit:
                 "decision_circuits.gates": public,
             },
         ) as span:
-            out = self._run(backend, state, model)
+            with tracing.span("decision_circuits.backend", **{"decision_circuits.backend": type(backend).__name__, "gen_ai.request.model": model}):
+                answers = backend.answer(state, self.questions, model=model)
+            missing = [q for q in self.questions if q not in answers]
+            if missing:
+                raise ValueError(f"{type(backend).__name__} returned no answer for {', '.join(map(repr, missing))}")
+            out: RunOutput = {"model": model, "answers": answers, "gates": self.evaluate(answers)}
             _record(span, backend, out)
             return out
-
-    def _run(self, backend: Backend, state: Any, model: str | None) -> RunOutput:
-        with_gates = getattr(backend, "answer_with_gates", None)
-        with tracing.span("decision_circuits.backend", **{"decision_circuits.backend": type(backend).__name__, "gen_ai.request.model": model}):
-            if callable(with_gates):
-                answers, gates = with_gates(state, self.questions, self.compile(), model=model)
-                if gates is not None:
-                    return {
-                        "model": model,
-                        "answers": answers,
-                        "gates": {k: v for k, v in gates.items() if not k.startswith("_")},
-                        "gates_evaluated_by": "server",
-                    }
-            else:
-                answers = backend.answer(state, self.questions, model=model)
-        missing = [q for q in self.questions if q not in answers]
-        if missing:
-            raise ValueError(f"{type(backend).__name__} returned no answer for {', '.join(map(repr, missing))}")
-        return {"model": model, "answers": answers, "gates": self.evaluate(answers), "gates_evaluated_by": "client"}
 
     def intervene(self, backend: Backend, state: Any, interventions: Mapping[str, Any], **kw: Any) -> Interventions:
         """Run the circuit on `state` and on each edited state; report which gates flipped
@@ -440,7 +423,6 @@ def _record(span: Any, backend: Any, out: RunOutput) -> None:
     """A run's result on its span: the response ids, an event per answer and per gate, and
     the gates that went to a person or held back. Never the state."""
     last = getattr(backend, "last_response", None) or {}
-    span.set_attribute("decision_circuits.gates_evaluated_by", out["gates_evaluated_by"])
     for key, value in (("gen_ai.response.model", last.get("model")), ("gen_ai.response.id", last.get("request_id"))):
         if value:
             span.set_attribute(key, value)

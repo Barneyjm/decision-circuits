@@ -27,9 +27,8 @@ Rules of the road:
 - Convert framework objects with `to_jsonable` before sending state
   over the wire or into a prompt. `SystemOne` does this for you.
 - No base class is needed. `isinstance(x, Backend)` is structural.
-- Optional: implement `answer_with_gates(state, questions, gates, *,
-  model=None) -> (answers, gates_or_None)` if your server can evaluate
-  circuits itself. `Circuit.run` prefers it when present.
+- Answer questions only. Gates are evaluated by the SDK, never by a
+  backend, so every backend gets the same decisions from the same answers.
 
 Wrappers are backends too. Example 08 wraps a model backend with code
 facts; a cache, a fallback chain, or an ensemble is the same pattern.

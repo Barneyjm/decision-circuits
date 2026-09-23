@@ -50,7 +50,7 @@ def test_any_object_with_answer_is_a_backend():
 
     assert isinstance(Mine(), Backend)
     out = circuit().run(Mine(), "hello")
-    assert out["gates_evaluated_by"] == "client" and out["gates"]["rush"]["value"] is True and out["model"] is None
+    assert out["gates"]["rush"]["value"] is True and out["model"] is None
     assert out["gates"]["route"]["outcome"] == "abstain"  # uniform -> confidence 0 < 0.2
 
 
@@ -215,23 +215,6 @@ def test_langgraph_node_and_router():
     assert route_on("rush")(state) == "escalate"
 
 
-def test_systemone_gates_negotiation_learns_only_from_definitive_answers():
-    seq = [(503, {"detail": "down"}), (200, {"answers": {"u": {"type": "noul", "noul": 0.5}}, "gates": {"g": {"value": True}}})]
-    sent = []
-
-    class C:
-        def post(self, url, json=None, headers=None):
-            sent.append("gates" in json)
-            return _Resp(*seq.pop(0))
-
-    be = SystemOne(client=C(), retry_for=0)
-    with pytest.raises(SystemOneError):
-        be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "threshold", "input": "u"}})
-    assert be._server_gates is None  # a 503 taught nothing
-    _answers, gates = be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "threshold", "input": "u"}})
-    assert gates == {"g": {"value": True}} and sent == [True, True] and be._server_gates is True
-
-
 def test_to_jsonable_keeps_message_identity():
     from types import SimpleNamespace
 
@@ -262,35 +245,6 @@ def test_systemone_retries_while_the_model_starts_up():
     be = SystemOne(client=C(), retry_for=60, retry_wait=0)
     assert be.answer("s", {"u": {"type": "noul", "instructions": "?"}})["u"]["noul"] == 0.9
     assert C.calls == 3
-
-
-def test_a_refused_question_does_not_teach_that_the_server_lacks_gates():
-    ok = (200, {"answers": {"u": {"type": "noul", "noul": 0.5}}, "gates": {"g": {"value": True}}})
-    seq = [(422, {"detail": "locate needs a state with text in it"}), (422, {"detail": "locate needs a state with text in it"}), ok]
-
-    class C:
-        def post(self, url, json=None, headers=None):
-            return _Resp(*seq.pop(0))
-
-    be = SystemOne(client=C(), retry_for=0)
-    with pytest.raises(SystemOneError):  # refused with and without gates: the question was the problem
-        be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "threshold", "input": "u"}})
-    assert be._server_gates is None
-    _a, gates = be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "threshold", "input": "u"}})
-    assert gates == {"g": {"value": True}} and be._server_gates is True
-
-
-def test_a_gates_server_refusing_one_request_is_not_downgraded():
-    seq = [(422, {"detail": "gates: unknown op"}), (200, {"answers": {"u": {"type": "noul", "noul": 0.5}}})]
-
-    class C:
-        def post(self, url, json=None, headers=None):
-            return _Resp(*seq.pop(0))
-
-    be = SystemOne(client=C(), retry_for=0)
-    be._server_gates = True  # it has evaluated gates before
-    answers, gates = be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "new_op", "input": "u"}})
-    assert gates is None and answers["u"]["noul"] == 0.5 and be._server_gates is True
 
 
 def test_chat_backends_refuse_v2_questions_by_name():
