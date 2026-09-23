@@ -25,6 +25,7 @@ Each intervention is one more call to the backend; the baseline is one more. Cal
 from __future__ import annotations
 
 import copy
+import itertools
 import re
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -42,6 +43,8 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
 def drop(*path: str | int) -> Edit:
     """Remove the value at `path` (keys and list indices) from a dict or list state."""
+    if not path:
+        raise ValueError("drop needs a path")
 
     def edit(state: Any) -> Any:
         out = copy.deepcopy(state)
@@ -168,6 +171,8 @@ def intervene(
 def segments(state: Any, unit: str = "auto", limit: int = 12) -> dict[str, Edit]:
     """One removal per segment: each sentence (or line) of a text state, or each top-level
     field of a dict state. Named by the segment's text or the field's key."""
+    if unit not in ("auto", "field", "sentence", "line"):
+        raise ValueError(f"unit must be 'auto', 'field', 'sentence' or 'line', got {unit!r}")
     if unit == "auto":
         unit = "field" if isinstance(state, dict) else "sentence"
     if unit == "field":
@@ -176,13 +181,19 @@ def segments(state: Any, unit: str = "auto", limit: int = 12) -> dict[str, Edit]
         return {f"-{k}": drop(k) for k in list(state)[:limit]}
     if not isinstance(state, str):
         raise TypeError(f"unit={unit!r} needs a text state; use unit='field' for a dict")
-    parts = [p for p in (state.splitlines() if unit == "line" else _SENTENCE.split(state.strip())) if p.strip()]
-    sep = "\n" if unit == "line" else " "
+    # Each segment keeps the whitespace after it, so removing one leaves the rest of the text,
+    # newlines and all, exactly as written.
+    if unit == "line":
+        spans = state.splitlines(keepends=True)
+    else:
+        cuts = [0, *(m.end() for m in _SENTENCE.finditer(state)), len(state)]
+        spans = [state[a:b] for a, b in itertools.pairwise(cuts)]
+    real = [i for i, t in enumerate(spans) if t.strip()]
 
     def without(i: int) -> Edit:
-        return lambda _s: sep.join(parts[:i] + parts[i + 1 :])
+        return lambda _s: "".join(spans[:i] + spans[i + 1 :])
 
-    return {f"-[{i}] {p.strip()}": without(i) for i, p in enumerate(parts[:limit])}  # the first `limit`; the rest stay in
+    return {f"-[{n}] {spans[i].strip()}": without(i) for n, i in enumerate(real[:limit])}  # the first `limit`; the rest stay in
 
 
 def ablate(circuit: Circuit, backend: Backend, state: Any, *, unit: str = "auto", limit: int = 12, model: str | None = None, workers: int = 4) -> Interventions:

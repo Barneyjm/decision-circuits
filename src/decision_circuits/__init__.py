@@ -20,6 +20,9 @@ same either way.
     out["gates"]["redact"]   # {"value": True, "p": 0.91, "outcome": "decided", "trace": [...]}
 """
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _version
+
 from decision_circuits.dsl import (
     And,
     Categorical,
@@ -44,7 +47,10 @@ from decision_circuits.interventions import Interventions, drop, set_to
 from decision_circuits.media import Audio, Image, Media
 from decision_circuits.types import Answer, Answers, Backend, Question, answer_from_probabilities, normalized_confidence, option_keys, to_jsonable
 
-__version__ = "0.3.0"
+try:
+    __version__ = _version("decision-circuits")  # one source: pyproject.toml
+except PackageNotFoundError:  # running from a checkout that was never installed
+    __version__ = "0+unknown"
 
 __all__ = [
     "And",

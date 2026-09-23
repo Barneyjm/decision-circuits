@@ -83,3 +83,18 @@ def test_set_to_nested_path_and_type_errors():
         segments("text", unit="field")
     with pytest.raises(ValueError):
         set_to("x")
+
+
+def test_sentence_ablation_keeps_the_rest_of_the_layout():
+    cut = segments("Refund?\nThanks.  Bye.")
+    assert list(cut) == ["-[0] Refund?", "-[1] Thanks.", "-[2] Bye."]
+    assert cut["-[0] Refund?"](None) == "Thanks.  Bye."
+    assert cut["-[1] Thanks."](None) == "Refund?\nBye."
+    assert segments("a\n\nb", unit="line")["-[1] b"](None) == "a\n\n"
+
+
+def test_unknown_unit_and_empty_drop_are_refused():
+    with pytest.raises(ValueError):
+        segments("x. y.", unit="lines")
+    with pytest.raises(ValueError):
+        drop()
