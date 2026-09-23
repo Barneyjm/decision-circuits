@@ -148,3 +148,40 @@ def test_questions_carry_fields_this_version_does_not_know_about():
     assert c.questions["urgency"]["weight"] == 4
     assert c.questions["billing"]["type"] == "noul"
     assert c.questions["dept"]["criteria"] == {"a": None, "b": None}
+
+
+def test_v2_questions_and_pooled_gates_compile_and_evaluate():
+    from decision_circuits import at_least, consistent, count
+
+    c = Circuit()
+    c.multi("issues", "Which problems does the customer report?", {"late": None, "damaged": None, "wrong_item": None})
+    c.locate("ask", "Which sentence says what the customer wants?", none="the message does not say")
+    c.noul("refund", "Does the customer want a refund?")
+    c.noul("keep", "Does the customer want to keep the order?")
+    c.gate("several", at_least(2, "issues", tau=0.5))
+    c.gate("n", count("issues"))
+    c.gate("two_exactly", G("n")[2] >= 0.3)
+    c.gate("coherent", consistent("refund", Q("keep"), relation="complement"), on_uncertain="escalate")
+    c.gate("unclear_ask", Q("ask")["none"] >= 0.5)
+    assert c.questions["ask"] == {"type": "locate", "instructions": "Which sentence says what the customer wants?", "criteria": "the message does not say"}
+    spec = c.compile()
+    assert spec["several"]["op"] == "at_least" and spec["several"]["k"] == 2 and spec["several"]["input"] == "issues"
+    assert spec["coherent"]["inputs"] == ["refund", "keep"] and spec["coherent"]["relation"] == "complement"
+    answers = {
+        "issues": {"type": "multi", "selected": ["late", "damaged"], "probabilities": {"late": 0.9, "damaged": 0.8, "wrong_item": 0.1}},
+        "ask": {"type": "locate", "located": [], "none": 0.2, "confidence": 0.5},
+        "refund": {"type": "noul", "noul": 0.9},
+        "keep": {"type": "noul", "noul": 0.6},
+    }
+    r = c.evaluate(answers)
+    assert r["several"]["value"] is True and r["n"]["value"] == 2 and r["two_exactly"]["value"] is True
+    assert r["coherent"]["outcome"] == "escalate"  # 0.9 + 0.6 is 0.5 over a complement
+    assert r["unclear_ask"]["value"] is False
+    assert "several" in c.to_mermaid()
+
+
+def test_pooled_gate_needs_something_to_pool():
+    from decision_circuits import at_least
+
+    with pytest.raises(ValueError):
+        at_least(1)

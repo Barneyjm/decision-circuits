@@ -125,6 +125,10 @@ output is. Check on a labeled sample before trusting a threshold.
 | `majority("c1", "c2", "c3")` | vote across paraphrased questions |
 | `verify("choice", check=Q("supported"), tau=...)` | a negative checker: escalate when the check does not support the pick |
 | `order("score", [c1, c2, ...])` | bucket the expected score by cutpoints |
+| `at_least(k, "multi")`, `at_least(k, a, b, c)` | at least k of a multi's options, or of the references, hold (independence assumed) |
+| `count("multi")`, `G("n")[2]` | the most likely number that hold; index it for P(exactly that many) |
+| `consistent(a, b, relation="complement")` | two answers checked against each other: `same`, `complement`, or `implies`; escalate when they disagree |
+| `Q("multi")["option"]`, `Q("locate")["none"]` | one multi option's probability; the chance a locate question found nothing |
 
 Every gate takes `on_uncertain="abstain" | "escalate" | "default"`
 (with `default=value`) and `band=width`. `c.to_mermaid()` draws it.
@@ -154,6 +158,22 @@ refund_circuit.ablate(api, ticket)  # remove each field (dict) or sentence (text
 
 One backend call per intervention, plus one for the baseline (pass
 `baseline=` to reuse a run); `workers` sets how many run at once.
+
+## Several options, and pointing at the text
+
+Circuit v2 models (circuit-1.7b v2.0 and later) answer two more kinds of question about a
+text state:
+
+```python
+c.multi("issues", "Which problems does the customer report?", {"late": None, "damaged": None, "wrong_item": None})
+c.locate("ask", "Which sentence says what they want?", none="the message never says")
+c.gate("escalate", at_least(2, "issues"), on_uncertain="escalate")
+c.gate("says_what", ~Q("ask")["none"] >= 0.5)
+```
+
+`multi` gives every option its own probability (none may apply, or all). `locate` points at a
+field, a list element or a sentence of the state, or at "none". See
+`examples/13_what_v2_reads.py`.
 
 ## Images and audio
 

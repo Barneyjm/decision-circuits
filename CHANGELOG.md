@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 (2026-09-23)
+
+- Questions for circuit v2 models, text states only: `Circuit.multi` (every option that applies, each with its own probability) and `Circuit.locate` (which field, list element or sentence answers it, or none).
+- Gates: `at_least(k, ...)` and `count(...)` over a multi's options or a list of references (the count's whole distribution is in its result, so `G("n")[2]` is P(exactly two)); `consistent(a, b, relation)` checks two answers against each other (`same`, `complement`, `implies`). `and`/`or` accept a multi as their input.
+- Interventions: `Circuit.intervene(backend, state, {name: edit})` reruns the circuit on edited states and reports which gates flipped and how every answer moved; `drop(...)`, `set_to(...)` build edits; `Circuit.ablate` removes each field or sentence in turn. Any backend.
+- `answer_distributions(answer)`: every answer type as named distributions, the one reader the gates and interventions share. The multi, locate, rank and match answer formats are documented and typed in `types.py`.
+- `__version__` reads the installed package's version.
+- Example 13: a complaint desk on multi, locate, ask-next, the new gates, and ablation.
+
 ## 0.4.1 (2026-09-19)
 
 - PyPI project links: documentation, source, issues, changelog, models.

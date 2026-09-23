@@ -1,6 +1,6 @@
 [project]
 name = "decision-circuits"
-version = "0.4.1"
+version = "0.5.0"
 description = "Deterministic decision gates over calibrated model answers: a small DSL that compiles to System One requests, evaluates AND/OR/NOT/threshold/argmax/majority/verify/order gates with explicit uncertainty, and renders the circuit."
 readme = "README.md"
 license = "MIT"

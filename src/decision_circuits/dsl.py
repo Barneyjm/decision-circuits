@@ -160,6 +160,20 @@ class Categorical:
     tau: float = 0.5
     min_confidence: float = 0.0
     cutpoints: list[float] | None = None
+    k: int | None = None
+    relation: str | None = None
+
+
+def _ref(x: str | Q | G) -> str:
+    return x.ref if isinstance(x, Q | G) else x
+
+
+def _pool(refs: tuple[str | Q | G, ...]) -> dict[str, Any]:
+    """One name is a multi question, read option by option; several are the references themselves."""
+    names = [_ref(r) for r in refs]
+    if not names:
+        raise ValueError("name a multi question, or two or more references")
+    return {"input": names[0]} if len(names) == 1 else {"inputs": names}
 
 
 def argmax(choice_id: str, min_confidence: float = 0.0) -> Categorical:
@@ -176,6 +190,26 @@ def verify(choice_id: str, check: Expr | str, tau: float = 0.6, min_confidence: 
 
 def order(score_id: str, cutpoints: list[float]) -> Categorical:
     return Categorical("order", input=score_id, cutpoints=list(cutpoints))
+
+
+def at_least(k: int, *refs: str | Q | G, tau: float = 0.5) -> Categorical:
+    """True when at least `k` hold: `at_least(2, "issues")` over a multi's options, or
+    `at_least(2, "late", "damaged", Q("dept")["billing"])` over references. Independence is
+    assumed and printed in the trace; k=1 is OR, k=all is AND."""
+    return Categorical("at_least", k=k, tau=tau, **_pool(refs))
+
+
+def count(*refs: str | Q | G, min_confidence: float = 0.0) -> Categorical:
+    """How many hold: the most likely count, with the whole distribution in the result, so
+    `G("n")[2]` is P(exactly two)."""
+    return Categorical("count", min_confidence=min_confidence, **_pool(refs))
+
+
+def consistent(a: str | Q | G, b: str | Q | G, relation: str = "same") -> Categorical:
+    """Check two answers against each other: "same" (one question asked two ways),
+    "complement" (a question and its negation), "implies" (a cannot be likelier than b).
+    Uncertain, so `on_uncertain` applies, when the violation exceeds the band."""
+    return Categorical("consistent", inputs=[_ref(a), _ref(b)], relation=relation)
 
 
 # ---------------------------------------------------------------- circuit
@@ -215,6 +249,20 @@ class Circuit:
 
     def choice(self, qid: str, instructions: Any, criteria: dict[str, Any], **extra: Any) -> Circuit:
         self.questions[qid] = {"type": "choice", "instructions": instructions, "criteria": criteria, **extra}
+        return self
+
+    def multi(self, qid: str, instructions: Any, criteria: dict[str, Any], **extra: Any) -> Circuit:
+        """Every option that applies, each with its own probability (circuit v2 models, text states)."""
+        self.questions[qid] = {"type": "multi", "instructions": instructions, "criteria": criteria, **extra}
+        return self
+
+    def locate(self, qid: str, instructions: Any, none: str | None = None, **extra: Any) -> Circuit:
+        """Which part of the state answers it: a field, a list element or a sentence, or "none"
+        (described by `none`). Circuit v2 models, text states."""
+        q: dict[str, Any] = {"type": "locate", "instructions": instructions, **extra}
+        if none:
+            q["criteria"] = none
+        self.questions[qid] = q
         return self
 
     def score(self, qid: str, instructions: Any, levels: list[Any], **extra: Any) -> Circuit:
@@ -289,6 +337,10 @@ class Circuit:
                     spec["check"] = ref_of(b.check, g.name)
                 if b.cutpoints is not None:
                     spec["cutpoints"] = b.cutpoints
+                if b.k is not None:
+                    spec["k"] = b.k
+                if b.relation is not None:
+                    spec["relation"] = b.relation
                 out[g.name] = {**spec, **common}
                 continue
             # boolean expression: the top node becomes the named gate
@@ -425,6 +477,10 @@ def render_mermaid(
                 val = f"yes {a['noul']:.0%}"
             elif kind == "choice":
                 val = f"{a['choice']} {a['probabilities'][a['choice']]:.0%}"
+            elif kind == "multi":
+                val = ", ".join(a["selected"]) or "none apply"
+            elif kind == "locate":
+                val = f"none {a['none']:.0%}" if a["none"] >= 0.5 or not a["located"] else f"{a['located'][0]['path']} {a['located'][0]['probability']:.0%}"
             else:
                 val = f"{a['score']:.1f} / {len(q['criteria']) - 1}"
             label = f"<b>{qid}</b><br/>{val}"
@@ -435,7 +491,19 @@ def render_mermaid(
     L.append("  class IN col")
 
     # --- logic and decisions
-    OP_LABEL = {"and": "AND", "or": "OR", "not": "NOT", "threshold": "≥", "argmax": "PICK", "majority": "VOTE", "verify": "VERIFY", "order": "BUCKET"}
+    OP_LABEL = {
+        "and": "AND",
+        "or": "OR",
+        "not": "NOT",
+        "threshold": "≥",
+        "argmax": "PICK",
+        "majority": "VOTE",
+        "verify": "VERIFY",
+        "order": "BUCKET",
+        "at_least": "AT LEAST",
+        "count": "COUNT",
+        "consistent": "CONSISTENT",
+    }
     SHAPES = {"and": ("{{", "}}"), "or": (">", "]"), "not": ("((", "))"), "threshold": ("{", "}")}
     logic, decisions = [], []
     for gid, spec in compiled.items():
@@ -467,6 +535,10 @@ def render_mermaid(
         head = OP_LABEL[op]
         if op == "order":
             head += " " + " | ".join(f"{c:g}" for c in spec.get("cutpoints", []))
+        if op == "at_least":
+            head += f" {spec['k']}"
+        if op == "consistent":
+            head += f"<br/>{spec['relation']}"
         if op in ("argmax", "majority", "verify") and spec.get("min_confidence"):
             head += f"<br/>conf ≥ {spec['min_confidence']:g}" if plain else f"<br/><span style='color:#5F6B78'>conf ≥ {spec['min_confidence']:g}</span>"
         if op in ("and", "or") and not terminal and spec.get("tau", 0.5) != 0.5:
