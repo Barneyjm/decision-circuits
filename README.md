@@ -210,6 +210,15 @@ out = call_circuit.run(api, Audio("call.wav", text="Inbound, Tuesday"), model="c
 caption, and are sent as `{"image": <data URI>, "text": ...}`. See
 `examples/12_images_and_audio.py`.
 
+## Proved
+
+The gate arithmetic is proved in Lean 4 (`proofs/`, checked in CI): the count distribution
+behind `at_least`, `count`, `and` and `or` (sums to 1, `and` is the product, `or` is one minus
+the product of complements, order does not matter, `at_least` falls as `k` rises), and pick
+dominance: a decided gate never reads an option it did not pick as likelier than the one it
+did. `tests/test_properties.py` checks the Python against the same statements. The models are
+not proved; they are measured.
+
 ## Examples
 
 Numbered, each self-contained, in [`examples/`](examples/):

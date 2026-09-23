@@ -224,6 +224,16 @@ def _count_dist(ps: list[float]) -> list[float]:
     return dist
 
 
+def _pick(a: dict[str, Any]) -> str:
+    """A choice answer's pick: an argmax of its probabilities, the backend's `choice` when that
+    attains the maximum. A `choice` the probabilities do not support is not trusted, since a
+    reference could then read another option likelier than the pick (proofs/Pick.lean,
+    `trusting_choice_fails`)."""
+    probs = a["probabilities"]
+    top = max(probs.values())
+    return a["choice"] if probs.get(a["choice"], -1.0) >= top else max(probs, key=probs.__getitem__)
+
+
 def _settle(
     g: Gate, value: Any, p: float | None, uncertain: bool, trace: list[str], confidence: float | None = None, probabilities: dict[str, float] | None = None
 ) -> GateResult:
@@ -278,34 +288,37 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
                 a = answers[ref]
                 if a["type"] != "choice":
                     raise ValueError(f"majority input {ref!r} must be a choice")
-                votes.setdefault(a["choice"], []).append(float(a["probabilities"][a["choice"]]))
-                trace.append(f"{ref} -> {a['choice']} ({a['probabilities'][a['choice']]:.2f})")
+                pick = _pick(a)
+                votes.setdefault(pick, []).append(float(a["probabilities"][pick]))
+                trace.append(f"{ref} -> {pick} ({a['probabilities'][pick]:.2f})")
             n = len(g.inputs or [])
             winner, ps = max(votes.items(), key=lambda kv: (len(kv[1]), sum(kv[1])))
             margin = len(ps) / n
             p = sum(ps) / len(ps)
             trace.append(f"majority {winner} {len(ps)}/{n}, mean p={p:.2f}")
-            mean = {k: sum(float(answers[r]["probabilities"].get(k, 0.0)) for r in g.inputs or []) / n for k in answers[(g.inputs or [""])[0]]["probabilities"]}
-            results[gid] = _settle(g, winner, p, margin <= 0.5 or p < g.min_confidence, trace, confidence=margin, probabilities=mean)
+            shares = {k: len(v) / n for k, v in votes.items()}  # vote shares: the winner's is the largest (proofs/Pick.lean)
+            results[gid] = _settle(g, winner, p, margin <= 0.5 or p < g.min_confidence, trace, confidence=margin, probabilities=shares)
         elif g.op == "argmax":
             a = answers[g.input]
             if a["type"] != "choice":
                 raise ValueError(f"argmax input {g.input!r} must be a choice")
             conf = float(a["confidence"])
-            p = float(a["probabilities"][a["choice"]])
-            trace.append(f"{g.input} -> {a['choice']} p={p:.2f} conf={conf:.2f} (min {g.min_confidence})")
+            pick = _pick(a)
+            p = float(a["probabilities"][pick])
+            trace.append(f"{g.input} -> {pick} p={p:.2f} conf={conf:.2f} (min {g.min_confidence})")
             dist = {k: float(v) for k, v in a["probabilities"].items()}
-            results[gid] = _settle(g, a["choice"], p, conf < g.min_confidence, trace, confidence=conf, probabilities=dist)
+            results[gid] = _settle(g, pick, p, conf < g.min_confidence, trace, confidence=conf, probabilities=dist)
         elif g.op == "verify":
             a = answers[g.input]
             if a["type"] != "choice":
                 raise ValueError(f"verify input {g.input!r} must be a choice")
             conf = float(a["confidence"])
             p_check, t, u = _noul_p(answers, results, g.check)
-            trace += [f"{g.input} -> {a['choice']} conf={conf:.2f}", f"check {t} (tau {g.tau})"]
+            pick = _pick(a)
+            trace += [f"{g.input} -> {pick} conf={conf:.2f}", f"check {t} (tau {g.tau})"]
             unc = u or conf < g.min_confidence or p_check < g.tau
             dist = {k: float(v) for k, v in a["probabilities"].items()}
-            results[gid] = _settle(g, a["choice"], p_check, unc, trace, confidence=conf, probabilities=dist)
+            results[gid] = _settle(g, pick, p_check, unc, trace, confidence=conf, probabilities=dist)
         elif g.op == "order":
             a = answers[g.input]
             if a["type"] != "score":
@@ -315,11 +328,10 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             bucket = sum(1 for c in cuts if s >= c)
             near = any(abs(s - c) < g.band for c in cuts)
             trace.append(f"{g.input} score={s:.2f} cutpoints={cuts} -> bucket {bucket}" + (" (near a cutpoint)" if near else ""))
-            buckets: dict[str, float] = {}
-            for level, q in a["probabilities"].items():  # each level's probability lands in that level's bucket
-                b = str(sum(1 for c in cuts if float(level) >= c))
-                buckets[b] = buckets.get(b, 0.0) + float(q)
-            results[gid] = _settle(g, bucket, None, near, trace, confidence=float(a["confidence"]), probabilities=buckets)
+            # The bucket is a function of the expected score, so it reads 1 and the others 0; summing
+            # level mass per bucket can read another bucket likelier (proofs/Pick.lean, levelMassReading_fails).
+            onehot = {str(b): float(b == bucket) for b in range(len(cuts) + 1)}
+            results[gid] = _settle(g, bucket, None, near, trace, confidence=float(a["confidence"]), probabilities=onehot)
         elif g.op == "consistent":
             ref_a, ref_b = g.inputs  # exactly two, and a known relation: checked in __post_init__
             (pa, ta, ua), (pb, tb, ub) = _noul_p(answers, results, ref_a), _noul_p(answers, results, ref_b)

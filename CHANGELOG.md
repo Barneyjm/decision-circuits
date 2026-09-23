@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.3 (2026-09-23)
+
+Found by proving pick dominance in Lean (`proofs/`): a decided categorical gate must never read
+an option it did not pick as likelier than its pick. Three readings broke it, two of them new
+in 0.5.2.
+
+- `majority` reads each value's share of the paraphrases' votes, not the mean of their
+  distributions (a vote won two to one could read the loser likelier).
+- `order` reads 1 for the bucket it decided and 0 elsewhere, as before 0.5.2 (summing score
+  levels per bucket could read another bucket likelier, since the bucket comes from the
+  expected score).
+- `argmax`, `verify` and `majority` pick an argmax of the probabilities, keeping the backend's
+  `choice` when it attains the maximum, instead of trusting a `choice` the probabilities do not
+  support.
+- `proofs/`: Lean 4 proofs of the count identities and pick dominance, checked in CI;
+  `tests/test_properties.py` checks the Python against the same theorems with Hypothesis.
+
 ## 0.5.2 (2026-09-23)
 
 Fixes. Two change results; both now match what the docs always said.

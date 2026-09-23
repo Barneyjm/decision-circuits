@@ -39,7 +39,7 @@ def test_operators_compile_and_evaluate():
     assert r["vote"]["value"] == "billing"
     assert r["checked"]["value"] == "billing" and r["checked"]["outcome"] == "decided"
     assert r["tier"]["value"] == 3
-    assert r["bill_and_hot"]["value"] is True and r["bill_and_hot"]["p"] == pytest.approx(0.7 * 0.9)  # P(billing) x P(urgency in the top bucket)
+    assert r["bill_and_hot"]["value"] is True and r["bill_and_hot"]["p"] == pytest.approx(0.7)  # P(billing) x 1: tier decided bucket 3
 
 
 def test_chained_and_flattens():

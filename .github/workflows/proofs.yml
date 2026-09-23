@@ -1,0 +1,26 @@
+name: Proofs
+
+on:
+  push:
+    paths: ["proofs/**", ".github/workflows/proofs.yml"]
+  pull_request:
+    paths: ["proofs/**"]
+
+jobs:
+  lean:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: proofs
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Mathlib cache
+        run: lake exe cache get
+      - name: Check every proof
+        run: lake build
+      - name: No gaps
+        run: "! grep -rnE '\\bsorry\\b|\\badmit\\b' Proofs"

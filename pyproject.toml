@@ -1,6 +1,6 @@
 [project]
 name = "decision-circuits"
-version = "0.5.2"
+version = "0.5.3"
 description = "Deterministic decision gates over calibrated model answers: a small DSL that compiles to System One requests, evaluates AND/OR/NOT/threshold/argmax/majority/verify/order gates with explicit uncertainty, and renders the circuit."
 readme = "README.md"
 license = "MIT"
@@ -40,7 +40,7 @@ Models = "https://huggingface.co/jbarney"
 Article = "https://towardsdatascience.com/attaining-llm-certainty-with-ai-decision-circuits/"
 
 [dependency-groups]
-dev = ["pytest>=8", "opentelemetry-sdk>=1.20", "ruff>=0.6", "httpx>=0.25", "langchain>=1.4,<2", "openai-agents>=0.22", "claude-agent-sdk>=0.2"]
+dev = ["pytest>=8", "hypothesis>=6.100", "opentelemetry-sdk>=1.20", "ruff>=0.6", "httpx>=0.25", "langchain>=1.4,<2", "openai-agents>=0.22", "claude-agent-sdk>=0.2"]
 
 [build-system]
 requires = ["hatchling"]
