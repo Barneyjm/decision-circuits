@@ -43,8 +43,9 @@ def _attr(v: Any) -> Any:
     """OpenTelemetry takes str, bool, int, float, or lists of one of them; None is left out."""
     if v is None or isinstance(v, str | bool | int | float):
         return v
-    if isinstance(v, list | tuple) and all(isinstance(x, str | bool | int | float) for x in v):
-        return list(v)
+    if isinstance(v, list | tuple):  # one element type or OpenTelemetry drops the attribute
+        kinds = {type(x) for x in v}
+        return list(v) if len(kinds) <= 1 and kinds <= {str, bool, int, float} else [str(x) for x in v]
     return str(v)
 
 

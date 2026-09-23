@@ -25,7 +25,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from decision_circuits.types import Answers, answer_from_probabilities, option_keys, to_jsonable
+from decision_circuits.types import V1_TYPES, Answers, answer_from_probabilities, option_keys, require_types, to_jsonable
 
 LETTERS = "ABCDEFGHIJKLMNOPQRST"
 
@@ -111,6 +111,7 @@ class OpenAILogprobs:
         return weights
 
     def answer(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Answers:
+        require_types(questions, V1_TYPES, "OpenAILogprobs")
         ids = list(questions)
         with ThreadPoolExecutor(max_workers=min(self.workers, max(1, len(ids)))) as pool:
             dists = list(pool.map(lambda qid: self.score_one(state, questions[qid], model), ids))

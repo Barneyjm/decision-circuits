@@ -291,3 +291,35 @@ def test_a_gates_server_refusing_one_request_is_not_downgraded():
     be._server_gates = True  # it has evaluated gates before
     answers, gates = be.answer_with_gates("s", {"u": QUESTIONS["urgent"]}, {"g": {"op": "new_op", "input": "u"}})
     assert gates is None and answers["u"]["noul"] == 0.5 and be._server_gates is True
+
+
+def test_chat_backends_refuse_v2_questions_by_name():
+    qs = {"issues": {"type": "multi", "instructions": "?", "criteria": {"a": None, "b": None}}, "ok": QUESTIONS["urgent"]}
+    for be in (OpenAILogprobs(model="m", client=SimpleNamespace()), Anthropic(model="m", client=SimpleNamespace())):
+        with pytest.raises(ValueError, match="'issues' is multi"):
+            be.answer("s", qs)
+
+
+def test_a_non_json_gateway_error_is_retried():
+    seq = [
+        SimpleNamespace(status_code=502, text="<html>Bad Gateway</html>", json=lambda: json.loads("<html>")),
+        _Resp(200, {"answers": {"u": {"type": "noul", "noul": 0.7}}}),
+    ]
+
+    class C:
+        def post(self, url, json=None, headers=None):
+            return seq.pop(0)
+
+    be = SystemOne(client=C(), retry_for=5, retry_wait=0.01)
+    assert be.answer("s", {"u": QUESTIONS["urgent"]})["u"]["noul"] == 0.7
+
+
+def test_a_missing_answer_is_named():
+    class Partial:
+        def answer(self, state, questions, *, model=None):
+            return {}
+
+    c = Circuit()
+    c.noul("x", "?")
+    with pytest.raises(ValueError, match="no answer for 'x'"):
+        c.run(Partial(), "s")

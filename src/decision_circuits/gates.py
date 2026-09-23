@@ -42,7 +42,7 @@ References may also name a multi option ("multi_id:option") or a locate question
 
 Every gate has `on_uncertain`: "abstain" | "escalate" | "default" (with
 `default` value). A gate is uncertain when the probability it acts on
-falls inside [tau - band, tau + band] (band defaults to 0.1), or when an
+is within `band` of tau, exclusive (band defaults to 0.1), or when an
 argmax/verify confidence check fails. Uncertainty is surfaced, never
 silently resolved.
 """
@@ -181,11 +181,9 @@ def _noul_p(answers: dict[str, Any], results: dict[str, GateResult], ref: str) -
         if qid in results:
             r = results[qid]
             note = " (uncertain)" if r.uncertain else ""
-            if r.probabilities is not None:
-                pm = float(r.probabilities.get(opt, 0.0))
-                return pm, f"gate {qid} P({opt})={pm:.2f}{note}", r.uncertain
-            p = float(r.p if r.p is not None else 1.0)
-            pm = p if str(r.value) == opt else max(0.0, 1.0 - p)
+            if r.probabilities is None:
+                raise ValueError(f"gate {qid!r} has no distribution over values; reference it as a probability, {qid!r}")
+            pm = float(r.probabilities.get(opt, 0.0))
             return pm, f"gate {qid}={r.value} -> P({opt})={pm:.2f}{note}", r.uncertain
         views = answer_distributions(answers[qid])
         if f"[{opt}]" in views and "yes" in views[f"[{opt}]"]:  # a multi option: P(it applies)
@@ -229,6 +227,10 @@ def _count_dist(ps: list[float]) -> list[float]:
 def _settle(
     g: Gate, value: Any, p: float | None, uncertain: bool, trace: list[str], confidence: float | None = None, probabilities: dict[str, float] | None = None
 ) -> GateResult:
+    if probabilities is None and isinstance(value, bool) and p is not None:
+        # A decided boolean is a fact downstream ("gate:True" is 1 or 0); an uncertain one passes
+        # on its probability, and its uncertainty with it.
+        probabilities = {"True": p, "False": 1.0 - p} if uncertain else {"True": float(value), "False": float(not value)}
     kw = {"p": p, "confidence": confidence, "probabilities": probabilities, "trace": trace}
     if not uncertain:
         return GateResult(value=value, **kw)
@@ -283,7 +285,8 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             margin = len(ps) / n
             p = sum(ps) / len(ps)
             trace.append(f"majority {winner} {len(ps)}/{n}, mean p={p:.2f}")
-            results[gid] = _settle(g, winner, p, margin <= 0.5 or p < g.min_confidence, trace, confidence=margin)
+            mean = {k: sum(float(answers[r]["probabilities"].get(k, 0.0)) for r in g.inputs or []) / n for k in answers[(g.inputs or [""])[0]]["probabilities"]}
+            results[gid] = _settle(g, winner, p, margin <= 0.5 or p < g.min_confidence, trace, confidence=margin, probabilities=mean)
         elif g.op == "argmax":
             a = answers[g.input]
             if a["type"] != "choice":
@@ -291,7 +294,8 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             conf = float(a["confidence"])
             p = float(a["probabilities"][a["choice"]])
             trace.append(f"{g.input} -> {a['choice']} p={p:.2f} conf={conf:.2f} (min {g.min_confidence})")
-            results[gid] = _settle(g, a["choice"], p, conf < g.min_confidence, trace, confidence=conf)
+            dist = {k: float(v) for k, v in a["probabilities"].items()}
+            results[gid] = _settle(g, a["choice"], p, conf < g.min_confidence, trace, confidence=conf, probabilities=dist)
         elif g.op == "verify":
             a = answers[g.input]
             if a["type"] != "choice":
@@ -300,7 +304,8 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             p_check, t, u = _noul_p(answers, results, g.check)
             trace += [f"{g.input} -> {a['choice']} conf={conf:.2f}", f"check {t} (tau {g.tau})"]
             unc = u or conf < g.min_confidence or p_check < g.tau
-            results[gid] = _settle(g, a["choice"], p_check, unc, trace, confidence=conf)
+            dist = {k: float(v) for k, v in a["probabilities"].items()}
+            results[gid] = _settle(g, a["choice"], p_check, unc, trace, confidence=conf, probabilities=dist)
         elif g.op == "order":
             a = answers[g.input]
             if a["type"] != "score":
@@ -310,7 +315,11 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             bucket = sum(1 for c in cuts if s >= c)
             near = any(abs(s - c) < g.band for c in cuts)
             trace.append(f"{g.input} score={s:.2f} cutpoints={cuts} -> bucket {bucket}" + (" (near a cutpoint)" if near else ""))
-            results[gid] = _settle(g, bucket, None, near, trace, confidence=float(a["confidence"]))
+            buckets: dict[str, float] = {}
+            for level, q in a["probabilities"].items():  # each level's probability lands in that level's bucket
+                b = str(sum(1 for c in cuts if float(level) >= c))
+                buckets[b] = buckets.get(b, 0.0) + float(q)
+            results[gid] = _settle(g, bucket, None, near, trace, confidence=float(a["confidence"]), probabilities=buckets)
         elif g.op == "consistent":
             ref_a, ref_b = g.inputs  # exactly two, and a known relation: checked in __post_init__
             (pa, ta, ua), (pb, tb, ub) = _noul_p(answers, results, ref_a), _noul_p(answers, results, ref_b)

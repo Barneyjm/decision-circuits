@@ -281,7 +281,10 @@ class Circuit:
         band: float | None = None,
     ) -> GateDef:
         """Add a gate. Policy can be given as keywords here or chained on
-        the returned GateDef (`.on_uncertain(...)`, `.band(...)`)."""
+        the returned GateDef (`.on_uncertain(...)`, `.band(...)`). Names starting
+        with "_" are reserved for the helper gates `compile` generates."""
+        if name.startswith("_"):
+            raise ValueError(f"gate name {name!r}: names starting with '_' are reserved for generated helpers")
         g = GateDef(name, _as_expr(body) if isinstance(body, str) else body)
         if on_uncertain is not None:
             g.on_uncertain(on_uncertain, default)
@@ -310,17 +313,21 @@ class Circuit:
             out[name] = spec
             return name
 
-        def ref_of(e: Expr, prefix: str) -> str:
+        def ref_of(e: Expr, prefix: str, band: float) -> str:
             """A string reference the server accepts for this expression,
-            emitting helper gates where needed."""
+            emitting helper gates where needed. A threshold inside an expression
+            is a decision, so it is referenced by its value ("helper:True": 1 or
+            0), with the enclosing gate's band so a probability near its tau
+            makes the whole gate uncertain rather than silently rounding."""
             if isinstance(e, Q | G):
                 return e.ref
             if isinstance(e, Not):
-                return helper(prefix, {"op": "not", "input": ref_of(e.inner, prefix), "tau": 0.5, "band": 0.0})
+                return helper(prefix, {"op": "not", "input": ref_of(e.inner, prefix, band), "tau": 0.5, "band": 0.0})
             if isinstance(e, And | Or):
-                return helper(prefix, {"op": "and" if isinstance(e, And) else "or", "inputs": [ref_of(p, prefix) for p in e.parts], "tau": 0.5, "band": 0.0})
+                parts = [ref_of(p, prefix, band) for p in e.parts]
+                return helper(prefix, {"op": "and" if isinstance(e, And) else "or", "inputs": parts, "tau": 0.5, "band": 0.0})
             if isinstance(e, Threshold):
-                return helper(prefix, {"op": "threshold", "input": ref_of(e.inner, prefix), "tau": e.tau, "band": 0.0})
+                return helper(prefix, {"op": "threshold", "input": ref_of(e.inner, prefix, band), "tau": e.tau, "band": band}) + ":True"
             raise TypeError(f"unsupported expression {e!r}")
 
         for g in self.gates:
@@ -335,7 +342,7 @@ class Circuit:
                 if b.inputs is not None:
                     spec["inputs"] = b.inputs
                 if b.check is not None:
-                    spec["check"] = ref_of(b.check, g.name)
+                    spec["check"] = ref_of(b.check, g.name, g.band_)
                 if b.cutpoints is not None:
                     spec["cutpoints"] = b.cutpoints
                 if b.k is not None:
@@ -349,12 +356,13 @@ class Circuit:
             e = b
             if isinstance(e, Threshold):
                 tau, e = e.tau, e.inner
-            if isinstance(e, Q | G):
-                out[g.name] = {"op": "threshold", "input": e.ref, "tau": tau, **common}
+            if isinstance(e, Q | G | Threshold):  # a nested threshold: the outer one thresholds its decision
+                out[g.name] = {"op": "threshold", "input": ref_of(e, g.name, g.band_), "tau": tau, **common}
             elif isinstance(e, Not):
-                out[g.name] = {"op": "not", "input": ref_of(e.inner, g.name), "tau": tau, **common}
+                out[g.name] = {"op": "not", "input": ref_of(e.inner, g.name, g.band_), "tau": tau, **common}
             elif isinstance(e, And | Or):
-                out[g.name] = {"op": "and" if isinstance(e, And) else "or", "inputs": [ref_of(p, g.name) for p in e.parts], "tau": tau, **common}
+                parts = [ref_of(p, g.name, g.band_) for p in e.parts]
+                out[g.name] = {"op": "and" if isinstance(e, And) else "or", "inputs": parts, "tau": tau, **common}
             else:
                 raise TypeError(f"unsupported gate body {b!r}")
         return out
@@ -409,6 +417,9 @@ class Circuit:
                     }
             else:
                 answers = backend.answer(state, self.questions, model=model)
+        missing = [q for q in self.questions if q not in answers]
+        if missing:
+            raise ValueError(f"{type(backend).__name__} returned no answer for {', '.join(map(repr, missing))}")
         return {"model": model, "answers": answers, "gates": self.evaluate(answers), "gates_evaluated_by": "client"}
 
     def intervene(self, backend: Backend, state: Any, interventions: Mapping[str, Any], **kw: Any) -> Interventions:
@@ -535,6 +546,10 @@ def render_mermaid(
                 val = f"{a['choice']} {a['probabilities'][a['choice']]:.0%}"
             elif kind == "multi":
                 val = ", ".join(a["selected"]) or "none apply"
+            elif kind == "rank":
+                val = " > ".join(a["order"][:3])
+            elif kind == "match":
+                val = f"{sum(m['match'] != 'none' for m in a['matches'].values())} of {len(a['matches'])} matched"
             elif kind == "locate":
                 val = f"none {a['none']:.0%}" if a["none"] >= 0.5 or not a["located"] else f"{a['located'][0]['path']} {a['located'][0]['probability']:.0%}"
             else:
@@ -574,6 +589,8 @@ def render_mermaid(
         for ref in refs:
             lab = "check" if spec.get("check") == ref else ""
             base, _, opt = ref.partition(":")
+            if base.startswith("_") and opt == "True":  # a threshold helper referenced by its decision
+                opt = ""
             if base in folded:
                 base, flab = folded[base]
                 base, _, opt = base.partition(":")
@@ -602,7 +619,7 @@ def render_mermaid(
         if terminal:
             label = f"<b>{gid.replace('_', ' ').title()}</b><br/>{head}"
             if op in ("and", "or", "threshold", "not"):
-                label += f" ≥ {spec.get('tau', 0.5):g}"
+                label += f"{'' if op == 'threshold' else ' ≥'} {spec.get('tau', 0.5):g}"  # a threshold's head is already "≥"
             cls = "logic"
             if results and gid in results:
                 r = results[gid]

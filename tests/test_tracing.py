@@ -101,3 +101,7 @@ def test_without_opentelemetry_nothing_is_recorded_and_nothing_breaks(monkeypatc
     out = circuit().run(Backend(), "text")
     assert out["gates"]["route"]["value"] == "billing" and not EXPORTER.get_finished_spans()
     assert tracing.inject({"a": "b"}) == {"a": "b"}
+
+
+def test_mixed_type_lists_are_kept_as_strings():
+    assert tracing._attr([1, "vip"]) == ["1", "vip"] and tracing._attr(["a", "b"]) == ["a", "b"] and tracing._attr([1, 2]) == [1, 2]

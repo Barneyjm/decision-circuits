@@ -73,7 +73,11 @@ class SystemOne:
     def _post_once(self, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         if self.client is not None:
             r = self.client.post(self.url, json=body, headers=tracing.inject(dict(self.headers)))
-            return getattr(r, "status_code", 200), r.json()
+            status = getattr(r, "status_code", 200)
+            try:
+                return status, r.json()
+            except ValueError:  # a gateway's HTML error page: keep the status, so a 502 is retried
+                return status, {"detail": str(getattr(r, "text", ""))[:500]}
         data = json.dumps(body, default=to_jsonable).encode()
         req = urllib.request.Request(self.url, data=data, headers=tracing.inject(dict(self.headers)), method="POST")
         try:

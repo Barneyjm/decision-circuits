@@ -120,3 +120,12 @@ def test_one_edited_state_failing_leaves_the_others_reported():
 def test_a_failing_baseline_still_raises():
     with pytest.raises(ValueError):
         circuit().intervene(Picky(), {"receipt": "#1"}, {"x": drop("receipt")})
+
+
+def test_an_edit_that_raises_fails_only_its_own_intervention():
+    def broken(_state):
+        raise KeyError("no such field")
+
+    r = circuit().intervene(Keyword(), STATE, {"broken": broken, "no receipt": drop("receipt")}, workers=1)
+    assert "KeyError" in r["effects"]["broken"]["error"] and r["effects"]["broken"]["state"] is None
+    assert r["effects"]["no receipt"]["flipped"] == ["pay"]

@@ -122,9 +122,23 @@ def option_keys(question: Mapping[str, Any]) -> list[str]:
     kind = question["type"]
     if kind == "noul":
         return ["yes", "no"]
-    if kind == "choice":
+    if kind in ("choice", "multi", "rank"):
         return list(question["criteria"].keys())
-    return [str(i) for i in range(len(question["criteria"]))]
+    if kind == "score":
+        return [str(i) for i in range(len(question["criteria"]))]
+    raise ValueError(f"a {kind} question has no fixed option list (locate points into the state; match answers per item)")
+
+
+V1_TYPES = ("noul", "choice", "score")
+
+
+def require_types(questions: Mapping[str, Any], supported: Sequence[str], backend: str) -> None:
+    """Refuse up front, by name, a question this backend cannot answer, rather than answering
+    something else (a multi read as a pick-one score, say)."""
+    bad = {qid: q["type"] for qid, q in questions.items() if q["type"] not in supported}
+    if bad:
+        listed = ", ".join(f"{qid!r} is {t}" for qid, t in bad.items())
+        raise ValueError(f"{backend} answers {', '.join(supported)} questions; {listed}. multi, locate, rank and match need a circuit v2 model (SystemOne)")
 
 
 def answer_distributions(answer: Mapping[str, Any]) -> dict[str, dict[str, float]]:

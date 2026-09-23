@@ -32,13 +32,14 @@ def test_operators_compile_and_evaluate():
 
     r = c.evaluate(ANSWERS)
     assert set(r) == {"redact", "human", "route", "vote", "checked", "tier", "bill_and_hot"}  # helpers hidden
-    assert r["redact"]["value"] is True and r["redact"]["p"] == pytest.approx(0.92 * 0.90, abs=1e-6)
+    # `Q("pii") >= 0.7` inside the expression is a decision: pii 0.92 passes, so it counts as 1
+    assert r["redact"]["value"] is True and r["redact"]["p"] == pytest.approx(1.0 * 0.90, abs=1e-6)
     assert r["human"]["value"] is True and r["human"]["p"] > 0.99
     assert r["route"]["value"] == "billing"
     assert r["vote"]["value"] == "billing"
     assert r["checked"]["value"] == "billing" and r["checked"]["outcome"] == "decided"
     assert r["tier"]["value"] == 3
-    assert r["bill_and_hot"]["value"] is True
+    assert r["bill_and_hot"]["value"] is True and r["bill_and_hot"]["p"] == pytest.approx(0.7 * 0.9)  # P(billing) x P(urgency in the top bucket)
 
 
 def test_chained_and_flattens():
@@ -185,3 +186,31 @@ def test_pooled_gate_needs_something_to_pool():
 
     with pytest.raises(ValueError):
         at_least(1)
+
+
+def test_an_unpicked_option_of_a_categorical_gate_is_never_likelier_than_the_pick():
+    answers = {"dept": {"type": "choice", "choice": "billing", "probabilities": {"billing": 0.34, "technical": 0.33, "other": 0.33}, "confidence": 0.0}}
+    c = Circuit()
+    c.gate("route", argmax("dept"))
+    c.gate("is_billing", G("route")["billing"] >= 0.3)
+    c.gate("is_tech", G("route")["technical"] >= 0.5)
+    r = c.evaluate(answers)
+    assert r["is_billing"]["p"] == pytest.approx(0.34) and r["is_tech"]["p"] == pytest.approx(0.33) and r["is_tech"]["value"] is False
+
+
+def test_a_threshold_inside_an_expression_is_a_decision_and_uncertain_near_its_tau():
+    answers = {"pii": {"type": "noul", "noul": 0.8}, "biz": {"type": "noul", "noul": 0.0}}
+    below = Circuit()
+    below.gate("a", (Q("pii") >= 0.9) & ~Q("biz"), band=0.05)
+    assert below.evaluate(answers)["a"]["value"] is False  # 0.8 misses 0.9: the AND is 0, not 0.8
+    near = Circuit()
+    near.gate("a", (Q("pii") >= 0.85) & ~Q("biz"), band=0.1, on_uncertain="escalate")
+    assert near.evaluate(answers)["a"]["outcome"] == "escalate"  # 0.8 is within the band of 0.85
+    nested = Circuit()
+    nested.gate("x", (Q("pii") >= 0.3).at(0.7))  # used to raise in compile
+    assert nested.evaluate(answers)["x"]["value"] is True
+
+
+def test_underscore_gate_names_are_reserved():
+    with pytest.raises(ValueError):
+        Circuit().gate("_internal", Q("x"))

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.2 (2026-09-23)
+
+Fixes. Two change results; both now match what the docs always said.
+
+- **A categorical gate's options read their own probabilities.** `G("route")["technical"]` after `argmax`, `majority` or `verify` gave every unpicked option `1 - p`, so an option the gate did not pick could read likelier than the one it did (billing .34 picked; technical read .66). Every categorical gate now carries its distribution (`order`: each score level's probability in its bucket), and references read it.
+- **A threshold inside an expression is a decision.** `(Q("pii") >= 0.9) & ~Q("biz")` used to ignore the 0.9 and multiply pii's probability; now pii counts as 1 when it passes and 0 when it does not, and a probability within the gate's band of 0.9 makes the gate uncertain. Nested thresholds (`(Q("x") >= 0.3).at(0.7)`) compile instead of raising.
+- `intervene` reports an edited state the backend refuses, or an edit function that raises, as that intervention's `error`; the rest are reported as before.
+- `SystemOne` marks a server as not evaluating gates only when a retry without gates succeeds; a refused question no longer downgrades it for good. A custom client's non-JSON error page (a gateway's 502) is retried like any other.
+- `OpenAILogprobs` and `Anthropic` refuse multi, locate, rank and match questions by name instead of answering them as a pick-one score.
+- `Circuit.run` names a question the backend returned no answer for.
+- Gate names starting with `_` are reserved for generated helpers and refused.
+- Mermaid: rank and match answers render; a terminal threshold's label no longer reads "≥ ≥".
+- Tracing: a list of mixed types is sent as strings instead of being dropped.
+- The uncertainty band is documented as it behaves: within `band` of tau, exclusive.
+
 ## 0.5.1 (2026-09-23)
 
 - OpenTelemetry tracing, optional (`decision-circuits[otel]`): a `decision_circuits.run` span per run with the model call as a child, GenAI attributes (`gen_ai.request.model`, `gen_ai.response.id`, `gen_ai.usage.input_tokens`), an event per answer and per gate, and the gates that escalated or abstained. `intervene`/`ablate` runs nest under a `decision_circuits.intervene` span across threads. `SystemOne` propagates `traceparent`. The state is never recorded. Nothing changes without OpenTelemetry installed.

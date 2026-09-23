@@ -125,6 +125,13 @@ def compare(baseline: RunOutput, run: RunOutput) -> tuple[list[str], dict[str, G
     return flipped, gates, answers
 
 
+class _EditFailed:
+    """An edit function that raised: carried to the report instead of the edited state."""
+
+    def __init__(self, error: Exception):
+        self.error = error
+
+
 def intervene(
     circuit: Circuit,
     backend: Backend,
@@ -144,11 +151,20 @@ def intervene(
     raises, since there is nothing to compare against."""
     names = list(interventions)
     with tracing.span("decision_circuits.intervene", **{"decision_circuits.interventions": names}) as span:
-        states = [v(state) if callable(v) else v for v in interventions.values()]
+
+        def edited(v: Any) -> Any:
+            try:
+                return v(state) if callable(v) else v
+            except Exception as e:  # noqa: BLE001 - a bad edit fails its own intervention only
+                return _EditFailed(e)
+
+        states = [edited(v) for v in interventions.values()]
         jobs = ([] if baseline else [state]) + states
         run = tracing.in_context(circuit.run)  # bound here, in this span, so each pooled run is its child
 
         def attempt(s: Any) -> RunOutput | Exception:
+            if isinstance(s, _EditFailed):
+                return s.error
             try:
                 return run(backend, s, model=model)
             except Exception as e:  # noqa: BLE001 - one edited state failing is a result, not the whole call failing
@@ -162,7 +178,8 @@ def intervene(
         effects: dict[str, Effect] = {}
         for name, s, r in zip(names, states, runs, strict=True):
             if isinstance(r, Exception):
-                effects[name] = {"state": s, "run": None, "error": f"{type(r).__name__}: {r}", "flipped": [], "gates": {}, "answers": {}}
+                failed_state = None if isinstance(s, _EditFailed) else s
+                effects[name] = {"state": failed_state, "run": None, "error": f"{type(r).__name__}: {r}", "flipped": [], "gates": {}, "answers": {}}
                 tracing.event(span, "decision_circuits.intervention", name=name, error=effects[name]["error"])
                 continue
             flipped, gates, answers = compare(base, r)

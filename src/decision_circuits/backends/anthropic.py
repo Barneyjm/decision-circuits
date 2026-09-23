@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from decision_circuits.types import Answers, answer_from_probabilities, option_keys, to_jsonable
+from decision_circuits.types import V1_TYPES, Answers, answer_from_probabilities, option_keys, require_types, to_jsonable
 
 TOOL_NAME = "submit_answers"
 
@@ -124,6 +124,7 @@ class Anthropic:
         raise RuntimeError("Claude did not call the answers tool")
 
     def answer(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Answers:
+        require_types(questions, V1_TYPES, "Anthropic")
         if self.mode == "stated":
             raw = self._call(state, questions, model, pick_one=False, temperature=0)
             return {qid: answer_from_probabilities(q, raw[qid]) for qid, q in questions.items()}
