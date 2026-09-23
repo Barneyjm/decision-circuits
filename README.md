@@ -129,6 +129,32 @@ output is. Check on a labeled sample before trusting a threshold.
 Every gate takes `on_uncertain="abstain" | "escalate" | "default"`
 (with `default=value`) and `band=width`. `c.to_mermaid()` draws it.
 
+## What changes the decision
+
+Change the input, run the circuit again, and compare. Each intervention is
+Pearl's do(): the effect is measured, not explained after the fact, and it
+works on any backend.
+
+```python
+from decision_circuits import drop, set_to
+
+r = refund_circuit.intervene(
+    api,
+    ticket,
+    {
+        "no receipt": drop("receipt"),  # remove a field
+        "vip": set_to("customer", "tier", "vip"),  # do(tier = "vip")
+    },
+)
+r["effects"]["no receipt"]["flipped"]  # ['pay']: the gates whose decision changed
+r["effects"]["vip"]["answers"]["desk"]  # {'option': 'general', 'p_before': 0.9, 'p_after': 0.1, 'dp': -0.8}
+
+refund_circuit.ablate(api, ticket)  # remove each field (dict) or sentence (text) in turn
+```
+
+One backend call per intervention, plus one for the baseline (pass
+`baseline=` to reuse a run); `workers` sets how many run at once.
+
 ## Images and audio
 
 The state can be a picture or a recording; the circuit does not change.

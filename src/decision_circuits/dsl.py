@@ -39,11 +39,15 @@ and `.band(width)`.
 from __future__ import annotations
 
 import itertools
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from decision_circuits.gates import Gate, GateResultDict, evaluate_gates
 from decision_circuits.types import Answers, Backend
+
+if TYPE_CHECKING:
+    from decision_circuits.interventions import Interventions
 
 
 class RunOutput(TypedDict):
@@ -330,6 +334,19 @@ class Circuit:
         else:
             answers = backend.answer(state, self.questions, model=model)
         return {"model": model, "answers": answers, "gates": self.evaluate(answers), "gates_evaluated_by": "client"}
+
+    def intervene(self, backend: Backend, state: Any, interventions: Mapping[str, Any], **kw: Any) -> Interventions:
+        """Run the circuit on `state` and on each edited state; report which gates flipped
+        and how every probability moved. See `decision_circuits.interventions`."""
+        from decision_circuits.interventions import intervene
+
+        return intervene(self, backend, state, interventions, **kw)
+
+    def ablate(self, backend: Backend, state: Any, **kw: Any) -> Interventions:
+        """Remove each sentence (text state) or field (dict state) in turn; see `intervene`."""
+        from decision_circuits.interventions import ablate
+
+        return ablate(self, backend, state, **kw)
 
 
 # ---------------------------------------------------------------- rendering
