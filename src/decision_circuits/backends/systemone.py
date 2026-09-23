@@ -115,5 +115,10 @@ class SystemOne:
                 return body["answers"], None
             if status not in (400, 422):  # auth, rate limit, outage: report it, learn nothing
                 raise SystemOneError(status, body)
-            self._server_gates = False  # rejected the field: a plain server
+            # Refused. It may be the gates field (a plain server) or this request's questions or
+            # gates: ask without gates, and only a success says the gates were the problem.
+            answers = self.answer(state, questions, model=model)  # a question the server refuses raises here, and nothing is learned
+            if self._server_gates is None:  # never seen it evaluate gates: it is a plain server
+                self._server_gates = False
+            return answers, None  # a gates server that refused these gates: evaluate them here, this once
         return self.answer(state, questions, model=model), None

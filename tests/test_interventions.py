@@ -98,3 +98,25 @@ def test_unknown_unit_and_empty_drop_are_refused():
         segments("x. y.", unit="lines")
     with pytest.raises(ValueError):
         drop()
+
+
+class Picky(Keyword):
+    """Refuses a state without a message, as a server refuses a locate question with no text."""
+
+    def answer(self, state, questions, *, model=None):
+        if isinstance(state, dict) and "message" not in state:
+            raise ValueError("422: locate needs a state with text in it")
+        return super().answer(state, questions, model=model)
+
+
+def test_one_edited_state_failing_leaves_the_others_reported():
+    r = circuit().ablate(Picky(), STATE, workers=1)
+    bad = r["effects"]["-message"]
+    assert bad["run"] is None and "locate needs a state" in bad["error"] and bad["flipped"] == []
+    good = r["effects"]["-receipt"]
+    assert good["error"] is None and good["flipped"] == ["pay"]
+
+
+def test_a_failing_baseline_still_raises():
+    with pytest.raises(ValueError):
+        circuit().intervene(Picky(), {"receipt": "#1"}, {"x": drop("receipt")})

@@ -92,7 +92,8 @@ class AnswerEffect(TypedDict):
 
 class Effect(TypedDict):
     state: Any
-    run: RunOutput
+    run: RunOutput | None  # None when this edited state could not be run
+    error: str | None  # why not: the backend's error, e.g. a server refusing the edited state
     flipped: list[str]  # gates whose decision changed
     gates: dict[str, GateEffect]
     answers: dict[str, AnswerEffect]
@@ -137,19 +138,35 @@ def intervene(
     """Run the circuit on `state` and on each intervention; report what changed.
 
     An intervention is a function of the state (`drop`, `set_to`, or your own) or a
-    replacement state. Pass `baseline` to reuse a run you already have."""
+    replacement state. Pass `baseline` to reuse a run you already have. An edited state the
+    backend cannot answer (removing the only text a locate question points into, say) is
+    reported with its `error` and no run; the others are unaffected. The baseline failing
+    raises, since there is nothing to compare against."""
     names = list(interventions)
     with tracing.span("decision_circuits.intervene", **{"decision_circuits.interventions": names}) as span:
         states = [v(state) if callable(v) else v for v in interventions.values()]
         jobs = ([] if baseline else [state]) + states
         run = tracing.in_context(circuit.run)  # bound here, in this span, so each pooled run is its child
+
+        def attempt(s: Any) -> RunOutput | Exception:
+            try:
+                return run(backend, s, model=model)
+            except Exception as e:  # noqa: BLE001 - one edited state failing is a result, not the whole call failing
+                return e
+
         with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-            runs = list(pool.map(lambda s: run(backend, s, model=model), jobs))
+            runs = list(pool.map(attempt, jobs))
         base = baseline or runs.pop(0)
+        if isinstance(base, Exception):
+            raise base
         effects: dict[str, Effect] = {}
-        for name, s, run in zip(names, states, runs, strict=True):
-            flipped, gates, answers = compare(base, run)
-            effects[name] = {"state": s, "run": run, "flipped": flipped, "gates": gates, "answers": answers}
+        for name, s, r in zip(names, states, runs, strict=True):
+            if isinstance(r, Exception):
+                effects[name] = {"state": s, "run": None, "error": f"{type(r).__name__}: {r}", "flipped": [], "gates": {}, "answers": {}}
+                tracing.event(span, "decision_circuits.intervention", name=name, error=effects[name]["error"])
+                continue
+            flipped, gates, answers = compare(base, r)
+            effects[name] = {"state": s, "run": r, "error": None, "flipped": flipped, "gates": gates, "answers": answers}
             tracing.event(span, "decision_circuits.intervention", name=name, flipped=flipped)
         return {"baseline": base, "effects": effects}
 
