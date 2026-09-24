@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.5 (2026-09-24)
+
+- **`SystemOne` retries a rate limit.** A 429 is retried like a 502 or 503, after at least
+  the `Retry-After` the server gives. A rate-limited gateway (LangSmith's default policy
+  answers 429 with `retry-after: 10`) used to fail each call at once, so bulk runs lost most
+  of their items.
+- The `User-Agent` names the installed version (it said 0.4).
+
 ## 0.5.4 (2026-09-23)
 
 - **Gates are always evaluated by the SDK.** `Circuit.run` sends the questions only and

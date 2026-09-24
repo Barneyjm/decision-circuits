@@ -19,7 +19,13 @@ import urllib.request
 from collections.abc import Mapping
 from typing import Any
 
-USER_AGENT = "decision-circuits/0.4"
+try:
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as _version
+
+    USER_AGENT = f"decision-circuits/{_version('decision-circuits')}"
+except PackageNotFoundError:  # not installed as a distribution (a bare checkout on sys.path)
+    USER_AGENT = "decision-circuits"
 RETRY_STATUSES = (429, 502, 503, 504, 524)  # rate limited, a model starting up, or a platform timeout in front of it
 
 
