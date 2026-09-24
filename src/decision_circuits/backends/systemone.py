@@ -20,7 +20,17 @@ from collections.abc import Mapping
 from typing import Any
 
 USER_AGENT = "decision-circuits/0.4"
-RETRY_STATUSES = (502, 503, 504, 524)  # a model starting up, or a platform timeout in front of it
+RETRY_STATUSES = (429, 502, 503, 504, 524)  # rate limited, a model starting up, or a platform timeout in front of it
+
+
+def _retry_after(headers: Any) -> float | None:
+    """Seconds from a Retry-After header, when it gives a number (the date form is ignored)."""
+    try:
+        v = headers.get("Retry-After") if headers is not None else None
+        return float(v) if v not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
 
 from decision_circuits import tracing
 from decision_circuits.types import Answers, to_jsonable
@@ -63,33 +73,35 @@ class SystemOne:
         deadline = time.monotonic() + self.retry_for
         wait = self.retry_wait
         while True:
-            status, payload = self._post_once(body)
-            if status not in RETRY_STATUSES or time.monotonic() + wait > deadline:
+            status, payload, after = self._post_once(body)
+            pause = max(wait, after or 0.0)  # a rate limit says how long; back off at least that much
+            if status not in RETRY_STATUSES or time.monotonic() + pause > deadline:
                 return status, payload
-            time.sleep(wait)
+            time.sleep(pause)
             wait = min(wait * 1.5, 30.0)
 
-    def _post_once(self, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    def _post_once(self, body: dict[str, Any]) -> tuple[int, dict[str, Any], float | None]:
+        """(status, body, Retry-After seconds or None)."""
         if self.client is not None:
             r = self.client.post(self.url, json=body, headers=tracing.inject(dict(self.headers)))
-            status = getattr(r, "status_code", 200)
+            status, after = getattr(r, "status_code", 200), _retry_after(getattr(r, "headers", None))
             try:
-                return status, r.json()
+                return status, r.json(), after
             except ValueError:  # a gateway's HTML error page: keep the status, so a 502 is retried
-                return status, {"detail": str(getattr(r, "text", ""))[:500]}
+                return status, {"detail": str(getattr(r, "text", ""))[:500]}, after
         data = json.dumps(body, default=to_jsonable).encode()
         req = urllib.request.Request(self.url, data=data, headers=tracing.inject(dict(self.headers)), method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                return resp.status, json.loads(resp.read().decode())
+                return resp.status, json.loads(resp.read().decode()), None
         except urllib.error.HTTPError as e:
             try:
                 payload = json.loads(e.read().decode())
             except ValueError:
                 payload = {"detail": str(e)}
-            return e.code, payload
+            return e.code, payload, _retry_after(e.headers)
         except urllib.error.URLError as e:  # timed out or unreachable: retryable like a 504
-            return 504, {"detail": str(e)}
+            return 504, {"detail": str(e)}, None
 
     def answer(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Answers:
         status, body = self._post({"state": to_jsonable(state), "model": model or self.model, "questions": dict(questions)})

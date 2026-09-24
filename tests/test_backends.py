@@ -277,3 +277,20 @@ def test_a_missing_answer_is_named():
     c.noul("x", "?")
     with pytest.raises(ValueError, match="no answer for 'x'"):
         c.run(Partial(), "s")
+
+
+def test_a_rate_limit_is_retried_after_the_time_it_asks_for(monkeypatch):
+    slept = []
+    monkeypatch.setattr("decision_circuits.backends.systemone.time.sleep", slept.append)
+    seq = [
+        SimpleNamespace(status_code=429, headers={"Retry-After": "7"}, json=lambda: {"detail": "rate limit"}),
+        _Resp(200, {"answers": {"u": {"type": "noul", "noul": 0.6}}}),
+    ]
+
+    class C:
+        def post(self, url, json=None, headers=None):
+            return seq.pop(0)
+
+    be = SystemOne(client=C(), retry_for=60, retry_wait=1)
+    assert be.answer("s", {"u": QUESTIONS["urgent"]})["u"]["noul"] == 0.6
+    assert slept == [7.0]
