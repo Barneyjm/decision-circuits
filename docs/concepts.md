@@ -204,10 +204,20 @@ c.gate("supervisor", pins["hot"] >= 0.5)
 - The chip's questions and gates are copied in as `ns.<name>` (`customer.threat`,
   `customer.hot`), so the model answers them in the same request as the host's, and a chip
   mounted twice is two independent copies.
-- Params fill `{name}` placeholders in the chip's question text, once per mount. Without
-  them, two copies of a chip ask the same question about the same state and get the same
-  answer; with `{"who": "the customer"}` and `{"who": "the agent"}` each asks about its own
-  part. Every declared param must be given.
+- **Typed pins.** `Pin("reason", type="choice", options=["damaged", "not_received"])`
+  declares what a pin takes: `"noul"` (a probability: a yes/no answer, one option, a gate's
+  decision), `"choice"` with the options the chip reads, `"score"`, or `"any"` (a plain name).
+  `mount` refuses a wire of the wrong kind, naming the pin, before anything runs.
+- **Optional pins.** `Pin("new_account", ask="Was the account opened in the last month?")` is
+  wired when the host knows the fact (from its database, say) and asked by the chip when it
+  doesn't. The same chip works in a circuit with rich data and one with none.
+- **Settings.** `params={"who": REQUIRED, "hold_at": 4}` declares settings, with defaults.
+  `{name}` in question text is a setting as words: who or what the chip reads about
+  ("the customer", "`ticket`"); a dict or list reads as a list of words. `P("name")` is a
+  setting in the logic: a threshold (`Q("x") >= P("strictness")`), an `at_least` count, a
+  confidence floor, cutpoints, a choice's options, a route's action. Without them, two copies
+  of a chip ask the same question about the same state; with `{"who": "the customer"}` and
+  `{"who": "the agent"}` each asks about its own part.
 - `mount` returns the output pins as `G` references. It refuses an unwired or unknown pin, a
   namespace already in use, and a reference inside the chip to something it does not own;
   a refused mount leaves the host unchanged.
@@ -216,7 +226,8 @@ c.gate("supervisor", pins["hot"] >= 0.5)
 Mounting compiles to the same flat gates you could have written by hand, so evaluation,
 tracing and backends do not change.
 
-**Testing a chip on its own.** `chip.evaluate(values)` runs it with no model: pins and the
+**Testing a chip on its own.** `chip.evaluate(values, params=None)` runs it with no model, on
+its default settings or `params`: pins and the
 chip's own questions take a number (a noul's P(yes)), a dict of option to probability (a
 choice), or a wire-format answer. Test vectors ship with the chip:
 
@@ -227,6 +238,26 @@ assert heat.test() == []  # or heat.test("cases.jsonl")
 ```
 
 An expectation is what `result_key` gives: the value when decided, else the outcome.
+
+**Parts.** `decision_circuits.parts` holds ready-made chips for decisions that come up
+everywhere. Each is a function returning a fresh chip with its test vectors and a datasheet:
+
+| part | pins | settings | outputs |
+|---|---|---|---|
+| `refund_risk()` | `new_account`, `high_value`, `repeat_refunds`, all optional | `request`, `review_at`=2, `hold_at`=4 | `action`: hold / review / clear; `signals` |
+| `verified_classifier()` | none | `question`, `options` (required), `text`, `floor`=0.4, `support`=0.6 | `label` (a three-way vote), `grounded` |
+| `tool_guard()` | none | `call`, `conversation`, `strictness`=0.6, `when_requested`="ask" | `decision`: allow / block / ask |
+
+```python
+from decision_circuits.parts import refund_risk, tool_guard
+
+c.mount(refund_risk(), "risk", {"high_value": "big"}, params={"request": "`ticket`"})  # asks the rest
+c.route("queue", [("fraud team", G("risk.action")["hold"]), ("agent", G("risk.action")["review"])], otherwise="auto refund")
+guard = CircuitToolGuard(c, jev, gate="guard.decision")  # after c.mount(tool_guard(), "guard")
+```
+
+A route's action can be read like an option, `G("risk.action")["hold"]`, so a host routes on
+a part's decision directly. `print(part().describe())` is its datasheet.
 
 **Sharing a chip.** `chip.to_dict()` is plain JSON with a `chip` block: name, version, pins, params,
 the tests, and `requires`, the question types it asks. `Circuit.from_dict` reads it back

@@ -40,33 +40,35 @@ from __future__ import annotations
 
 import copy
 import json
-from collections.abc import Callable, Mapping, Sequence
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from decision_circuits.dsl import (
     FORMAT,
-    And,
     Categorical,
     Circuit,
     Expr,
     G,
     GateDef,
-    Not,
-    Or,
     P,
     Q,
     RunOutput,
-    Threshold,
     _load_into,
     decode_params,
     encode_params,
+    expr_refs,
+    gate_output,
+    map_expr,
+    rename_refs,
 )
 from decision_circuits.gates import GateResultDict, result_key
-from decision_circuits.types import Backend, normalized_confidence
+from decision_circuits.types import Backend, answer_from_probabilities
 
 PIN_TYPES = ("noul", "choice", "score", "any")
+_PLACEHOLDER = re.compile(r"\{(\w+)\}")
 REQUIRED = object()  # a setting with no default: the host must give it
 
 
@@ -128,6 +130,7 @@ class Chip(Circuit):
         outputs: Sequence[str] = (),
         *,
         params: Sequence[str] | Mapping[str, Any] = (),
+        allowed: Mapping[str, Sequence[Any]] | None = None,
         version: str | None = None,
         description: str | None = None,
     ):
@@ -137,9 +140,11 @@ class Chip(Circuit):
         self.outputs = list(outputs)
         # settings: name -> default, REQUIRED for one the host must give
         self.settings: dict[str, Any] = dict(params) if isinstance(params, Mapping) else dict.fromkeys(params, REQUIRED)
+        self.allowed = {k: list(v) for k, v in (allowed or {}).items()}  # setting -> the values it may take
         self.version = version
         self.description = description
         self.tests: list[dict[str, Any]] = []
+        self._filled = False  # a configured copy: its settings are filled in
         for name_ in [*self.outputs, *self.settings]:
             _check_name(name_, "pin" if name_ in self.outputs else "setting")
 
@@ -164,20 +169,20 @@ class Chip(Circuit):
         """Raise unless the chip is well formed: pins don't collide with its own names, every
         output pin is a gate, every reference inside reads an input pin, one of its own questions
         or one of its own gates, and every `P` names a declared setting."""
-        own = set(self.questions) | {g.name for g in self.gates}
+        gates = {g.name for g in self.gates}
+        own = set(self.questions) | gates
         clash = own & set(self.pins)
         if clash:
             raise ValueError(f"chip {self.name!r}: {sorted(clash)} are both input pins and its own questions or gates")
-        gates = {g.name for g in self.gates}
         missing = [o for o in self.outputs if o not in gates]
         if missing:
             raise ValueError(f"chip {self.name!r}: output pins {missing} are not gates of the chip")
         known = own | set(self.pins)
         for g in self.gates:
-            for ref in _refs(g.body):
+            for ref in expr_refs(g.body):
                 if ref.partition(":")[0] not in known:
                     raise ValueError(f"chip {self.name!r}, gate {g.name!r}: {ref!r} is not an input pin, question or gate of the chip")
-        used = _settings_used([self.questions, [(g.body, g.band_, g.default_) for g in self.gates], [p.ask for p in self.pins.values()]])
+        used = _settings_used([*self._setting_sites(), [p.ask for p in self.pins.values()]])
         undeclared = sorted(used - set(self.settings))
         if undeclared:
             raise ValueError(f"chip {self.name!r} uses settings {undeclared} it does not declare in `params`")
@@ -195,7 +200,10 @@ class Chip(Circuit):
             missing = [k for k in self.settings if k not in full]
             if missing:
                 raise ValueError(f"chip {self.name!r} needs settings {missing}")
-        out = Chip(self.name, [], self.outputs, params=self.settings, version=self.version, description=self.description)
+        for k, ok in self.allowed.items():
+            if k in full and full[k] not in ok:
+                raise ValueError(f"chip {self.name!r}: setting {k!r} must be one of {ok}, got {full[k]!r}")
+        out = Chip(self.name, [], self.outputs, params=self.settings, allowed=self.allowed, version=self.version, description=self.description)
         out.pins = {n: Pin(p.name, p.type, _resolve(p.options, full), _resolve(p.ask, full)) for n, p in self.pins.items()}
         out.model = self.model
         out.questions = {k: _resolve(copy.deepcopy(q), full) for k, q in self.questions.items()}
@@ -203,17 +211,25 @@ class Chip(Circuit):
             GateDef(g.name, _resolve(g.body, full), g.on_uncertain_, _resolve(copy.deepcopy(g.default_), full), _resolve(g.band_, full)) for g in self.gates
         ]
         out.mounts = copy.deepcopy(self.mounts)
-        out.tests = copy.deepcopy(self.tests)
+        out.tests = self.tests  # read-only here: a configured copy evaluates, mounts and describes
+        out._filled = True
         return out
 
+    def _setting_sites(self) -> list[Any]:
+        """Where a `P` can sit: the questions, and each gate's body, band and default."""
+        return [self.questions, [(g.body, g.band_, g.default_) for g in self.gates]]
+
     def _unfilled(self) -> bool:
-        return bool(_settings_used([self.questions, [(g.body, g.band_, g.default_) for g in self.gates]]))
+        return not self._filled and bool(_settings_used(self._setting_sites()))
+
+    def _for(self, params: Mapping[str, Any] | None = None) -> Chip:
+        """The chip to compile and evaluate: configured when there are settings to fill."""
+        return self.configured(params) if params or self._unfilled() else self
 
     def compile(self) -> dict[str, dict[str, Any]]:
         """Compiled with the settings' defaults (a mounted chip has its own)."""
-        if self._unfilled():
-            return self.configured().compile()
-        return super().compile()
+        chip = self._for()
+        return super(Chip, chip).compile()
 
     def describe(self, results: Mapping[str, Any] | None = None, answers: Mapping[str, Any] | None = None) -> str:
         from decision_circuits.describe import describe
@@ -221,19 +237,22 @@ class Chip(Circuit):
         return describe(self.configured(strict=False), results, answers)
 
     def to_mermaid(self, *args: Any, **kw: Any) -> str:
-        return Circuit.to_mermaid(self.configured(), *args, **kw) if self._unfilled() else super().to_mermaid(*args, **kw)
+        return Circuit.to_mermaid(self._for(), *args, **kw)
 
     # offline use -------------------------------------------------------
-    def evaluate(self, answers: Mapping[str, Any]) -> dict[str, GateResultDict]:  # type: ignore[override]
+    def evaluate(self, answers: Mapping[str, Any], params: Mapping[str, Any] | None = None) -> dict[str, GateResultDict]:  # type: ignore[override]
         """Evaluate the chip on pin values and answers to its own questions, no model needed,
-        with its default settings. Shorthands: a number is a noul's P(yes), a dict of option ->
+        with its default settings, or `params` over them. Shorthands: a number is a noul's P(yes), a dict of option ->
         probability is a choice; anything with a `type` is a wire-format answer as is."""
         self.check()
+        return self._evaluate(self._for(params), answers)
+
+    def _evaluate(self, configured: Chip, answers: Mapping[str, Any]) -> dict[str, GateResultDict]:
         full = {k: _coerce(v) for k, v in answers.items()}
         missing = [n for n in [*self.pins, *self.questions] if n not in full]
         if missing:
             raise ValueError(f"chip {self.name!r}: no value for {', '.join(map(repr, missing))}")
-        return Circuit.evaluate(self.configured() if self._unfilled() else self, full)
+        return Circuit.evaluate(configured, full)
 
     def run(self, backend: Backend, state: Any, *, model: str | None = None) -> RunOutput:
         """Run a chip on its own: every optional pin asks its own question. A chip with a pin it
@@ -246,24 +265,37 @@ class Chip(Circuit):
         return alone.run(backend, state, model=model)
 
     # test vectors ------------------------------------------------------
-    def add_test(self, answers: Mapping[str, Any], expect: Mapping[str, Any], name: str | None = None) -> Chip:
+    def add_test(self, answers: Mapping[str, Any], expect: Mapping[str, Any], name: str | None = None, params: Mapping[str, Any] | None = None) -> Chip:
         """Store a test vector that ships with the chip. `expect` maps gate -> its value when
-        decided (or defaulted), else its outcome: True, "billing", 2, "escalate", "abstain"."""
+        decided (or defaulted), else its outcome: True, "billing", 2, "escalate", "abstain".
+        `params` are the settings it runs with, over the defaults."""
         case: dict[str, Any] = {"answers": dict(answers), "expect": dict(expect)}
         if name:
             case["name"] = name
+        if params:
+            case["params"] = encode_params(dict(params))
         self.tests.append(case)
         return self
 
     def test(self, cases: Sequence[Mapping[str, Any]] | str | Path | None = None) -> list[dict[str, Any]]:
         """Run test vectors (the chip's own by default, a list, or a JSONL file of
-        {"answers", "expect", "name"?} lines) and return the failures; empty means all pass."""
+        {"answers", "expect", "name"?, "params"?} lines) and return the failures; empty means all pass."""
         if isinstance(cases, str | Path):
             cases = [json.loads(line) for line in Path(cases).read_text().splitlines() if line.strip()]
-        failures = []
+        self.check()
+        failures: list[dict[str, Any]] = []
+        configured: dict[str, Chip] = {}  # one configured copy per distinct settings, not per case
         for i, case in enumerate(self.tests if cases is None else cases):
             label = case.get("name", f"#{i}")
-            results = self.evaluate(case["answers"])
+            params = decode_params(case.get("params"))
+            key = json.dumps(case.get("params"), sort_keys=True, default=str)
+            try:
+                if key not in configured:
+                    configured[key] = self._for(params)
+                results = self._evaluate(configured[key], case["answers"])
+            except (ValueError, KeyError, TypeError) as e:  # a broken case is a failure, not the end of the run
+                failures.append({"case": label, "gate": None, "expected": case.get("expect"), "got": f"error: {e}", "trace": []})
+                continue
             for gate, want in case["expect"].items():
                 if gate not in results:
                     failures.append({"case": label, "gate": gate, "expected": want, "got": "no such gate", "trace": []})
@@ -284,6 +316,9 @@ class Chip(Circuit):
         }
         if self.settings:
             meta["params"] = [{"name": k} if v is REQUIRED else {"name": k, "default": encode_params(v)} for k, v in self.settings.items()]
+            for p in meta["params"]:
+                if p["name"] in self.allowed:
+                    p["allowed"] = self.allowed[p["name"]]
         if self.version:
             meta["version"] = self.version
         if self.description:
@@ -299,16 +334,15 @@ class Chip(Circuit):
         meta = d.get("chip")
         if not meta:
             raise ValueError("not a chip: no `chip` block")
-        raw = meta.get("params", ())
-        if raw and isinstance(raw[0], Mapping):  # [{"name", "default"?}]
-            params: Any = {p["name"]: decode_params(p["default"]) if "default" in p else REQUIRED for p in raw}
-        else:  # an older chip: a list of required names
-            params = list(raw)
+        raw = meta.get("params", ())  # [{"name", "default"?, "allowed"?}]
+        params = {p["name"]: decode_params(p["default"]) if "default" in p else REQUIRED for p in raw}
+        allowed = {p["name"]: p["allowed"] for p in raw if "allowed" in p}
         chip = cls(
             meta["name"],
             [Pin.of(p) for p in meta.get("inputs", ())],
             meta.get("outputs", ()),
             params=params,
+            allowed=allowed,
             version=meta.get("version"),
             description=meta.get("description"),
         )
@@ -356,14 +390,16 @@ def mount(host: Circuit, chip: Chip, ns: str, pins: Mapping[str, str | Q | G], p
         raise ValueError(f"chip {chip.name!r}: {ref!r} is not an input pin, question or gate of the chip")
 
     # build everything first, so a wiring mistake leaves the host as it was
-    gates = [GateDef(f"{ns}.{g.name}", _rename(g.body, remap), g.on_uncertain_, copy.deepcopy(g.default_), g.band_) for g in chip.gates]
+    gates = [
+        GateDef(f"{ns}.{g.name}", rename_refs(g.body, remap), g.on_uncertain_, g.default_, g.band_) for g in chip.gates
+    ]  # `chip` is a fresh configured copy
     mounts = {ns: {"chip": chip.name, "pins": {p: t for p, t in wired.items() if p not in asked}, "outputs": list(chip.outputs)}}
     if asked:
         mounts[ns]["asked"] = sorted(asked)
     for inner, m in chip.mounts.items():  # a chip built from chips: keep the inner boards, rewired
         mounts[f"{ns}.{inner}"] = {**m, "pins": {p: remap(t) for p, t in m["pins"].items()}}
     questions = {f"{ns}.{p}": pin.question() for p, pin in asked.items()}
-    questions |= {f"{ns}.{qid}": copy.deepcopy(q) for qid, q in chip.questions.items()}
+    questions |= {f"{ns}.{qid}": q for qid, q in chip.questions.items()}
     host.questions.update(questions)
     host.gates.extend(gates)
     host.mounts.update(mounts)
@@ -387,13 +423,12 @@ def kind_of(host: Circuit, ref: str) -> tuple[str, list[str] | None]:
     gates = {g.name: g.body for g in host.gates}
     if base in gates:
         body = gates[base]
-        if opt or isinstance(body, Expr) or body.op in ("at_least", "consistent"):
-            return "noul", None
-        if body.op in ("argmax", "verify"):
-            return "choice", kind_of(host, body.input or "")[1]
-        if body.op == "majority":
-            return "choice", kind_of(host, (body.inputs or [""])[0])[1]
-        return body.op, None  # order, count, route: a value, not a probability or a pick
+        out = "noul" if opt else gate_output(body)
+        if out != "choice":
+            return out, None
+        if body.op == "route":  # a route picks one of its actions
+            return "choice", [str(a) for a, _ in body.rules or []] + [str(body.otherwise)]
+        return "choice", kind_of(host, body.input or (body.inputs or [""])[0])[1]  # the options of the choice it picks from
     raise ValueError(f"{ref!r} is not a question or gate of the circuit")
 
 
@@ -420,33 +455,10 @@ def _resolve(x: Any, values: Mapping[str, Any]) -> Any:
     References (Q, G) are left alone: they are names, not text."""
     if isinstance(x, P):
         return values.get(x.name, x)
-    if isinstance(x, str):
-        for k, v in values.items():
-            if isinstance(v, str | int | float):
-                x = x.replace("{" + k + "}", str(v))
-        return x
-    if isinstance(x, Q | G):
-        return x
-    if isinstance(x, Not):
-        return Not(_resolve(x.inner, values))
-    if isinstance(x, And | Or):
-        return type(x)([_resolve(p, values) for p in x.parts])
-    if isinstance(x, Threshold):
-        return Threshold(_resolve(x.inner, values), _resolve(x.tau, values))
-    if isinstance(x, Categorical):
-        return Categorical(
-            x.op,
-            input=x.input,
-            inputs=x.inputs,
-            check=_resolve(x.check, values) if x.check is not None else None,
-            tau=_resolve(x.tau, values),
-            min_confidence=_resolve(x.min_confidence, values),
-            cutpoints=_resolve(x.cutpoints, values),
-            k=_resolve(x.k, values),
-            relation=x.relation,
-            rules=[(_resolve(a, values), _resolve(c, values)) for a, c in x.rules] if x.rules is not None else None,
-            otherwise=_resolve(x.otherwise, values),
-        )
+    if isinstance(x, str):  # one pass, so a setting's value is never itself rewritten
+        return _PLACEHOLDER.sub(lambda m: _words(values[m[1]]) if m[1] in values and not isinstance(values[m[1]], P) else m[0], x)
+    if isinstance(x, Expr | Categorical):
+        return map_expr(x, value=lambda v: _resolve(v, values))
     if isinstance(x, Mapping):
         return {k: _resolve(v, values) for k, v in x.items()}
     if isinstance(x, list | tuple):
@@ -454,29 +466,31 @@ def _resolve(x: Any, values: Mapping[str, Any]) -> Any:
     return x
 
 
+def _words(v: Any) -> str:
+    """A setting as words in question text: options as "a (what a means); b", a list as "a, b"."""
+    if isinstance(v, Mapping):
+        return "; ".join(f"{k} ({d})" if d else str(k) for k, d in v.items())
+    if isinstance(v, list | tuple):
+        return ", ".join(map(str, v))
+    return str(v)
+
+
 def _settings_used(x: Any) -> set[str]:
+    """The names of every `P` in `x`: an expression, a question, or containers of them."""
     found: set[str] = set()
 
-    def walk(v: Any) -> None:
+    def walk(v: Any) -> Any:
         if isinstance(v, P):
             found.add(v.name)
-        elif isinstance(v, Threshold):
-            walk(v.inner)
-            walk(v.tau)
-        elif isinstance(v, Not):
-            walk(v.inner)
-        elif isinstance(v, And | Or):
-            for p in v.parts:
-                walk(p)
-        elif isinstance(v, Categorical):
-            for f in (v.check, v.tau, v.min_confidence, v.cutpoints, v.k, v.otherwise, v.rules):
-                walk(f)
+        elif isinstance(v, Expr | Categorical):
+            map_expr(v, value=walk)
         elif isinstance(v, Mapping):
             for w in v.values():
                 walk(w)
         elif isinstance(v, list | tuple):
             for w in v:
                 walk(w)
+        return v
 
     walk(x)
     return found
@@ -490,43 +504,6 @@ def _check_name(name: str, what: str) -> None:
         raise ValueError(f"{what} {name!r}: use a plain name, no ':' or '.', not starting with '_'")
 
 
-def _rename(e: Any, f: Callable[[str], str]) -> Any:
-    """The same expression with every reference passed through `f`."""
-    if isinstance(e, Q):
-        return Q(f(e.ref))
-    if isinstance(e, G):
-        return G(f(e.ref))
-    if isinstance(e, Not):
-        return Not(_rename(e.inner, f))
-    if isinstance(e, And):
-        return And([_rename(p, f) for p in e.parts])
-    if isinstance(e, Or):
-        return Or([_rename(p, f) for p in e.parts])
-    if isinstance(e, Threshold):
-        return Threshold(_rename(e.inner, f), e.tau)
-    if isinstance(e, Categorical):
-        return Categorical(
-            e.op,
-            input=f(e.input) if e.input is not None else None,
-            inputs=[f(r) for r in e.inputs] if e.inputs is not None else None,
-            check=_rename(e.check, f) if e.check is not None else None,
-            tau=e.tau,
-            min_confidence=e.min_confidence,
-            cutpoints=list(e.cutpoints) if isinstance(e.cutpoints, list) else e.cutpoints,
-            k=e.k,
-            relation=e.relation,
-            rules=[(a, _rename(c, f)) for a, c in e.rules] if e.rules is not None else None,
-            otherwise=e.otherwise,
-        )
-    raise TypeError(f"unsupported expression {e!r}")
-
-
-def _refs(e: Expr | Categorical) -> list[str]:
-    out: list[str] = []
-    _rename(e, lambda r: out.append(r) or r)
-    return out
-
-
 def _coerce(v: Any) -> Any:
     """Pin-value shorthands to wire-format answers."""
     if isinstance(v, bool):
@@ -535,7 +512,7 @@ def _coerce(v: Any) -> Any:
         return {"type": "noul", "noul": float(v)}
     if isinstance(v, Mapping) and "type" not in v:
         probs = {str(k): float(p) for k, p in v.items()}
-        return {"type": "choice", "choice": max(probs, key=probs.__getitem__), "probabilities": probs, "confidence": normalized_confidence(probs)}
+        return answer_from_probabilities({"type": "choice", "criteria": dict.fromkeys(probs)}, probs)
     return v
 
 

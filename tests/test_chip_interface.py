@@ -130,10 +130,10 @@ def test_pins_settings_and_placeholders_round_trip_through_json():
     b.mount(loaded, "r", {"reason": "why"}, params={"hold_at": 3})
     assert a.compile() == b.compile() and a.questions == b.questions
 
-    older = {"format": "decision-circuits/1", "chip": {"name": "old", "inputs": ["x"], "outputs": ["y"], "params": ["who"]}, "questions": {}, "gates": []}
-    older["gates"] = [{"name": "y", "body": {"at": 0.5, "of": {"q": "x"}}}]
-    old = Circuit.from_dict(older)
-    assert old.pins["x"].type == "any" and old.settings == {"who": REQUIRED}  # an older chip: names only, all required
+    plain = Chip("plain", inputs=["x"], outputs=["y"], params=["who"])  # untyped pins and required settings round-trip too
+    plain.gate("y", Q("x") >= 0.5)
+    again = Circuit.from_dict(json.loads(json.dumps(plain.to_dict())))
+    assert again.pins["x"].type == "any" and again.settings == {"who": REQUIRED}
 
 
 def test_a_choice_setting_fills_a_question_s_options():
@@ -144,3 +144,41 @@ def test_a_choice_setting_fills_a_question_s_options():
     c.mount(triage, "t", params={"teams": {"technical": "Bugs", "account": "Login", "other": None}})
     assert c.questions["t.which"]["criteria"] == {"technical": "Bugs", "account": "Login", "other": None}
     assert Circuit.from_dict(json.loads(json.dumps(triage.to_dict()))).questions["which"]["criteria"] == P("teams")
+
+
+def test_a_dict_or_list_setting_reads_as_words_in_question_text():
+    c = Chip("words", outputs=["out"], params={"options": {"billing": "Money", "other": None}, "tags": ["a", "b"]})
+    c.noul("q", "Pick from: {options}. Tags: {tags}.")
+    c.gate("out", Q("q") >= 0.5)
+    host = Circuit()
+    host.mount(c, "w")
+    assert host.questions["w.q"]["instructions"] == "Pick from: billing (Money); other. Tags: a, b."
+
+
+def test_review_fixes_hold():
+    # user data shaped like the old marker survives JSON
+    c = Chip("data", outputs=["out"], params={"options": {"param": "a real option"}})
+    c.choice("q", "Pick: {options}", P("options"))
+    c.gate("out", argmax("q"))
+    back = Circuit.from_dict(json.loads(json.dumps(c.to_dict())))
+    assert back.settings["options"] == {"param": "a real option"}
+
+    # a setting's value is never itself rewritten by another setting
+    text = Chip("text", outputs=["out"], params={"question": "Is {text} about billing?", "text": "the text"})
+    text.noul("q", "{question}")
+    text.gate("out", Q("q") >= 0.5)
+    host = Circuit()
+    host.mount(text, "t")
+    assert host.questions["t.q"]["instructions"] == "Is {text} about billing?"
+
+    # a broken case is a failure, and the run carries on
+    from decision_circuits.parts import tool_guard, verified_classifier
+
+    vc = verified_classifier()
+    fails = vc.test([{"name": "no settings", "answers": {}, "expect": {"label": "a"}}, *vc.tests])
+    assert [f["case"] for f in fails] == ["no settings"] and fails[0]["got"].startswith("error: chip 'verified_classifier' needs settings")
+
+    # a setting with allowed values is checked at mount, and survives JSON
+    with pytest.raises(ValueError, match=r"setting 'when_requested' must be one of \['ask', 'allow', 'block'\], got 'deny'"):
+        Circuit().mount(tool_guard(), "g", params={"when_requested": "deny"})
+    assert Circuit.from_dict(json.loads(json.dumps(tool_guard().to_dict()))).allowed == {"when_requested": ["ask", "allow", "block"]}

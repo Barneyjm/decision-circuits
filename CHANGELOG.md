@@ -10,6 +10,16 @@
   mount leaves the host unchanged. `chip.evaluate` runs one offline with shorthand pin
   values, and `add_test` / `test` keep test vectors with the chip (also from JSONL).
   `examples/14_chips.py`.
+- **Parts.** `decision_circuits.parts`: `refund_risk()` (seven refund-abuse signals, three of
+  them optional pins the host can answer from its own data, to hold / review / clear),
+  `verified_classifier()` (any pick-one asked three ways and voted, plus "does the text answer
+  it at all"), `tool_guard()` (allow / block / ask for an agent's tool call, with a strictness
+  and a policy for irreversible actions the user asked for). Each ships with test vectors and a
+  datasheet, and was run live in two unrelated circuits.
+- A route's action reads like an option, `G("risk.action")["hold"]` (1 or 0 when it decided;
+  an undecided route passes its uncertainty on), and a route output wires into a choice pin.
+- Test vectors and `chip.evaluate` take `params`, so a chip with required settings can be
+  tested. A dict or list setting reads as words in question text.
 - **Chips plug into any circuit.** `Pin(name, type=..., options=..., ask=...)` declares what an
   input pin takes (a yes/no probability, a pick-one with the options it needs, a score), and
   `mount` refuses a wire of the wrong kind, naming the pin. A pin with `ask` is optional: wire

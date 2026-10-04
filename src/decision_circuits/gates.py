@@ -148,6 +148,7 @@ class GateResultDict(TypedDict):
     outcome: str
     trace: list[str]
     probabilities: dict[str, float] | None
+    rules: list[str] | None
 
 
 @dataclass
@@ -159,6 +160,7 @@ class GateResult:
     outcome: str = "decided"
     trace: list[str] = field(default_factory=list)
     probabilities: dict[str, float] | None = None  # per value, when the gate has a distribution (count)
+    rules: list[str] | None = None  # route: each rule's "held", "no", "unsure" or "skipped" (never reached)
 
     def to_dict(self) -> GateResultDict:
         return asdict(self)  # type: ignore[return-value]
@@ -255,7 +257,7 @@ def _count_dist(ps: list[float]) -> list[float]:
     return dist
 
 
-def _pick(a: dict[str, Any]) -> str:
+def pick(a: dict[str, Any]) -> str:
     """A choice answer's pick: an argmax of its probabilities, the backend's `choice` when that
     attains the maximum. A `choice` the probabilities do not support is not trusted, since a
     reference could then read another option likelier than the pick (proofs/Pick.lean,
@@ -266,13 +268,20 @@ def _pick(a: dict[str, Any]) -> str:
 
 
 def _settle(
-    g: Gate, value: Any, p: float | None, uncertain: bool, trace: list[str], confidence: float | None = None, probabilities: dict[str, float] | None = None
+    g: Gate,
+    value: Any,
+    p: float | None,
+    uncertain: bool,
+    trace: list[str],
+    confidence: float | None = None,
+    probabilities: dict[str, float] | None = None,
+    rules: list[str] | None = None,
 ) -> GateResult:
     if probabilities is None and isinstance(value, bool) and p is not None:
         # A decided boolean is a fact downstream ("gate:True" is 1 or 0); an uncertain one passes
         # on its probability, and its uncertainty with it.
         probabilities = {"True": p, "False": 1.0 - p} if uncertain else {"True": float(value), "False": float(not value)}
-    kw = {"p": p, "confidence": confidence, "probabilities": probabilities, "trace": trace}
+    kw = {"p": p, "confidence": confidence, "probabilities": probabilities, "trace": trace, "rules": rules}
     if not uncertain:
         return GateResult(value=value, **kw)
     if g.on_uncertain == "default":
@@ -323,9 +332,9 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
                 a = answers[ref]
                 if a["type"] != "choice":
                     raise ValueError(f"majority input {ref!r} must be a choice")
-                pick = _pick(a)
-                votes.setdefault(pick, []).append(float(a["probabilities"][pick]))
-                trace.append(f"{ref} -> {pick} ({a['probabilities'][pick]:.2f})")
+                chosen = pick(a)
+                votes.setdefault(chosen, []).append(float(a["probabilities"][chosen]))
+                trace.append(f"{ref} -> {chosen} ({a['probabilities'][chosen]:.2f})")
             n = len(g.inputs or [])
             winner, ps = max(votes.items(), key=lambda kv: (len(kv[1]), sum(kv[1])))
             margin = len(ps) / n
@@ -338,22 +347,22 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             if a["type"] != "choice":
                 raise ValueError(f"argmax input {g.input!r} must be a choice")
             conf = float(a["confidence"])
-            pick = _pick(a)
-            p = float(a["probabilities"][pick])
-            trace.append(f"{g.input} -> {pick} p={p:.2f} conf={conf:.2f} (min {g.min_confidence})")
+            chosen = pick(a)
+            p = float(a["probabilities"][chosen])
+            trace.append(f"{g.input} -> {chosen} p={p:.2f} conf={conf:.2f} (min {g.min_confidence})")
             dist = {k: float(v) for k, v in a["probabilities"].items()}
-            results[gid] = _settle(g, pick, p, conf < g.min_confidence, trace, confidence=conf, probabilities=dist)
+            results[gid] = _settle(g, chosen, p, conf < g.min_confidence, trace, confidence=conf, probabilities=dist)
         elif g.op == "verify":
             a = answers[g.input]
             if a["type"] != "choice":
                 raise ValueError(f"verify input {g.input!r} must be a choice")
             conf = float(a["confidence"])
             p_check, t, u = _noul_p(answers, results, g.check)
-            pick = _pick(a)
-            trace += [f"{g.input} -> {pick} conf={conf:.2f}", f"check {t} (tau {g.tau})"]
+            chosen = pick(a)
+            trace += [f"{g.input} -> {chosen} conf={conf:.2f}", f"check {t} (tau {g.tau})"]
             unc = u or conf < g.min_confidence or p_check < g.tau
             dist = {k: float(v) for k, v in a["probabilities"].items()}
-            results[gid] = _settle(g, pick, p_check, unc, trace, confidence=conf, probabilities=dist)
+            results[gid] = _settle(g, chosen, p_check, unc, trace, confidence=conf, probabilities=dist)
         elif g.op == "order":
             a = answers[g.input]
             if a["type"] != "score":
@@ -377,18 +386,22 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             # First rule that holds wins. A rule too close to call stops the route: falling through to
             # a lower rule would act on a guess about the higher one.
             action, unc = g.otherwise, False
+            status = ["skipped"] * len(g.rules or [])  # what happened to each rule, for whoever draws or explains it
             for i, (name, ref) in enumerate(g.rules or [], 1):
                 p, t, u = _noul_p(answers, results, ref)
                 if u:
-                    unc = True
+                    unc, status[i - 1] = True, "unsure"
                     trace.append(f"rule {i} {name!r}: too close to call ({t})")
                     break
                 if p >= 0.5:
-                    action = name
+                    action, status[i - 1] = name, "held"
                     trace.append(f"rule {i} {name!r} holds -> {name}")
                     break
+                status[i - 1] = "no"
                 trace.append(f"rule {i} {name!r} does not hold")
             else:
                 trace.append(f"no rule holds -> {g.otherwise!r}")
-            results[gid] = _settle(g, action, None, unc, trace)
+            # a decided action reads as certain ("route:hold" is 1 or 0); an undecided route reads 0
+            # with its uncertainty, so a gate or route built on it escalates too
+            results[gid] = _settle(g, action, None, unc, trace, probabilities={} if unc else {str(action): 1.0}, rules=status)
     return results

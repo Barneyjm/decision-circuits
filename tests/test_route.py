@@ -231,3 +231,12 @@ def test_a_shared_gate_keeps_its_place_and_its_rule_gets_a_diamond():
     m = c.to_mermaid(plain=True)
     assert 'g_action__r1{"<b>1.</b> risky?"}' in m and "g_risky --> g_action__r1" in m  # a diamond in the ladder
     assert "g_risky -->|no|" not in m  # no ladder branches from the shared gate itself
+
+
+def test_a_host_can_route_on_another_route_s_action():
+    c = triage()
+    c.route("page_now", [("yes", G("action")["page on-call"])], otherwise="no")
+    decided = c.evaluate({"urgent": noul(0.95), "outage": noul(0.95), "technical": noul(0.1)})
+    assert decided["action"]["probabilities"] == {"page on-call": 1.0} and decided["page_now"]["value"] == "yes"
+    unsure = c.evaluate({"urgent": noul(0.75), "outage": noul(0.95), "technical": noul(0.1)})
+    assert unsure["action"]["outcome"] == "escalate" and unsure["page_now"]["outcome"] == "escalate"  # inherits it

@@ -189,10 +189,24 @@ c.gate("says_what", ~Q("ask")["none"] >= 0.5)
 field, a list element or a sentence of the state, or at "none". See
 `examples/13_what_v2_reads.py`.
 
-## Chips
+## Chips and parts
 
-Package a sub-circuit with named pins, test it on its own, and mount it as many times as you
-need:
+A chip is a sub-circuit packaged like an integrated circuit: typed input pins, settings, its
+own questions and gates, and output pins. `decision_circuits.parts` has ready-made ones that
+plug into any circuit:
+
+```python
+from decision_circuits.parts import refund_risk
+
+c.mount(refund_risk(), "risk", {"high_value": "big"}, params={"request": "`ticket`", "hold_at": 3})
+c.route("queue", [("fraud team", G("risk.action")["hold"]), ("agent", G("risk.action")["review"])], otherwise="auto refund")
+```
+
+Wire the facts you have (`high_value` from your database); the chip asks the model for the
+rest. `refund_risk`, `verified_classifier` (a label asked three ways and checked against the
+text) and `tool_guard` (allow / block / ask for an agent's tool call) ship today.
+
+Or build your own, test it on its own, and mount it as many times as you need:
 
 ```python
 from decision_circuits import Chip, G, at_least

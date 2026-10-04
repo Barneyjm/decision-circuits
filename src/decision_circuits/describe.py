@@ -18,7 +18,23 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from decision_circuits.dsl import And, Categorical, G, GateDef, Not, Or, Q, Threshold, answer_outcomes, mount_owner, question_text
+from decision_circuits.dsl import (
+    And,
+    Categorical,
+    G,
+    GateDef,
+    Not,
+    Or,
+    Q,
+    Threshold,
+    answer_outcomes,
+    child_mounts,
+    expr_refs,
+    local_name,
+    mount_owner,
+    question_text,
+    verdict,
+)
 
 if TYPE_CHECKING:
     from decision_circuits.dsl import Circuit
@@ -52,7 +68,12 @@ class _Writer:
             if c.inputs:
                 lines += ["**Input pins:** " + ", ".join(f"`{p}`" for p in c.inputs), ""]
             if c.params:
-                lines += ["**Params:** " + ", ".join(f"`{{{p}}}`" for p in c.params) + ", filled in the question text when it is mounted", ""]
+                lines += [
+                    "**Params:** "
+                    + ", ".join(f"`{{{p}}}`" for p in c.params)
+                    + ", set when it is mounted (in question text as `{name}`, in the logic as `P(name)`)",
+                    "",
+                ]
             if c.outputs:
                 lines += ["**Output pins:** " + ", ".join(f"`{p}`" for p in c.outputs), ""]
         else:
@@ -76,9 +97,8 @@ class _Writer:
             out += [f"{h} Decides" if ns else f"{h} Decisions", ""]
             for g in gs:
                 out += self.gate_lines(g) + [""]
-        for inner in self.c.mounts:
-            if (inner.rpartition(".")[0] or None) == ns:  # the chips mounted directly in this one
-                out += self.chip_block(inner, depth)
+        for inner in child_mounts(self.c, ns):
+            out += self.chip_block(inner, depth)
         return out
 
     def outcome_summary(self) -> list[str]:
@@ -88,19 +108,16 @@ class _Writer:
             r = self.results.get(g.name)
             if r is None or not isinstance(g.body, Categorical) or g.body.op != "route" or mount_owner(self.c, g.name):
                 continue
+            status = r.get("rules") or []
             if r.get("outcome") in ("decided", "default"):
-                why = next((t for t in r.get("trace", []) if t.endswith(f"-> {r['value']}") or "no rule holds" in t), "")
-                rule = why.split(" ", 2)[1] if why.startswith("rule ") else None
-                out.append(f"**Outcome ({g.name}):** **{r['value']}**" + (f", by rule {rule}." if rule else ", since no rule held."))
+                held = status.index("held") + 1 if "held" in status else None
+                out.append(f"**Outcome ({g.name}):** **{r['value']}**" + (f", by rule {held}." if held else ", since no rule held."))
             else:
-                from decision_circuits.chips import _refs
-
-                line = next((t for t in r.get("trace", []) if "too close to call" in t), "")
-                n = int(line.split()[1]) if line.startswith("rule ") else 0
-                action, cond = g.body.rules[n - 1] if 0 < n <= len(g.body.rules or []) else (None, None)
+                n = status.index("unsure") + 1 if "unsure" in status else 0
+                action, cond = g.body.rules[n - 1] if n else (None, None)
                 unsure = [
                     f"`{ref}` ({self.results[ref]['p']:.0%})" if self.results[ref].get("p") is not None else f"`{ref}`"
-                    for ref in (_refs(cond) if cond is not None else [])
+                    for ref in (expr_refs(cond) if cond is not None else [])
                     if ref in self.results and self.results[ref].get("uncertain")
                 ]
                 cause = f"{' and '.join(unsure)} too close to call" if unsure else "too close to call"
@@ -121,8 +138,7 @@ class _Writer:
 
     # ---------------------------------------------------------- lines
     def short(self, name: str) -> str:
-        own = mount_owner(self.c, name)
-        return name[len(own) + 1 :] if own else name
+        return local_name(self.c, name)
 
     def question_line(self, qid: str) -> str:
         q = self.c.questions[qid]
@@ -218,14 +234,11 @@ class _Writer:
         return [f"{b.op} over {what}", *listed]
 
     def outcome(self, r: Mapping[str, Any]) -> str:
-        p = r.get("p")
-        pct = f" ({p:.0%})" if isinstance(p, int | float) else ""
+        word, pct, _ = verdict(r)
         if r.get("outcome") == "escalate":
             return f"⚠ **Escalated to a person**{pct}: too close to call."
         if r.get("outcome") == "abstain":
             return f"⚠ **Abstained**{pct}: too close to call."
-        v = r.get("value")
-        word = "yes" if v is True else "no" if v is False else str(v)
         extra = " (the fallback; it was too close to call)" if r.get("outcome") == "default" else ""
         return f"Result: **{word}**{pct}{extra}."
 

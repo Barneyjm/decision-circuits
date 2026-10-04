@@ -68,7 +68,8 @@ class CircuitPolicy:
         self.gate = gate
         # Ordered pairs, not a dict: in a dict 0 and False (1 and True) are the same key,
         # so `{**DEFAULT_ACTIONS, 0: "allow"}` would silently rewrite the False entry.
-        self.actions: list[tuple[Any, Action]] = [*DEFAULT_ACTIONS.items(), *(actions or {}).items()]
+        # A key that is itself an action (a route's "allow", "block" or "ask") means that action.
+        self.actions: list[tuple[Any, Action]] = [*DEFAULT_ACTIONS.items(), *((a, a) for a in ("allow", "block", "ask")), *(actions or {}).items()]
         self.uncertain_fallback = uncertain_fallback
         self.last: Judgment | None = None
 
@@ -84,15 +85,12 @@ class CircuitPolicy:
         """Look up a result key. `True`/`False` entries match only booleans,
         so an order-gate bucket of 1 or 0 never hits them (1 == True in
         Python) and falls through to `uncertain_fallback` like any other
-        unlisted value. A key that is itself "allow", "block" or "ask" (a
-        route's action) means that, unless `actions` maps it otherwise."""
+        unlisted value."""
         for k, action in reversed(self.actions):  # later (user) entries win
             if isinstance(k, bool) != isinstance(key, bool):
                 continue
             if k == key:
                 return action
-        if key in ("allow", "block", "ask"):
-            return key  # type: ignore[return-value]
         return self.uncertain_fallback
 
 

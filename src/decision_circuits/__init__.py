@@ -23,7 +23,7 @@ circuit decides the same way whichever backend answered it.
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _version
 
-from decision_circuits.chips import Chip, Pin
+from decision_circuits.chips import REQUIRED, Chip, Pin
 from decision_circuits.dsl import (
     And,
     Categorical,
@@ -69,6 +69,7 @@ except PackageNotFoundError:  # running from a checkout that was never installed
     __version__ = "0+unknown"
 
 __all__ = [
+    "REQUIRED",
     "And",
     "Answer",
     "Answers",
