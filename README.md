@@ -194,7 +194,8 @@ agent = c.mount(heat, "agent", {**pins, "hostile": "agent_hostile"}, params={"wh
 c.gate("supervisor", (customer["hot"] | agent["hot"]) >= 0.5)
 ```
 
-`params` fill `{who}` per mount, so each copy asks about its own part of the state. A chip is
+`params` fill `{who}` per mount, so each copy asks about its own part of the state.
+`c.describe()` explains the whole circuit, chips included, in plain English. A chip is
 plain JSON (`to_dict` / `Circuit.from_dict`) carrying its pins, its tests and the
 question types it needs. See [docs/concepts.md](docs/concepts.md#chips) and
 `examples/14_chips.py`.

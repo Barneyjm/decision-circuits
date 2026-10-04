@@ -339,9 +339,19 @@ class Circuit:
         return c
 
     # rendering ---------------------------------------------------------
-    def to_mermaid(self, results: dict[str, Any] | None = None, answers: dict[str, Any] | None = None, direction: str = "LR", plain: bool = False) -> str:
+    def to_mermaid(
+        self, results: dict[str, Any] | None = None, answers: dict[str, Any] | None = None, direction: str = "LR", plain: bool = False, text: bool = True
+    ) -> str:
         """Schematic of the compiled circuit; see `render_mermaid`."""
-        return render_mermaid(self, results, answers, direction, plain)
+        return render_mermaid(self, results, answers, direction, plain, text)
+
+    def describe(self, results: Mapping[str, Any] | None = None, answers: Mapping[str, Any] | None = None) -> str:
+        """The circuit in plain English, as Markdown: what the model is asked, what each gate
+        decides and when it holds back, how each chip is wired. Pass a run's `gates` and
+        `answers` to say what happened. See `decision_circuits.describe`."""
+        from decision_circuits.describe import describe
+
+        return describe(self, results, answers)
 
     # compile -----------------------------------------------------------
     def compile(self) -> dict[str, dict[str, Any]]:
@@ -580,12 +590,79 @@ def _short(s: str, n: int = 38) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
+def mount_owner(circuit: Circuit, name: str) -> str | None:
+    """The namespace of the innermost mounted chip a question or gate came from, or None
+    for the circuit's own."""
+    bare = name.lstrip("_")
+    found = [ns for ns in circuit.mounts if bare.startswith(ns + ".")]
+    return max(found, key=len) if found else None
+
+
+def question_text(q: Mapping[str, Any]) -> str:
+    """A question's instructions as one line of text (structured instructions are flattened)."""
+    ins = q.get("instructions")
+    if isinstance(ins, str):
+        return " ".join(ins.split())
+    if isinstance(ins, Mapping):
+        return " ".join(f"{k}: {v}" for k, v in ins.items() if isinstance(v, str))
+    if isinstance(ins, list):
+        return " ".join(str(x) for x in ins if isinstance(x, str))
+    return ""
+
+
+def answer_summary(q: Mapping[str, Any], a: Mapping[str, Any]) -> str:
+    """One answer in a few words: "yes 89%", "billing 80%", "level 2.4 of 3"."""
+    kind = q["type"]
+    if kind == "noul":
+        return f"yes {a['noul']:.0%}"
+    if kind == "choice":
+        return f"{a['choice']} {a['probabilities'][a['choice']]:.0%}"
+    if kind == "multi":
+        return ", ".join(a["selected"]) or "none apply"
+    if kind == "rank":
+        return " > ".join(a["order"][:3])
+    if kind == "match":
+        return f"{sum(m['match'] != 'none' for m in a['matches'].values())} of {len(a['matches'])} matched"
+    if kind == "locate":
+        return f"none {a['none']:.0%}" if a["none"] >= 0.5 or not a["located"] else f"{a['located'][0]['path']} {a['located'][0]['probability']:.0%}"
+    levels = q["criteria"]
+    top = max(a["probabilities"], key=a["probabilities"].__getitem__)
+    name = levels[int(top)] if top.isdigit() and int(top) < len(levels) and isinstance(levels[int(top)], str) else top
+    return f"{name} ({a['score']:.1f} of {len(levels) - 1})"
+
+
+def _wrap(s: str, width: int, lines: int) -> list[str]:
+    out: list[str] = []
+    for word in s.split():
+        if out and len(out[-1]) + 1 + len(word) <= width:
+            out[-1] += " " + word
+        else:
+            out.append(word)
+    if len(out) > lines:
+        out = out[:lines]
+        out[-1] = out[-1][: width - 1].rstrip() + "…"
+    return out
+
+
+def _mermaid_safe(s: str) -> str:
+    """User text inside a quoted Mermaid label: entity codes for what would end or break it."""
+    for ch, code in (("#", "#35;"), ("&", "#amp;"), ('"', "#quot;"), ("<", "#lt;"), (">", "#gt;")):
+        s = s.replace(ch, code)
+    return s
+
+
 def render_mermaid(
-    circuit: Circuit, results: dict[str, Any] | None = None, answers: dict[str, Any] | None = None, direction: str = "LR", plain: bool = False
+    circuit: Circuit,
+    results: dict[str, Any] | None = None,
+    answers: dict[str, Any] | None = None,
+    direction: str = "LR",
+    plain: bool = False,
+    text: bool = True,
 ) -> str:
     """Render the compiled circuit as a schematic. `plain=True` omits the
     init directive and inline HTML styling for stricter renderers (some
-    hosted Mermaid builds reject them); layout is the same.
+    hosted Mermaid builds reject them); layout is the same. `text=False`
+    leaves out each question's wording, for a compact diagram.
 
     Schematic: an input column of
     questions, a logic column of gates, and a decisions column for the
@@ -626,10 +703,7 @@ def render_mermaid(
 
     # mounted chips are drawn as boxes: each node belongs to the top-level chip it came from
     def owner(name: str) -> str | None:
-        """The innermost mounted chip a node came from, or None for the host's own."""
-        bare = name.lstrip("_")
-        found = [ns for ns in circuit.mounts if bare.startswith(ns + ".")]
-        return max(found, key=len) if found else None
+        return mount_owner(circuit, name)
 
     def shown(name: str) -> str:
         """A node's name inside its chip's box: without the namespace."""
@@ -657,26 +731,14 @@ def render_mermaid(
     L.append("    direction TB")
 
     def qnode_line(qid: str, q: dict[str, Any]) -> str:
-        kind = q["type"]
+        head = f"<b>{shown(qid)}</b>"
+        if text:
+            asked = "<br/>".join(_mermaid_safe(line) for line in _wrap(question_text(q), 26, 4))
+            head += f"<br/>{asked}" if plain else f"<br/><span style='color:#3B4550;font-size:12px'>{asked}</span>"
         if answers and qid in answers:
-            a = answers[qid]
-            if kind == "noul":
-                val = f"yes {a['noul']:.0%}"
-            elif kind == "choice":
-                val = f"{a['choice']} {a['probabilities'][a['choice']]:.0%}"
-            elif kind == "multi":
-                val = ", ".join(a["selected"]) or "none apply"
-            elif kind == "rank":
-                val = " > ".join(a["order"][:3])
-            elif kind == "match":
-                val = f"{sum(m['match'] != 'none' for m in a['matches'].values())} of {len(a['matches'])} matched"
-            elif kind == "locate":
-                val = f"none {a['none']:.0%}" if a["none"] >= 0.5 or not a["located"] else f"{a['located'][0]['path']} {a['located'][0]['probability']:.0%}"
-            else:
-                val = f"{a['score']:.1f} / {len(q['criteria']) - 1}"
-            label = f"<b>{shown(qid)}</b><br/>{val}"
+            label = f"{head}<br/><b>→ {_mermaid_safe(answer_summary(q, answers[qid]))}</b>"
         else:
-            label = f"<b>{shown(qid)}</b><br/>{kind}" if plain else f"<b>{shown(qid)}</b><br/><span style='color:#5F6B78'>{kind}</span>"
+            label = f"{head}<br/>{q['type']}" if plain else f"{head}<br/><span style='color:#5F6B78'>{q['type']}</span>"
         return f'    {qnode(qid)}["{label}"]:::q'
 
     for qid, q in circuit.questions.items():

@@ -115,7 +115,29 @@ input and operation, meant to be logged next to the decision.
 `c.to_mermaid()` renders the circuit as a Mermaid flowchart in three
 columns: inputs, logic, decisions. Pass `results=` and `answers=` from a
 run to color the nodes by outcome. It renders on GitHub and in any
-Mermaid tool. Each mounted chip is drawn as its own box.
+Mermaid tool. Each question shows its wording (`text=False` for a compact diagram), and each
+mounted chip is drawn as its own box.
+
+## In plain English
+
+`c.describe()` writes the circuit as Markdown for someone who doesn't read the DSL: every
+question in its own words, what each gate decides ("yes when it is at least 60% likely that
+2 or more of these hold: ..."), when it holds back and what it does then, and how each chip
+is wired. Pass a run's results to say what happened:
+
+```python
+out = c.run(backend, state)
+print(c.describe(out["gates"], out["answers"]))
+```
+
+```
+- **threat** (yes/no): Does the customer threaten legal action, a chargeback or a public complaint? → **yes 98%**
+- **hot**: yes when it is at least 60% likely that the `signs` decision is yes.
+  - *Between 50% and 70% it is too close to call, so it escalates to a person.*
+  - Result: **yes** (100%).
+```
+
+On a chip that isn't mounted, `describe()` is its datasheet: pins, params, questions, gates.
 
 ## Chips
 

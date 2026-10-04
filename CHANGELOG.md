@@ -16,8 +16,13 @@
 - `circuit.question_types` lists the question types a backend has to answer. `SystemOne`
   pointed at `api.typesafe.ai` refuses `multi`, `locate`, `rank` and `match` before the
   request, since TypeSafe answers `noul`, `choice` and `score`; `question_types=` overrides.
-- `to_mermaid` draws each mounted chip as a box, labels a wire into a chip with its pin, and
-  shows the tau on a named threshold gate that feeds another gate.
+- **`describe()`**: a circuit or chip in plain English, as Markdown. It covers each question in
+  its own words, what each gate decides and when it holds back, and how each chip is wired.
+  Given a run's results, it also says what happened. On an unmounted chip it is the datasheet.
+- `to_mermaid` shows each question's wording (`text=False` for the compact form) and a
+  scale answer's level name, draws each mounted chip as a box (nested chips inside their
+  parent), labels a wire into a chip with its pin, shows the tau on a named threshold gate
+  that feeds another gate, and leaves out the Decisions column when it would be empty.
 
 ## 0.5.6 (2026-10-04)
 

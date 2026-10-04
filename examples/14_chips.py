@@ -60,5 +60,8 @@ blob = json.dumps(heat.to_dict())
 again = Circuit.from_dict(json.loads(blob))
 print(f"\n{len(blob)} bytes of JSON; loads back as {type(again).__name__} {again.name!r}, tests failing: {again.test()}")
 
-# 6. The diagram draws each mounted chip as a box.
+# 6. In plain English, with what happened on this run.
+print("\n" + c.describe(results, answers))
+
+# 7. The diagram draws each mounted chip as a box.
 print("\n" + c.to_mermaid(results=results, answers=answers, plain=True))
