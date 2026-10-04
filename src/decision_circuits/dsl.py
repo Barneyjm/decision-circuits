@@ -626,8 +626,10 @@ def render_mermaid(
 
     # mounted chips are drawn as boxes: each node belongs to the top-level chip it came from
     def owner(name: str) -> str | None:
-        head, dot, _ = name.lstrip("_").partition(".")
-        return head if dot and head in circuit.mounts else None
+        """The innermost mounted chip a node came from, or None for the host's own."""
+        bare = name.lstrip("_")
+        found = [ns for ns in circuit.mounts if bare.startswith(ns + ".")]
+        return max(found, key=len) if found else None
 
     def shown(name: str) -> str:
         """A node's name inside its chip's box: without the namespace."""
@@ -775,15 +777,20 @@ def render_mermaid(
         lo, hi = SHAPES.get(op, ("[", "]"))
         return f'  {gnode(gid)}{lo}"{label}"{hi}:::logic'
 
-    for ns, m in circuit.mounts.items():
-        if "." in ns:  # a chip inside a chip is drawn inside its parent's box
-            continue
-        L.append(f'  subgraph M_{ns}["{ns} · {m["chip"]}"]')
-        L.append("    direction TB")
-        L += [qnode_line(qid, q) for qid, q in circuit.questions.items() if owner(qid) == ns]
-        L += ["  " + node_line(gid, compiled[gid], gid in decisions) for gid in logic + decisions if owner(gid) == ns]
-        L.append("  end")
-        L.append(f"  class M_{ns} chip")
+    def chip_box(ns: str) -> list[str]:
+        """A mounted chip as a box, with any chips it mounted drawn inside it."""
+        sid = "M_" + ns.replace(".", "__")
+        out = [f'  subgraph {sid}["{ns.rpartition(".")[2]} · {circuit.mounts[ns]["chip"]}"]', "    direction TB"]
+        out += [qnode_line(qid, q) for qid, q in circuit.questions.items() if owner(qid) == ns]
+        out += ["  " + node_line(gid, compiled[gid], gid in decisions) for gid in logic + decisions if owner(gid) == ns]
+        for inner in circuit.mounts:
+            if inner.startswith(ns + ".") and "." not in inner[len(ns) + 1 :]:
+                out += chip_box(inner)
+        return [*out, "  end", f"  class {sid} chip"]
+
+    for ns in circuit.mounts:
+        if "." not in ns:
+            L += chip_box(ns)
     if any(not owner(g) for g in logic):
         L.append('  subgraph LOGIC["Logic"]')
         L.append("    direction TB")
@@ -793,13 +800,14 @@ def render_mermaid(
             L.append("  " + node_line(gid, compiled[gid], False))
         L.append("  end")
         L.append("  class LOGIC col")
-    L.append('  subgraph OUT["Decisions"]')
-    L.append("    direction TB")
-    for gid in decisions:
-        if not owner(gid):
-            L.append("  " + node_line(gid, compiled[gid], True))
-    L.append("  end")
-    L.append("  class OUT col")
+    if any(not owner(g) for g in decisions) or not circuit.mounts:
+        L.append('  subgraph OUT["Decisions"]')
+        L.append("    direction TB")
+        for gid in decisions:
+            if not owner(gid):
+                L.append("  " + node_line(gid, compiled[gid], True))
+        L.append("  end")
+        L.append("  class OUT col")
     for gid in logic + decisions:
         L += edge_lines(gid, compiled[gid])
     return "\n".join(L)

@@ -184,6 +184,9 @@ def test_a_chip_built_from_chips_mounts_with_its_inner_boards_rewired():
 
     c = host()
     pins = c.mount(outer, "w", {"a": "angry"})
+    m = c.to_mermaid(plain=True)
+    assert m.index('subgraph M_w["w · wrap"]') < m.index('subgraph M_w__in["in · pass"]') < m.index("<b>y</b>")  # the inner box sits in the outer
+    assert 'subgraph OUT["Decisions"]' not in m  # every decision is inside a chip: no empty column
     assert [g.name for g in c.gates] == ["w.in.y", "w.z"]
     assert c.mounts["w.in"]["pins"] == {"x": "angry"}
     assert c.evaluate(ANSWERS)[pins["z"].ref]["value"] is False
