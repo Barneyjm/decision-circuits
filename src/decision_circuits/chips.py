@@ -245,9 +245,9 @@ class Chip(Circuit):
         with its default settings, or `params` over them. Shorthands: a number is a noul's P(yes), a dict of option ->
         probability is a choice; anything with a `type` is a wire-format answer as is."""
         self.check()
-        return self._evaluate(self._for(params), answers)
+        return self._evaluate_on(self._for(params), answers)
 
-    def _evaluate(self, configured: Chip, answers: Mapping[str, Any]) -> dict[str, GateResultDict]:
+    def _evaluate_on(self, configured: Chip, answers: Mapping[str, Any]) -> dict[str, GateResultDict]:
         full = {k: _coerce(v) for k, v in answers.items()}
         missing = [n for n in [*self.pins, *self.questions] if n not in full]
         if missing:
@@ -292,7 +292,7 @@ class Chip(Circuit):
             try:
                 if key not in configured:
                     configured[key] = self._for(params)
-                results = self._evaluate(configured[key], case["answers"])
+                results = self._evaluate_on(configured[key], case["answers"])
             except (ValueError, KeyError, TypeError) as e:  # a broken case is a failure, not the end of the run
                 failures.append({"case": label, "gate": None, "expected": case.get("expect"), "got": f"error: {e}", "trace": []})
                 continue
@@ -394,6 +394,8 @@ def mount(host: Circuit, chip: Chip, ns: str, pins: Mapping[str, str | Q | G], p
         GateDef(f"{ns}.{g.name}", rename_refs(g.body, remap), g.on_uncertain_, g.default_, g.band_) for g in chip.gates
     ]  # `chip` is a fresh configured copy
     mounts = {ns: {"chip": chip.name, "pins": {p: t for p, t in wired.items() if p not in asked}, "outputs": list(chip.outputs)}}
+    if chip.version:
+        mounts[ns]["version"] = chip.version
     if asked:
         mounts[ns]["asked"] = sorted(asked)
     for inner, m in chip.mounts.items():  # a chip built from chips: keep the inner boards, rewired

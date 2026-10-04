@@ -32,6 +32,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from decision_circuits import tracing
 from decision_circuits.dsl import Circuit, RunOutput
 from decision_circuits.gates import GateResultDict, result_key
 from decision_circuits.types import Backend
@@ -74,12 +75,21 @@ class CircuitPolicy:
         self.last: Judgment | None = None
 
     def judge(self, state: Any) -> Judgment:
-        out = self.circuit.run(self.backend, state)
-        results = out["gates"]
-        if self.gate not in results:
-            raise KeyError(f"gate {self.gate!r} is not in the circuit; gates are {sorted(results)}")
-        self.last = Judgment(self.action_for(result_key(results[self.gate])), explain(results, self.gate), out)
-        return self.last
+        with tracing.span("decision_circuits.policy", **{"decision_circuits.gate": self.gate}) as span:
+            out = self.circuit.run(self.backend, state)
+            results = out["gates"]
+            if self.gate not in results:
+                raise KeyError(f"gate {self.gate!r} is not in the circuit; gates are {sorted(results)}")
+            key = result_key(results[self.gate])
+            self.last = Judgment(self.action_for(key), explain(results, self.gate), out)
+            span.set_attribute("decision_circuits.result", str(key))
+            span.set_attribute("decision_circuits.action", self.last.action)
+            tracing.count(
+                "decision_circuits.policy.actions",
+                "Middleware judgments by gate, result and action",
+                **{"decision_circuits.gate": self.gate, "decision_circuits.result": str(key), "decision_circuits.action": self.last.action},
+            )
+            return self.last
 
     def action_for(self, key: Any) -> Action:
         """Look up a result key. `True`/`False` entries match only booleans,

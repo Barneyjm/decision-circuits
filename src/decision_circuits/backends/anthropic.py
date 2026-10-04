@@ -30,6 +30,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from decision_circuits import tracing
 from decision_circuits.types import V1_TYPES, Answers, answer_from_probabilities, option_keys, require_types, to_jsonable
 
 TOOL_NAME = "submit_answers"
@@ -109,15 +110,24 @@ class Anthropic:
         self.system = system
 
     def _call(self, state: Any, questions: Mapping[str, Any], model: str | None, *, pick_one: bool, temperature: float) -> dict[str, Any]:
-        r = self.client.messages.create(
-            model=model or self.model,
-            max_tokens=self.max_tokens,
-            temperature=temperature,
-            system=self.system,
-            tools=[{"name": TOOL_NAME, "description": "Submit answers to every question.", "input_schema": _schema(questions, pick_one=pick_one)}],
-            tool_choice={"type": "tool", "name": TOOL_NAME},
-            messages=[{"role": "user", "content": render_prompt(state, questions)}],
-        )
+        model = model or self.model
+        with tracing.model_call("anthropic", "chat", model) as call:
+            r = self.client.messages.create(
+                model=model,
+                max_tokens=self.max_tokens,
+                temperature=temperature,
+                system=self.system,
+                tools=[{"name": TOOL_NAME, "description": "Submit answers to every question.", "input_schema": _schema(questions, pick_one=pick_one)}],
+                tool_choice={"type": "tool", "name": TOOL_NAME},
+                messages=[{"role": "user", "content": render_prompt(state, questions)}],
+            )
+            usage = getattr(r, "usage", None)
+            call.response(
+                model=getattr(r, "model", None),
+                response_id=getattr(r, "id", None),
+                input_tokens=getattr(usage, "input_tokens", None),
+                output_tokens=getattr(usage, "output_tokens", None),
+            )
         for block in r.content:
             if getattr(block, "type", None) == "tool_use" and block.name == TOOL_NAME:
                 return dict(block.input)
@@ -129,7 +139,7 @@ class Anthropic:
             raw = self._call(state, questions, model, pick_one=False, temperature=0)
             return {qid: answer_from_probabilities(q, raw[qid]) for qid, q in questions.items()}
         with ThreadPoolExecutor(max_workers=min(self.workers, self.k)) as pool:
-            picks = list(pool.map(lambda _: self._call(state, questions, model, pick_one=True, temperature=1.0), range(self.k)))
+            picks = list(pool.map(tracing.in_context(lambda _: self._call(state, questions, model, pick_one=True, temperature=1.0)), range(self.k)))
         out: Answers = {}
         for qid, q in questions.items():
             keys = option_keys(q)

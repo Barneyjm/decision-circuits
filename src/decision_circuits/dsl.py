@@ -494,6 +494,12 @@ class Circuit:
 
     def evaluate(self, answers: Answers) -> dict[str, GateResultDict]:
         """Evaluate the compiled gates locally against answers already in hand."""
+        with tracing.span("decision_circuits.evaluate", **{"decision_circuits.gates": [g.name for g in self.gates]}) as span:
+            gates = self._evaluate(answers)
+            _record_gates(span, self, gates)
+            return gates
+
+    def _evaluate(self, answers: Answers) -> dict[str, GateResultDict]:
         res = evaluate_gates({k: Gate.from_dict(v) for k, v in self.compile().items()}, answers)
         return {k: v.to_dict() for k, v in res.items() if not k.startswith("_")}
 
@@ -522,8 +528,9 @@ class Circuit:
             missing = [q for q in self.questions if q not in answers]
             if missing:
                 raise ValueError(f"{type(backend).__name__} returned no answer for {', '.join(map(repr, missing))}")
-            out: RunOutput = {"model": model, "answers": answers, "gates": self.evaluate(answers)}
+            out: RunOutput = {"model": model, "answers": answers, "gates": self._evaluate(answers)}
             _record(span, backend, out)
+            _record_gates(span, self, out["gates"])
             return out
 
     def intervene(self, backend: Backend, state: Any, interventions: Mapping[str, Any], **kw: Any) -> Interventions:
@@ -717,8 +724,16 @@ def _record(span: Any, backend: Any, out: RunOutput) -> None:
         for suffix, dist in answer_distributions(a).items():
             pick = max(dist, key=dist.__getitem__)
             tracing.event(span, "decision_circuits.answer", question=qid + suffix, type=a.get("type"), pick=pick, p=round(dist[pick], 4))
+
+
+def _record_gates(span: Any, circuit: Circuit, gates: Mapping[str, GateResultDict]) -> None:
+    """Each gate's result: an event on the span (value, outcome, p, trace, a route's rule
+    statuses, the chip it came from) and one count on `decision_circuits.gate.results`."""
     held: dict[str, list[str]] = {"escalate": [], "abstain": []}
-    for gid, g in out["gates"].items():
+    for gid, g in gates.items():
+        ns = mount_owner(circuit, gid)
+        chip = circuit.mounts[ns] if ns else {}
+        where = {"chip": chip.get("chip"), "chip_version": chip.get("version")}
         tracing.event(
             span,
             "decision_circuits.gate",
@@ -728,6 +743,20 @@ def _record(span: Any, backend: Any, out: RunOutput) -> None:
             p=g.get("p"),
             uncertain=g.get("uncertain"),
             trace="; ".join(g.get("trace") or []),
+            rules=g.get("rules"),
+            **where,
+        )
+        decided = g.get("outcome") in ("decided", "default")
+        tracing.count(
+            "decision_circuits.gate.results",
+            "Gate results by gate, outcome and value",
+            **{
+                "decision_circuits.gate": gid,
+                "decision_circuits.outcome": g.get("outcome"),
+                "decision_circuits.value": str(g.get("value")) if decided else None,
+                "decision_circuits.chip": where["chip"],
+                "decision_circuits.chip.version": where["chip_version"],
+            },
         )
         if g.get("outcome") in held:
             held[g["outcome"]].append(gid)

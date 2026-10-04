@@ -10,6 +10,16 @@
   mount leaves the host unchanged. `chip.evaluate` runs one offline with shorthand pin
   values, and `add_test` / `test` keep test vectors with the chip (also from JSONL).
   `examples/14_chips.py`.
+- **Telemetry for every runtime path.** Each model request the SystemOne, OpenAI and
+  Anthropic backends make is an OpenTelemetry GenAI client span (`{operation} {model}`, with
+  provider, models, response id, token usage and `error.type`) feeding the standard
+  `gen_ai.client.operation.duration` and `gen_ai.client.token.usage` histograms; thread-pooled
+  calls stay in their trace, and a SystemOne retry is an event (status, wait). `Circuit.evaluate`
+  on its own is a span. Gate events carry a route's rule statuses and the chip (and version) a
+  gate came from, and every gate result counts on `decision_circuits.gate.results`. A
+  middleware judgment is a `decision_circuits.policy` span (gate, result, action) and counts on
+  `decision_circuits.policy.actions`. No derived measures and no configuration: bring your own
+  SDK, exporters and views. The state is still never recorded.
 - **Parts.** `decision_circuits.parts`: `refund_risk()` (seven refund-abuse signals, three of
   them optional pins the host can answer from its own data, to hold / review / clear),
   `verified_classifier()` (any pick-one asked three ways and voted, plus "does the text answer

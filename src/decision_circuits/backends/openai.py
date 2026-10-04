@@ -25,6 +25,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from decision_circuits import tracing
 from decision_circuits.types import V1_TYPES, Answers, answer_from_probabilities, option_keys, require_types, to_jsonable
 
 LETTERS = "ABCDEFGHIJKLMNOPQRST"
@@ -90,14 +91,23 @@ class OpenAILogprobs:
 
     def score_one(self, state: Any, question: Mapping[str, Any], model: str | None = None) -> dict[str, float]:
         prompt, keys = render_question(state, question)
-        r = self.client.chat.completions.create(
-            model=model or self.model,
-            messages=[{"role": "system", "content": self.system}, {"role": "user", "content": prompt}],
-            max_tokens=1,
-            temperature=0,
-            logprobs=True,
-            top_logprobs=min(self.top_logprobs, 20),
-        )
+        model = model or self.model
+        with tracing.model_call("openai", "chat", model) as call:
+            r = self.client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": self.system}, {"role": "user", "content": prompt}],
+                max_tokens=1,
+                temperature=0,
+                logprobs=True,
+                top_logprobs=min(self.top_logprobs, 20),
+            )
+            usage = getattr(r, "usage", None)
+            call.response(
+                model=getattr(r, "model", None),
+                response_id=getattr(r, "id", None),
+                input_tokens=getattr(usage, "prompt_tokens", None),
+                output_tokens=getattr(usage, "completion_tokens", None),
+            )
         top = r.choices[0].logprobs.content[0].top_logprobs
         lp: dict[str, float] = {}
         for t in top:
@@ -114,5 +124,5 @@ class OpenAILogprobs:
         require_types(questions, V1_TYPES, "OpenAILogprobs")
         ids = list(questions)
         with ThreadPoolExecutor(max_workers=min(self.workers, max(1, len(ids)))) as pool:
-            dists = list(pool.map(lambda qid: self.score_one(state, questions[qid], model), ids))
+            dists = list(pool.map(tracing.in_context(lambda qid: self.score_one(state, questions[qid], model)), ids))
         return {qid: answer_from_probabilities(questions[qid], d) for qid, d in zip(ids, dists, strict=True)}

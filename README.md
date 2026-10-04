@@ -228,18 +228,34 @@ plain JSON (`to_dict` / `Circuit.from_dict`) carrying its pins, its tests and th
 question types it needs. See [docs/concepts.md](docs/concepts.md#chips) and
 `examples/14_chips.py`.
 
-## Tracing
+## Tracing and metrics
 
 With `pip install "decision-circuits[otel]"` and any OpenTelemetry SDK and exporter
 configured, every run is a span:
 
 ```
-decision_circuits.run                  gen_ai.request.model, gen_ai.response.id, gen_ai.usage.input_tokens,
-│                                      decision_circuits.escalated = ["pay"], decision_circuits.abstained = []
-│   event decision_circuits.answer     question, type, pick, p           (one per answer; per option for a multi)
-│   event decision_circuits.gate       gate, value, outcome, p, trace    (one per gate)
-└── decision_circuits.backend          the model call
+decision_circuits.policy                 (middleware only) gate, result, action
+└── decision_circuits.run                gen_ai.request.model, gen_ai.response.id, gen_ai.usage.input_tokens,
+    │                                    decision_circuits.escalated = ["pay"], decision_circuits.abstained = []
+    │   event decision_circuits.answer   question, type, pick, p           (one per answer; per option for a multi)
+    │   event decision_circuits.gate     gate, value, outcome, p, trace, rules (a route's), chip, chip_version
+    └── decision_circuits.backend
+        └── answer jev-latest            one client span per model request, GenAI attributes; retries are events
 ```
+
+`Circuit.evaluate` on its own is a `decision_circuits.evaluate` span with the same gate events.
+
+Metrics, where OpenTelemetry has a convention, follow it; elsewhere they are plain counts:
+
+| metric | kind | attributes |
+|---|---|---|
+| `gen_ai.client.operation.duration` | histogram, s | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.response.model`, `server.address`, `error.type` |
+| `gen_ai.client.token.usage` | histogram, tokens | the same, plus `gen_ai.token.type` (input / output) |
+| `decision_circuits.gate.results` | counter | gate, outcome, value (when decided), chip, chip version |
+| `decision_circuits.policy.actions` | counter | gate, result, action |
+
+They are facts, not verdicts: what counts as too many escalations, and what to alert on, is
+yours to decide.
 
 `intervene` and `ablate` add a `decision_circuits.intervene` span over one run per edited
 state, threads included. `SystemOne` sends `traceparent`, so a traced server joins the same

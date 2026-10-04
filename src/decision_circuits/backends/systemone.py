@@ -83,7 +83,7 @@ class SystemOne:
             self.headers["Authorization"] = f"Bearer {api_key}"
         self.last_response: dict[str, Any] | None = None  # full body of the last call (usage, model)
 
-    def _post(self, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    def _post(self, body: dict[str, Any], call: tracing.ModelCall | None = None) -> tuple[int, dict[str, Any]]:
         deadline = time.monotonic() + self.retry_for
         wait = self.retry_wait
         while True:
@@ -91,6 +91,8 @@ class SystemOne:
             pause = max(wait, after or 0.0)  # a rate limit says how long; back off at least that much
             if status not in RETRY_STATUSES or time.monotonic() + pause > deadline:
                 return status, payload
+            if call is not None:
+                tracing.event(call.span, "decision_circuits.retry", **{"http.response.status_code": status, "decision_circuits.retry.wait_s": round(pause, 3)})
             time.sleep(pause)
             wait = min(wait * 1.5, 30.0)
 
@@ -120,8 +122,17 @@ class SystemOne:
     def answer(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Answers:
         if self.question_types is not None:
             require_types(questions, self.question_types, f"SystemOne at {urllib.parse.urlsplit(self.url).hostname}", hint="a circuit v2 server")
-        status, body = self._post({"state": to_jsonable(state), "model": model or self.model, "questions": dict(questions)})
-        if status >= 400 or "answers" not in body:
-            raise SystemOneError(status, body)
+        model = model or self.model
+        host = urllib.parse.urlsplit(self.url).hostname
+        provider = "typesafe" if host and host.endswith("typesafe.ai") else "system_one"
+        with tracing.model_call(provider, "answer", model, host) as call:
+            status, body = self._post({"state": to_jsonable(state), "model": model, "questions": dict(questions)}, call)
+            if status >= 400 or "answers" not in body:
+                call.failed(str(status))
+                raise SystemOneError(status, body)
+            usage = body.get("usage") or {}
+            call.response(
+                model=body.get("model"), response_id=body.get("request_id"), input_tokens=usage.get("input_tokens"), output_tokens=usage.get("output_tokens")
+            )
         self.last_response = body
         return body["answers"]
