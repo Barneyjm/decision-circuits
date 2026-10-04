@@ -797,6 +797,8 @@ def render_mermaid(
         "  classDef col fill:none,stroke:#D9DEE3,stroke-dasharray:3 3,color:#5F6B78;",
         "  classDef chip fill:#F2F4F7,stroke:#1B1F24,stroke-width:2px,color:#1B1F24;",
         "  classDef state fill:#1B1F24,stroke:#1B1F24,color:#FFFFFF;",
+        "  classDef act fill:#FFFFFF,stroke:#1B1F24,stroke-width:1.5px,color:#1B1F24;",
+        "  classDef faded fill:#F4F5F7,stroke:#C9CED4,stroke-width:1px,color:#9AA3AD;",
     ]
     if state:
         L.append(f'  STATE(["<b>{_mermaid_safe(state)}</b>"]):::state')
@@ -847,6 +849,7 @@ def render_mermaid(
             continue
         terminal = not gid.startswith("_") and not consumers[gid]
         (decisions if terminal else logic).append(gid)
+    ladder_of = {gid for gid in decisions if compiled[gid]["op"] == "route"}  # a route nothing reads is drawn as its ladder
 
     def carries(base: str, opt: str) -> bool | None:
         """Whether a wire carried a yes on this run: a noul answered yes, the picked option, a gate
@@ -874,12 +877,17 @@ def render_mermaid(
         """(Mermaid line, whether the wire carried a yes on the run) per input of a gate."""
         out = []
         rule_of = {ref: f"{i}. {action}" for i, (action, ref) in enumerate(spec.get("rules", []), 1)}
+        rule_no = {ref: i for i, (_, ref) in enumerate(spec.get("rules", []), 1)}
         route_r = (results or {}).get(gid) if spec["op"] == "route" else None
+        status = rule_status(gid, len(spec.get("rules", []))) if gid in ladder_of else []
         for ref in spec_refs(spec):
             lab = "check" if spec.get("check") == ref else ""
             base, _, opt = ref.partition(":")
             live = carries(base, opt)
-            if ref in rule_of and route_r and route_r.get("outcome") == "decided":
+            if ref in rule_of and gid in ladder_of:  # a wire into a rule's diamond: did the rule hold
+                st = status[rule_no[ref] - 1]
+                live = True if st == "held" else False if st in ("no", "skipped") else None
+            elif ref in rule_of and route_r and route_r.get("outcome") == "decided":
                 live = rule_of[ref].split(". ", 1)[1] == str(route_r.get("value"))  # only the rule taken carried
             if opt == "True" and base in compiled:  # a gate read as its decision: the wire says nothing more
                 opt = ""
@@ -895,15 +903,56 @@ def render_mermaid(
                 shown = f"level {opt}" if (q and q["type"] == "score") else opt
                 lab = (f"{shown} " + lab).strip()
             if ref in rule_of:  # a route's rule: the wire is named for the action it leads to
-                lab = rule_of[ref]
+                lab = "" if gid in ladder_of else rule_of[ref]
             node = gnode(base) if base in compiled else qnode(base)
             dest = owner(gid)
             if dest and owner(ref) != dest:  # a wire into a chip: name the pin it lands on
                 pin = next((p for p, t in circuit.mounts[dest]["pins"].items() if t == ref or t == ref.partition(":")[0]), None)
                 if pin and pin != ref.partition(":")[0]:
                     lab = f"{pin}: {lab}" if lab else pin
-            out.append((f"  {node} --{'>' if not lab else f'>|{lab}|'} {gnode(gid)}", live))
+            target = f"{gnode(gid)}__r{rule_no[ref]}" if ref in rule_no and gid in ladder_of else gnode(gid)
+            out.append((f"  {node} --{'>' if not lab else f'>|{lab}|'} {target}", live))
         return out
+
+    def rule_status(gid: str, n: int) -> list[str | None]:
+        """Per rule of a route on this run: "held", "no", "unsure", or "skipped" (never reached)."""
+        r = (results or {}).get(gid)
+        if not r:
+            return [None] * n
+        st: list[str | None] = ["skipped"] * n
+        for t in r.get("trace", []):
+            if t.startswith("rule "):
+                i = int(t.split()[1]) - 1
+                st[i] = "held" if " holds -> " in t else "unsure" if "too close to call" in t else "no"
+        return st
+
+    def ladder(gid: str, spec: dict[str, Any]) -> tuple[list[str], list[tuple[str, bool | None]]]:
+        """A route as the decision ladder it is: a diamond per rule, yes to its action, no to the
+        next rule, the last no to `otherwise`; an escalation leaves from the rule it stopped at."""
+        g = gnode(gid)
+        rules = spec["rules"]
+        st = rule_status(gid, len(rules))
+        r = (results or {}).get(gid)
+        taken = r.get("value") if r and r.get("outcome") in ("decided", "default") else None
+        ran = r is not None
+        nodes, edges = [], []
+        cls_rule = {"held": "yes", "no": "no", "unsure": "hold", "skipped": "faded", None: "logic"}
+        for i, (action, _) in enumerate(rules, 1):
+            name = _mermaid_safe(str(action))
+            nodes.append(f'  {g}__r{i}{{"<b>{i}.</b> {name}?"}}:::{cls_rule[st[i - 1]]}')
+            took = ran and st[i - 1] == "held"
+            nodes.append(f'  {g}__a{i}(["{"✓ " if took else ""}{name}"]):::{"yes" if took else "faded" if ran else "act"}')
+            edges.append((f"  {g}__r{i} -->|yes| {g}__a{i}", took if ran else None))
+            nxt = f"{g}__r{i + 1}" if i < len(rules) else f"{g}__else"
+            edges.append((f"  {g}__r{i} -->|no| {nxt}", (st[i - 1] == "no") if ran else None))
+            if st[i - 1] == "unsure":
+                edges.append((f"  {g}__r{i} -->|too close to call| {g}__esc", True))
+        fell = ran and all(x == "no" for x in st)
+        other = _mermaid_safe(str(spec.get("otherwise")))
+        nodes.append(f'  {g}__else(["{"✓ " if fell else ""}{other}"]):::{"yes" if fell else "faded" if ran else "act"}')
+        if ran and taken is None:
+            nodes.append(f'  {g}__esc(["⚠ {"a person" if r.get("outcome") == "escalate" else str(r.get("outcome"))}"]):::hold')
+        return nodes, edges
 
     def route_line(gid: str, spec: dict[str, Any]) -> str:
         r = (results or {}).get(gid)
@@ -978,7 +1027,9 @@ def render_mermaid(
         sid = "M_" + ns.replace(".", "__")
         out = [f'  subgraph {sid}["{ns.rpartition(".")[2]} · {circuit.mounts[ns]["chip"]}"]', "    direction TB"]
         out += [qnode_line(qid, q) for qid, q in circuit.questions.items() if owner(qid) == ns]
-        out += ["  " + node_line(gid, compiled[gid], gid in decisions) for gid in logic + decisions if owner(gid) == ns]
+        for gid in logic + decisions:
+            if owner(gid) == ns:
+                out += ["  " + n for n in ladder(gid, compiled[gid])[0]] if gid in ladder_of else ["  " + node_line(gid, compiled[gid], gid in decisions)]
         for inner in circuit.mounts:
             if inner.startswith(ns + ".") and "." not in inner[len(ns) + 1 :]:
                 out += chip_box(inner)
@@ -1001,25 +1052,28 @@ def render_mermaid(
         L.append(f'  subgraph OUT["{"Action" if only_routes and decisions else "Decisions"}"]')
         L.append("    direction TB")
         for gid in decisions:
-            if not owner(gid):
+            if owner(gid):
+                continue
+            if gid in ladder_of:
+                L += ["  " + n for n in ladder(gid, compiled[gid])[0]]
+            else:
                 L.append("  " + node_line(gid, compiled[gid], True))
         L.append("  end")
         L.append("  class OUT col")
     wired: list[tuple[str, bool | None]] = [(f"  STATE --> {qnode(qid)}", None) for qid in circuit.questions] if state else []
     for gid in logic + decisions:
         wired += edge_lines(gid, compiled[gid])
+    path_start = len(wired)
+    for gid in ladder_of:
+        wired += ladder(gid, compiled[gid])[1]
     edges = [line for line, _ in wired]
     L += edges
     dim = [str(i) for i, (_, live) in enumerate(wired) if live is False]
     if dim:  # wires that carried a no on this run fade, so the live path reads at a glance
         L.append(f"  linkStyle {','.join(dim)} stroke:#C9CED4,stroke-width:1px,stroke-dasharray:4 3")
-    # the wire into each route's chosen action, drawn heavy
-    for gid, spec in compiled.items():
-        r = (results or {}).get(gid)
-        if spec["op"] != "route" or not r or r.get("outcome") != "decided":
-            continue
-        taken = next((f"|{i}. {a}| {gnode(gid)}" for i, (a, _) in enumerate(spec["rules"], 1) if a == r.get("value")), None)
-        L += [f"  linkStyle {i} stroke:#2E7D4F,stroke-width:3.5px" for i, e in enumerate(edges) if taken and e.endswith(taken)]
+    path = [str(i) for i in range(path_start, len(wired)) if wired[i][1] is True]
+    if path:  # the way through each route's ladder to its action, drawn heavy
+        L.append(f"  linkStyle {','.join(path)} stroke:#2E7D4F,stroke-width:3.5px")
     return "\n".join(L)
 
 

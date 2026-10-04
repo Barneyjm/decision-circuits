@@ -88,17 +88,27 @@ def test_a_probability_on_the_band_edge_is_outside_the_band():
     assert s.evaluate({"size": {"type": "score", "score": 1.0, "probabilities": {"0": 0, "1": 1, "2": 0}, "confidence": 1.0}})["b"]["outcome"] == "decided"
 
 
-def test_the_diagram_ends_in_one_action_and_starts_from_the_state():
+def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_state():
     c = triage()
     m = c.to_mermaid(plain=True, state="Ticket")
     assert 'STATE(["<b>Ticket</b>"]):::state' in m and "STATE --> q_urgent" in m
     assert 'subgraph OUT["Action"]' in m
-    assert "1. page on-call<br/>2. technical queue<br/>else general queue" in m
-    assert "-->|1. page on-call| g_action" in m and "-->|2. technical queue| g_action" in m
+    assert 'g_action__r1{"<b>1.</b> page on-call?"}' in m and 'g_action__a1(["page on-call"])' in m
+    for wire in ("g_action__r1 -->|yes| g_action__a1", "g_action__r1 -->|no| g_action__r2", "g_action__r2 -->|no| g_action__else"):
+        assert wire in m
+    assert 'g_action__else(["general queue"])' in m
     answers = {"urgent": noul(0.2), "outage": noul(0.95), "technical": noul(0.95)}
     ran = c.to_mermaid(c.evaluate(answers), answers, plain=True)
-    assert "<b>✓ technical queue</b>" in ran and ":::yes" in ran
+    assert 'g_action__a2(["✓ technical queue"]):::yes' in ran
+    assert 'g_action__r1{"<b>1.</b> page on-call?"}:::no' in ran and 'g_action__a1(["page on-call"]):::faded' in ran
+    wires = [ln.strip() for ln in ran.split("\n") if "-->" in ln]
+    heavy = next(ln for ln in ran.split("\n") if "stroke-width:3.5px" in ln).split()[1].split(",")
+    assert {wires[int(i)] for i in heavy} == {"g_action__r1 -->|no| g_action__r2", "g_action__r2 -->|yes| g_action__a2"}  # the way through
     assert "STATE" not in c.to_mermaid(plain=True, state=None)
+
+    unsure = {"urgent": noul(0.75), "outage": noul(0.95), "technical": noul(0.95)}
+    held = c.to_mermaid(c.evaluate(unsure), unsure, plain=True)
+    assert 'g_action__esc(["⚠ a person"]):::hold' in held and "g_action__r1 -->|too close to call| g_action__esc" in held
 
 
 def test_describe_leads_with_the_outcome_and_names_what_was_unsure():
@@ -123,6 +133,6 @@ def test_after_a_run_what_said_no_greys_out_and_its_wires_fade():
     wires = [ln.strip() for ln in lines if "-->" in ln]
     faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
     assert "q_urgent --> g_now" in {wires[i] for i in faded}  # the no from urgent
-    assert any(wires[i].endswith("|1. page on-call| g_action") for i in faded)  # the rule not taken
-    assert not any(wires[i].endswith("|2. technical queue| g_action") for i in faded)  # the rule taken
+    assert "g_action__r1 -->|yes| g_action__a1" in {wires[i] for i in faded}  # the action not taken
+    assert "g_action__r2 -->|yes| g_action__a2" not in {wires[i] for i in faded}  # the action taken
     assert "linkStyle" not in c.to_mermaid(plain=True)  # no run, nothing to fade

@@ -27,8 +27,10 @@
   its own words, what each gate decides and when it holds back, and how each chip is wired.
   Given a run's results, it also says what happened. On an unmounted chip it is the datasheet.
 - `to_mermaid` reads as one process: a state node (`state=`, None to leave it out), and a
-  route drawn as one Action node listing every action with the taken one marked. After a
-  run, every gate is coloured by its decision and the wire into the chosen action is heavy.
+  route drawn as its yes/no ladder. Each rule is a diamond, **yes** leads to its action and
+  **no** to the next rule, and an escalation branches to a person. After a run, every gate is
+  coloured by its decision, a question answered no greys out, wires that carried a no fade,
+  and the way through the ladder is heavy.
   It also shows each question's wording (`text=False` for the compact form) and a
   scale answer's level name, draws each mounted chip as a box (nested chips inside their
   parent), labels a wire into a chip with its pin, shows the tau on a named threshold gate

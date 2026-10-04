@@ -96,8 +96,10 @@ The first rule that holds gives the action; `otherwise` when none does. In a rul
 counts as its decision, so `G("urgent") & G("outage")` means both decided yes. A rule too
 close to call stops the route and escalates (the default `on_uncertain` for a route) rather
 than falling through to a lower rule on a guess. The result's `value` is the action and its
-trace says which rule held. In the diagram the route is the one Action node, every action
-listed and the one taken marked; `describe()` leads with it.
+trace says which rule held. In the diagram the route is drawn as the ladder it is: a
+diamond per rule, **yes** to its action, **no** to the next rule, the last **no** to
+`otherwise`, and a "too close to call" branch to a person where it stopped. After a run the
+way through is drawn heavy and the branches not taken fade. `describe()` leads with it.
 
 Routing used to be plain code over the gate results, outside the circuit (the refund desk's
 `decide` still is). Inside the circuit it is versioned, traced, drawn and tested with
@@ -144,8 +146,9 @@ columns: inputs, logic, decisions. Pass `results=` and `answers=` from a
 run to color the nodes by outcome. It renders on GitHub and in any
 Mermaid tool. It reads left to right as one process: the state (`state="Conversation"`
 names it), the questions asked about it with their wording (`text=False` for a compact
-diagram), the gates, and the action. After a run every gate is coloured by what it decided,
-so the path the run took lights up, and the wire into the chosen action is drawn heavy.
+diagram), the gates, and the action. After a run every gate is coloured by what it decided
+and a yes/no question answered no greys out, wires that carried a no fade, and the way
+through the route to the chosen action is drawn heavy.
 Each mounted chip is its own box.
 
 ## In plain English
