@@ -1019,8 +1019,10 @@ def render_mermaid(
         cls_rule = {"held": "yes", "no": "passed", "unsure": "hold", "skipped": "faded", None: "logic"}
         for i, (action, _) in enumerate(rules, 1):
             name = _mermaid_safe(str(action))
-            cond = "<br/>".join(_mermaid_safe(x) for x in _wrap(cond_text(gate_defs[gid].body.rules[i - 1][1]), 24, 4)) if gid in gate_defs else ""
-            nodes.append(f'  {g}__r{i}{{"<b>{i}. {name}?</b>{"<br/>" + cond if cond else ""}"}}:::{cls_rule[st[i - 1]]}')
+            # the diamond asks the rule's condition; the action is where its yes leads
+            asks = cond_text(gate_defs[gid].body.rules[i - 1][1]) if gid in gate_defs else str(action)
+            question = "<br/>".join(_mermaid_safe(x) for x in _wrap(f"{asks}?", 24, 4))
+            nodes.append(f'  {g}__r{i}{{"<b>{i}.</b> {question}"}}:::{cls_rule[st[i - 1]]}')
             took = ran and st[i - 1] == "held"
             nodes.append(f'  {g}__a{i}(["{"✓ " if took else ""}{name}"]):::{"yes" if took else "faded" if ran else "act"}')
             edges.append((f"  {g}__r{i} -->|yes| {g}__a{i}", (True if took else SKIP) if ran else None))

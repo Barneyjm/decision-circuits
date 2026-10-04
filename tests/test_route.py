@@ -93,7 +93,7 @@ def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_stat
     m = c.to_mermaid(plain=True, state="Ticket")
     assert 'STATE(["<b>Ticket</b>"]):::state' in m and "STATE --> q_urgent" in m
     assert 'subgraph OUT["Action"]' in m
-    assert 'g_action__r1{"<b>1. page on-call?</b><br/>now AND down"}' in m and 'g_action__a1(["page on-call"])' in m
+    assert 'g_action__r1{"<b>1.</b> now AND down?"}' in m and 'g_action__a1(["page on-call"])' in m  # asks the condition
     assert "g_now --> g_action__r1" in m and "g_down --> g_action__r1" in m  # wired straight in (no run: no values)
     assert "AND" not in m.replace("now AND down", "")  # no loose junction box for the rule's logic
     for wire in ("g_action__r1 -->|yes| g_action__a1", "g_action__r1 -->|no| g_action__r2", "g_action__r2 -->|no| g_action__else"):
@@ -102,9 +102,7 @@ def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_stat
     answers = {"urgent": noul(0.2), "outage": noul(0.95), "technical": noul(0.95)}
     ran = c.to_mermaid(c.evaluate(answers), answers, plain=True)
     assert 'g_action__a2(["✓ technical queue"]):::yes' in ran
-    assert (
-        'g_action__r1{"<b>1. page on-call?</b><br/>now AND down"}:::passed' in ran
-    )  # checked, said no: on the path and 'g_action__a1(["page on-call"]):::faded' in ran
+    assert 'g_action__r1{"<b>1.</b> now AND down?"}:::passed' in ran  # checked, said no: on the path and 'g_action__a1(["page on-call"]):::faded' in ran
     wires = [ln.strip() for ln in ran.split("\n") if "-->" in ln]
     heavy = next(ln for ln in ran.split("\n") if "stroke-width:3.5px" in ln).split()[1].split(",")
     assert {wires[int(i)] for i in heavy} == {"g_action__r1 -->|no| g_action__r2", "g_action__r2 -->|yes| g_action__a2"}  # the way through
@@ -167,7 +165,7 @@ def test_a_rule_that_was_never_reached_has_its_wires_faded_and_not_reads_inverte
     c.route("action", [("page", G("now")), ("quiet", ~G("tech")), ("tech", G("tech"))], otherwise="none")
     answers = {"urgent": noul(0.95), "outage": noul(0.1), "technical": noul(0.95)}
     m = c.to_mermaid(c.evaluate(answers), answers, plain=True)
-    assert "g_tech -->|NOT| g_action__r2" in m and "<b>2. quiet?</b><br/>NOT tech" in m
+    assert "g_tech -->|NOT| g_action__r2" in m and "<b>2.</b> NOT tech?" in m
     lines = m.split("\n")
     wires = [ln.strip() for ln in lines if "-->" in ln]
     faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
