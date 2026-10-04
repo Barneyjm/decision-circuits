@@ -94,7 +94,7 @@ def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_stat
     assert 'STATE(["<b>Ticket</b>"]):::state' in m and "STATE --> q_urgent" in m
     assert 'subgraph OUT["Action"]' in m
     assert 'g_action__r1{"<b>1. page on-call?</b><br/>now AND down"}' in m and 'g_action__a1(["page on-call"])' in m
-    assert "g_now --> g_action__r1" in m and "g_down --> g_action__r1" in m  # wired straight in
+    assert "g_now --> g_action__r1" in m and "g_down --> g_action__r1" in m  # wired straight in (no run: no values)
     assert "AND" not in m.replace("now AND down", "")  # no loose junction box for the rule's logic
     for wire in ("g_action__r1 -->|yes| g_action__a1", "g_action__r1 -->|no| g_action__r2", "g_action__r2 -->|no| g_action__else"):
         assert wire in m
@@ -141,7 +141,10 @@ def test_what_ran_and_said_no_stays_solid_and_only_what_never_ran_is_dashed():
 
     said_no = styled("stroke:#AEB6BF")  # ran, carried a no: solid
     never = styled("dasharray")  # never ran: dashed
-    assert "q_urgent --> g_now" in said_no and "g_now --> g_action__r1" in said_no
+    assert "q_urgent --> g_now" in said_no
+    # into a rule the route checked: solid and dark, labelled with what it carried
+    assert "g_now -->|no| g_action__r1" in wires and "g_now -->|no| g_action__r1" not in said_no | never
+    assert "g_tech -->|yes| g_action__r2" in wires
     assert never == {"g_action__r1 -->|yes| g_action__a1", "g_action__r2 -->|no| g_action__else"}  # branches not taken
     assert "g_action__r2 -->|yes| g_action__a2" not in said_no | never  # the branch taken
     assert "linkStyle" not in c.to_mermaid(plain=True)  # no run, nothing styled
@@ -169,4 +172,4 @@ def test_a_rule_that_was_never_reached_has_its_wires_faded_and_not_reads_inverte
     wires = [ln.strip() for ln in lines if "-->" in ln]
     faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
     assert {"g_tech -->|NOT| g_action__r2", "g_tech --> g_action__r3"} <= {wires[i] for i in faded}  # rule 1 held: 2 and 3 never ran
-    assert "g_now --> g_action__r1" not in {wires[i] for i in faded}
+    assert "g_now -->|yes| g_action__r1" in wires and "g_now -->|yes| g_action__r1" not in {wires[i] for i in faded}

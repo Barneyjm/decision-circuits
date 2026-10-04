@@ -922,11 +922,17 @@ def render_mermaid(
             for i, leaves in enumerate(rule_inputs[gid], 1):
                 for leaf, negated in leaves:
                     base, _, opt = leaf.partition(":")
-                    live: bool | str | None = None if status[i - 1] is None else SKIP if status[i - 1] == "skipped" else carries(base, opt)
-                    if negated and isinstance(live, bool):
-                        live = not live
                     shown_opt = "" if opt in ("", "True") else opt
                     lab = " ".join(x for x in ("NOT" if negated else "", shown_opt) if x)
+                    live: bool | str | None = None
+                    if status[i - 1] == "skipped":
+                        live = SKIP
+                    elif status[i - 1] is not None:
+                        # The rule was checked: this wire decided its answer, yes or no, so it is
+                        # drawn solid and says what it carried.
+                        said = carries(base, opt)
+                        if said is not None:
+                            lab = f"{lab}: {'yes' if said else 'no'}" if lab else ("yes" if said else "no")
                     node = gnode(base) if base in compiled else qnode(base)
                     out.append((f"  {node} --{'>' if not lab else f'>|{lab}|'} {gnode(gid)}__r{i}", live))
             return out
