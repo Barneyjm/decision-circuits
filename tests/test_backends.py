@@ -294,3 +294,20 @@ def test_a_rate_limit_is_retried_after_the_time_it_asks_for(monkeypatch):
     be = SystemOne(client=C(), retry_for=60, retry_wait=1)
     assert be.answer("s", {"u": QUESTIONS["urgent"]})["u"]["noul"] == 0.6
     assert slept == [7.0]
+
+
+def test_an_overloaded_server_is_retried(monkeypatch):
+    slept = []
+    monkeypatch.setattr("decision_circuits.backends.systemone.time.sleep", slept.append)
+    seq = [
+        SimpleNamespace(status_code=529, headers={}, json=lambda: {"detail": "overloaded"}),
+        _Resp(200, {"answers": {"u": {"type": "noul", "noul": 0.6}}}),
+    ]
+
+    class C:
+        def post(self, url, json=None, headers=None):
+            return seq.pop(0)
+
+    be = SystemOne(client=C(), retry_for=60, retry_wait=1)
+    assert be.answer("s", {"u": QUESTIONS["urgent"]})["u"]["noul"] == 0.6
+    assert slept == [1]

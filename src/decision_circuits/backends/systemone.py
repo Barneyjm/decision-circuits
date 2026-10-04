@@ -26,7 +26,7 @@ try:
     USER_AGENT = f"decision-circuits/{_version('decision-circuits')}"
 except PackageNotFoundError:  # not installed as a distribution (a bare checkout on sys.path)
     USER_AGENT = "decision-circuits"
-RETRY_STATUSES = (429, 502, 503, 504, 524)  # rate limited, a model starting up, or a platform timeout in front of it
+RETRY_STATUSES = (429, 502, 503, 504, 524, 529)  # rate limited, a model starting up, a platform timeout, or overloaded
 
 
 def _retry_after(headers: Any) -> float | None:
@@ -62,7 +62,7 @@ class SystemOne:
         retry_wait: float = 5.0,
     ):
         """`timeout` is per request; `retry_for` is how long to keep retrying
-        a 502/503/504/524 (a hosted model spinning up from zero takes about
+        a 429/502/503/504/524/529 (a hosted model spinning up from zero takes about
         a minute) before raising. 0 disables retries."""
         self.url = url
         self.model = model

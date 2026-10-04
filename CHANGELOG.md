@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.6 (2026-10-04)
+
+- **`SystemOne` retries a 529.** TypeSafe's API answers `529 Overloaded` under heavy load and
+  documents it as retryable; it now waits and retries like a 503 instead of raising at once.
+
 ## 0.5.5 (2026-09-24)
 
 - **`SystemOne` retries a rate limit.** A 429 is retried like a 502 or 503, after at least
