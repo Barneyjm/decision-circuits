@@ -39,7 +39,7 @@ and `.band(width)`.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -163,6 +163,8 @@ class Categorical:
     cutpoints: list[float] | None = None
     k: int | None = None
     relation: str | None = None
+    rules: list[tuple[Any, Expr]] | None = None
+    otherwise: Any = None
 
 
 def _ref(x: str | Q | G) -> str:
@@ -211,6 +213,16 @@ def consistent(a: str | Q | G, b: str | Q | G, relation: str = "same") -> Catego
     "complement" (a question and its negation), "implies" (a cannot be likelier than b).
     Uncertain, so `on_uncertain` applies, when the violation exceeds the band."""
     return Categorical("consistent", inputs=[_ref(a), _ref(b)], relation=relation)
+
+
+def route(rules: Sequence[tuple[Any, Expr | str]], otherwise: Any = None) -> Categorical:
+    """One action from a priority list: the first `(action, condition)` whose condition holds,
+    else `otherwise`. A gate in a condition counts as its decision (`G("hot")` is "hot decided
+    yes"), so `G("a") & ~G("b")` is logic over decisions. A condition too close to call
+    stops the route (escalate, by default with `Circuit.route`) instead of trying the next."""
+    if not rules:
+        raise ValueError("route needs at least one (action, condition) rule")
+    return Categorical("route", rules=[(a, _as_expr(c)) for a, c in rules], otherwise=otherwise)
 
 
 # ---------------------------------------------------------------- circuit
@@ -294,6 +306,19 @@ class Circuit:
         self.gates.append(g)
         return g
 
+    def route(
+        self, name: str, rules: Sequence[tuple[Any, Expr | str]], otherwise: Any = None, *, on_uncertain: str = "escalate", default: Any = None
+    ) -> GateDef:
+        """The circuit's last step: one action, from the first rule that holds.
+
+            c.route("action", [
+                ("page on-call", G("urgent_yes") & G("outage")),
+                ("technical queue", G("technical")),
+            ], otherwise="general queue")
+
+        Escalates when a rule it needs is too close to call; see `route`."""
+        return self.gate(name, route(rules, otherwise), on_uncertain=on_uncertain, default=default)
+
     # chips -------------------------------------------------------------
     def mount(self, chip: Chip, ns: str, pins: Mapping[str, str | Q | G] | None = None, params: Mapping[str, str] | None = None) -> dict[str, G]:
         """Wire a `Chip` into this circuit under namespace `ns`: its questions and gates are
@@ -340,10 +365,16 @@ class Circuit:
 
     # rendering ---------------------------------------------------------
     def to_mermaid(
-        self, results: dict[str, Any] | None = None, answers: dict[str, Any] | None = None, direction: str = "LR", plain: bool = False, text: bool = True
+        self,
+        results: dict[str, Any] | None = None,
+        answers: dict[str, Any] | None = None,
+        direction: str = "LR",
+        plain: bool = False,
+        text: bool = True,
+        state: str | None = "State",
     ) -> str:
         """Schematic of the compiled circuit; see `render_mermaid`."""
-        return render_mermaid(self, results, answers, direction, plain, text)
+        return render_mermaid(self, results, answers, direction, plain, text, state)
 
     def describe(self, results: Mapping[str, Any] | None = None, answers: Mapping[str, Any] | None = None) -> str:
         """The circuit in plain English, as Markdown: what the model is asked, what each gate
@@ -385,6 +416,25 @@ class Circuit:
                 return helper(prefix, {"op": "threshold", "input": ref_of(e.inner, prefix, band), "tau": e.tau, "band": band}) + ":True"
             raise TypeError(f"unsupported expression {e!r}")
 
+        boolean = {g.name for g in self.gates if isinstance(g.body, Expr) or (isinstance(g.body, Categorical) and g.body.op in ("at_least", "consistent"))}
+
+        def decisions(e: Expr) -> Expr:
+            """A route condition reads a boolean gate as its decision ("gate:True", 1 or 0, or its
+            probability while uncertain, uncertainty included), not as the probability behind it."""
+            if isinstance(e, G) and e.ref in boolean:
+                return G(e.ref + ":True")
+            if isinstance(e, Not):
+                return Not(decisions(e.inner))
+            if isinstance(e, And | Or):
+                return type(e)([decisions(p) for p in e.parts])
+            if isinstance(e, Threshold):
+                return Threshold(decisions(e.inner), e.tau)
+            return e
+
+        def as_condition(e: Expr) -> Expr:
+            e = decisions(e)
+            return e if isinstance(e, Threshold) else Threshold(e, 0.5)
+
         for g in self.gates:
             common = {"on_uncertain": g.on_uncertain_, "band": g.band_}
             if g.on_uncertain_ == "default":
@@ -404,6 +454,9 @@ class Circuit:
                     spec["k"] = b.k
                 if b.relation is not None:
                     spec["relation"] = b.relation
+                if b.rules is not None:
+                    spec["rules"] = [[action, ref_of(as_condition(c), g.name, g.band_)] for action, c in b.rules]
+                    spec["otherwise"] = b.otherwise
                 out[g.name] = {**spec, **common}
                 continue
             # boolean expression: the top node becomes the named gate
@@ -498,8 +551,12 @@ def expr_to_dict(e: Expr | Categorical) -> dict[str, Any]:
         d: dict[str, Any] = {"op": e.op}
         for name, default in _CAT_DEFAULTS.items():
             v = getattr(e, name)
-            if name != "op" and v != default:
-                d[name] = expr_to_dict(v) if name == "check" else v
+            if name in ("op", "rules") or v == default:
+                continue
+            d[name] = expr_to_dict(v) if name == "check" else v
+        if e.rules is not None:
+            d["rules"] = [{"action": a, "when": expr_to_dict(c)} for a, c in e.rules]
+            d["otherwise"] = e.otherwise
         return d
     raise TypeError(f"cannot serialize {e!r}")
 
@@ -523,6 +580,8 @@ def expr_from_dict(d: Mapping[str, Any]) -> Expr | Categorical:
         kw = dict(d)
         if "check" in kw:
             kw["check"] = _expr(kw["check"])
+        if "rules" in kw:
+            kw["rules"] = [(r["action"], _expr(r["when"])) for r in kw["rules"]]
         return Categorical(**kw)
     raise ValueError(f"not an expression: {dict(d)!r}")
 
@@ -658,11 +717,15 @@ def render_mermaid(
     direction: str = "LR",
     plain: bool = False,
     text: bool = True,
+    state: str | None = "State",
 ) -> str:
     """Render the compiled circuit as a schematic. `plain=True` omits the
     init directive and inline HTML styling for stricter renderers (some
     hosted Mermaid builds reject them); layout is the same. `text=False`
-    leaves out each question's wording, for a compact diagram.
+    leaves out each question's wording, for a compact diagram. `state` labels
+    the node the questions are asked about ("Conversation", "Ticket"); None
+    leaves it out. A `route` gate is drawn as the circuit's one action, every
+    possible action listed and the one taken marked.
 
     Schematic: an input column of
     questions, a logic column of gates, and a decisions column for the
@@ -673,11 +736,18 @@ def render_mermaid(
     the pin they land on."""
     compiled = circuit.compile()
 
+    def spec_refs(spec: dict[str, Any]) -> list[str]:
+        return (
+            ([spec["input"]] if spec.get("input") else [])
+            + list(spec.get("inputs", []))
+            + ([spec["check"]] if spec.get("check") else [])
+            + [ref for _, ref in spec.get("rules", [])]
+        )
+
     # which gates feed other gates (their base name before ':')
     consumers: dict[str, set[str]] = {g: set() for g in compiled}
     for gid, spec in compiled.items():
-        refs = ([spec["input"]] if spec.get("input") else []) + list(spec.get("inputs", [])) + ([spec["check"]] if spec.get("check") else [])
-        for ref in refs:
+        for ref in spec_refs(spec):
             base = ref.partition(":")[0]
             if base in consumers:
                 consumers[base].add(gid)
@@ -724,7 +794,10 @@ def render_mermaid(
         "  classDef hold fill:#FFF1CC,stroke:#9A6B00,stroke-width:2.5px,color:#4A3300;",
         "  classDef col fill:none,stroke:#D9DEE3,stroke-dasharray:3 3,color:#5F6B78;",
         "  classDef chip fill:#F2F4F7,stroke:#1B1F24,stroke-width:2px,color:#1B1F24;",
+        "  classDef state fill:#1B1F24,stroke:#1B1F24,color:#FFFFFF;",
     ]
+    if state:
+        L.append(f'  STATE(["<b>{_mermaid_safe(state)}</b>"]):::state')
 
     # --- inputs
     L.append('  subgraph IN["Inputs"]')
@@ -760,6 +833,7 @@ def render_mermaid(
         "at_least": "AT LEAST",
         "count": "COUNT",
         "consistent": "CONSISTENT",
+        "route": "ROUTE",
     }
     SHAPES = {"and": ("{{", "}}"), "or": (">", "]"), "not": ("((", "))"), "threshold": ("{", "}")}
     logic, decisions = [], []
@@ -771,11 +845,11 @@ def render_mermaid(
 
     def edge_lines(gid: str, spec: dict[str, Any]) -> list[str]:
         out = []
-        refs = ([spec["input"]] if spec.get("input") else []) + list(spec.get("inputs", [])) + ([spec["check"]] if spec.get("check") else [])
-        for ref in refs:
+        rule_of = {ref: f"{i}. {action}" for i, (action, ref) in enumerate(spec.get("rules", []), 1)}
+        for ref in spec_refs(spec):
             lab = "check" if spec.get("check") == ref else ""
             base, _, opt = ref.partition(":")
-            if base.startswith("_") and opt == "True":  # a threshold helper referenced by its decision
+            if opt == "True" and base in compiled:  # a gate read as its decision: the wire says nothing more
                 opt = ""
             if base in folded:
                 base, flab = folded[base]
@@ -785,6 +859,8 @@ def render_mermaid(
                 q = circuit.questions.get(base)
                 shown = f"level {opt}" if (q and q["type"] == "score") else opt
                 lab = (f"{shown} " + lab).strip()
+            if ref in rule_of:  # a route's rule: the wire is named for the action it leads to
+                lab = rule_of[ref]
             node = gnode(base) if base in compiled else qnode(base)
             dest = owner(gid)
             if dest and owner(ref) != dest:  # a wire into a chip: name the pin it lands on
@@ -794,8 +870,25 @@ def render_mermaid(
             out.append(f"  {node} --{'>' if not lab else f'>|{lab}|'} {gnode(gid)}")
         return out
 
+    def route_line(gid: str, spec: dict[str, Any]) -> str:
+        r = (results or {}).get(gid)
+        taken = r.get("value") if r and r.get("outcome") in ("decided", "default") else None
+        rows = [(f"{i}.", action) for i, (action, _) in enumerate(spec["rules"], 1)] + [("else", spec.get("otherwise"))]
+        lines = []
+        for mark, action in rows:
+            name = _mermaid_safe(str(action))
+            lines.append(f"<b>✓ {name}</b>" if r and action == taken else f"{mark} {name}")
+        cls = "logic"
+        if r:
+            cls = "yes" if taken is not None else "hold"
+            if taken is None:
+                lines.append(f"<b>⚠ {str(r.get('outcome')).upper()}</b>: too close to call")
+        return f'  {gnode(gid)}[["<b>{shown(gid).replace("_", " ").title()}</b><br/>{"<br/>".join(lines)}"]]:::{cls}'
+
     def node_line(gid: str, spec: dict[str, Any], terminal: bool) -> str:
         op = spec["op"]
+        if op == "route":
+            return route_line(gid, spec)
         head = OP_LABEL[op]
         if op == "order":
             head += " " + " | ".join(f"{c:g}" for c in spec.get("cutpoints", []))
@@ -828,16 +921,22 @@ def render_mermaid(
                 label += f"<br/><b>{verdict}</b>" + (f" · {pr:.0%}" if pr is not None else "")
             return f'  {gnode(gid)}["{label}"]:::{cls}'
         label = f"<b>{shown(gid).replace('_', ' ')}</b><br/>{head}" if not gid.startswith("_") else head
+        cls = "logic"
         if results and gid in results:
             r = results[gid]
             if r.get("outcome", "decided") != "decided":
                 label += f"<br/>⚠ {r['outcome']}"
+                cls = "hold"
             elif op in ("argmax", "majority", "verify", "order"):
                 label += f"<br/>→ <b>{r.get('value')}</b>" + (f" · {r['p']:.0%}" if r.get("p") is not None else "")
             elif r.get("p") is not None:
-                label += f"<br/>{r['p']:.0%}"
+                label += f"<br/>{'✓' if r.get('value') is True else '✗'} {r['p']:.0%}"
+            if r.get("value") is True:  # the path the run took lights up; what didn't hold greys out
+                cls = "yes"
+            elif r.get("value") is False:
+                cls = "no"
         lo, hi = SHAPES.get(op, ("[", "]"))
-        return f'  {gnode(gid)}{lo}"{label}"{hi}:::logic'
+        return f'  {gnode(gid)}{lo}"{label}"{hi}:::{cls}'
 
     def chip_box(ns: str) -> list[str]:
         """A mounted chip as a box, with any chips it mounted drawn inside it."""
@@ -863,15 +962,25 @@ def render_mermaid(
         L.append("  end")
         L.append("  class LOGIC col")
     if any(not owner(g) for g in decisions) or not circuit.mounts:
-        L.append('  subgraph OUT["Decisions"]')
+        only_routes = all(compiled[g]["op"] == "route" for g in decisions if not owner(g))
+        L.append(f'  subgraph OUT["{"Action" if only_routes and decisions else "Decisions"}"]')
         L.append("    direction TB")
         for gid in decisions:
             if not owner(gid):
                 L.append("  " + node_line(gid, compiled[gid], True))
         L.append("  end")
         L.append("  class OUT col")
+    edges = [f"  STATE --> {qnode(qid)}" for qid in circuit.questions] if state else []
     for gid in logic + decisions:
-        L += edge_lines(gid, compiled[gid])
+        edges += edge_lines(gid, compiled[gid])
+    L += edges
+    # the wire into each route's chosen action, drawn heavy
+    for gid, spec in compiled.items():
+        r = (results or {}).get(gid)
+        if spec["op"] != "route" or not r or r.get("outcome") != "decided":
+            continue
+        taken = next((f"|{i}. {a}| {gnode(gid)}" for i, (a, _) in enumerate(spec["rules"], 1) if a == r.get("value")), None)
+        L += [f"  linkStyle {i} stroke:#2E7D4F,stroke-width:3.5px" for i, e in enumerate(edges) if taken and e.endswith(taken)]
     return "\n".join(L)
 
 

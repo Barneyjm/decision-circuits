@@ -54,6 +54,20 @@ No model handy? `c.evaluate(answers)` runs the gates on answers you
 already have, and [`examples/01_first_circuit.py`](examples/01_first_circuit.py)
 does exactly that with hand-written numbers.
 
+End with a route, and the circuit gives one action instead of a set of yes/no answers:
+
+```python
+c.route(
+    "action",
+    [
+        ("human", G("redact") | G("human")),
+        ("billing desk", G("route")["billing"]),
+    ],
+    otherwise="general queue",
+)
+out["gates"]["action"]["value"]  # 'human'
+```
+
 ## Where it plugs in
 
 The point of a circuit is to sit inside an agent and make the small

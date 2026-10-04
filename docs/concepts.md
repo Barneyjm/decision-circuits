@@ -76,6 +76,33 @@ OR assume the inputs are independent, and every trace says so, because
 a reviewer should see that assumption next to the number. If two
 questions are obviously correlated, ask one question instead.
 
+## Routing: the last step
+
+Gates say what is true; a route says what to do. `c.route` turns the gates into one action,
+from a priority list:
+
+```python
+c.route(
+    "action",
+    [
+        ("page on-call", G("urgent") & G("outage")),
+        ("technical queue", G("technical")),
+    ],
+    otherwise="general queue",
+)
+```
+
+The first rule that holds gives the action; `otherwise` when none does. In a rule a gate
+counts as its decision, so `G("urgent") & G("outage")` means both decided yes. A rule too
+close to call stops the route and escalates (the default `on_uncertain` for a route) rather
+than falling through to a lower rule on a guess. The result's `value` is the action and its
+trace says which rule held. In the diagram the route is the one Action node, every action
+listed and the one taken marked; `describe()` leads with it.
+
+Routing used to be plain code over the gate results, outside the circuit (the refund desk's
+`decide` still is). Inside the circuit it is versioned, traced, drawn and tested with
+everything else.
+
 ## Uncertainty
 
 Every gate has a band around its threshold and a policy for what to do
@@ -115,8 +142,11 @@ input and operation, meant to be logged next to the decision.
 `c.to_mermaid()` renders the circuit as a Mermaid flowchart in three
 columns: inputs, logic, decisions. Pass `results=` and `answers=` from a
 run to color the nodes by outcome. It renders on GitHub and in any
-Mermaid tool. Each question shows its wording (`text=False` for a compact diagram), and each
-mounted chip is drawn as its own box.
+Mermaid tool. It reads left to right as one process: the state (`state="Conversation"`
+names it), the questions asked about it with their wording (`text=False` for a compact
+diagram), the gates, and the action. After a run every gate is coloured by what it decided,
+so the path the run took lights up, and the wire into the chosen action is drawn heavy.
+Each mounted chip is its own box.
 
 ## In plain English
 

@@ -16,10 +16,20 @@
 - `circuit.question_types` lists the question types a backend has to answer. `SystemOne`
   pointed at `api.typesafe.ai` refuses `multi`, `locate`, `rank` and `match` before the
   request, since TypeSafe answers `noul`, `choice` and `score`; `question_types=` overrides.
+- **Routing.** `c.route(name, [(action, condition), ...], otherwise=...)` is the circuit's last
+  step: one action from the first rule that holds. In a rule a gate counts as its decision.
+  A rule too close to call stops the route and escalates instead of falling through on a guess.
+  `route(...)` is the same as a gate body. It survives JSON and mounting.
+- **A probability on a band's edge is outside the band**, as documented. Float error made
+  0.9 against 0.8 ± 0.1 read as inside (0.9 − 0.8 is 0.0999… in floats), so it abstained or
+  escalated. The same fix applies to `order` cutpoints and the `consistent` band.
 - **`describe()`**: a circuit or chip in plain English, as Markdown. It covers each question in
   its own words, what each gate decides and when it holds back, and how each chip is wired.
   Given a run's results, it also says what happened. On an unmounted chip it is the datasheet.
-- `to_mermaid` shows each question's wording (`text=False` for the compact form) and a
+- `to_mermaid` reads as one process: a state node (`state=`, None to leave it out), and a
+  route drawn as one Action node listing every action with the taken one marked. After a
+  run, every gate is coloured by its decision and the wire into the chosen action is heavy.
+  It also shows each question's wording (`text=False` for the compact form) and a
   scale answer's level name, draws each mounted chip as a box (nested chips inside their
   parent), labels a wire into a chip with its pin, shows the tau on a named threshold gate
   that feeds another gate, and leaves out the Decisions column when it would be empty.

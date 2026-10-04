@@ -262,6 +262,8 @@ def _rename(e: Any, f: Callable[[str], str]) -> Any:
             cutpoints=list(e.cutpoints) if e.cutpoints is not None else None,
             k=e.k,
             relation=e.relation,
+            rules=[(a, _rename(c, f)) for a, c in e.rules] if e.rules is not None else None,
+            otherwise=e.otherwise,
         )
     raise TypeError(f"unsupported expression {e!r}")
 

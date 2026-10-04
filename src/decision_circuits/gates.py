@@ -37,6 +37,11 @@ Gate ops (inputs may reference question ids or earlier gate ids):
              Catches a model that is confused about the case, which calibration of
              each answer on its own cannot show.
 
+  route      rules: [[action, condition], ...], otherwise    value: an action
+             the first rule whose condition holds gives the action, `otherwise` when none
+             does. A condition too close to call stops the route (on_uncertain applies)
+             rather than falling through to a lower rule on a guess.
+
 References may also name a multi option ("multi_id:option") or a locate question's
 "none" ("locate_id:none").
 
@@ -54,7 +59,7 @@ from typing import Any, TypedDict
 
 from decision_circuits.types import answer_distributions
 
-OPS = ("threshold", "not", "and", "or", "at_least", "count", "majority", "argmax", "verify", "order", "consistent")
+OPS = ("threshold", "not", "and", "or", "at_least", "count", "majority", "argmax", "verify", "order", "consistent", "route")
 POOLED = ("and", "or", "at_least", "count")  # ops that read a set: `inputs`, or every option of a multi `input`
 RELATIONS = ("same", "complement", "implies")
 POLICIES = ("abstain", "escalate", "default")
@@ -77,6 +82,8 @@ class Gate:
     default: Any = None
     relation: str | None = None
     k: int | None = None
+    rules: list[list[Any]] | None = None  # route: [[action, condition ref], ...] in priority order
+    otherwise: Any = None  # route: the action when no rule holds
 
     def __post_init__(self) -> None:
         if self.op not in OPS:
@@ -93,6 +100,10 @@ class Gate:
             if self.k is None or int(self.k) != self.k or self.k < 0:
                 raise ValueError("gate op 'at_least' needs `k`, a whole number >= 0")
             self.k = int(self.k)
+        if self.op == "route":
+            if not self.rules or any(not isinstance(r, list | tuple) or len(r) != 2 for r in self.rules):
+                raise ValueError("gate op 'route' needs `rules`: [[action, condition], ...]")
+            self.rules = [[a, c] for a, c in self.rules]
         if self.op == "verify" and not self.check:
             raise ValueError("gate op 'verify' needs `check`")
         if self.op == "order" and self.cutpoints is None:
@@ -160,6 +171,14 @@ def result_key(result: GateResultDict | GateResult) -> Any:
     agree on the key for a given result."""
     r = result.to_dict() if isinstance(result, GateResult) else result
     return r["value"] if r["outcome"] in ("decided", "default") else r["outcome"]
+
+
+EPS = 1e-9  # float slack at a band's edge: 0.9 against 0.8 +/- 0.1 is on the edge, not inside
+
+
+def _near(p: float, tau: float, band: float) -> bool:
+    """Within `band` of `tau`, exclusive, up to float error (0.9 - 0.8 is 0.0999... in floats)."""
+    return abs(p - tau) < band - EPS
 
 
 def _noul_p(answers: dict[str, Any], results: dict[str, GateResult], ref: str) -> tuple[float, str, bool]:
@@ -260,11 +279,11 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
         if g.op == "threshold":
             p, t, unc = _noul_p(answers, results, g.input)
             trace.append(t)
-            results[gid] = _settle(g, p >= g.tau, p, unc or abs(p - g.tau) < g.band, trace)
+            results[gid] = _settle(g, p >= g.tau, p, unc or _near(p, g.tau, g.band), trace)
         elif g.op == "not":
             p, t, unc = _noul_p(answers, results, g.input)
             trace += [t, f"not -> p={1 - p:.2f}"]
-            results[gid] = _settle(g, (1 - p) >= g.tau, 1 - p, unc or abs((1 - p) - g.tau) < g.band, trace)
+            results[gid] = _settle(g, (1 - p) >= g.tau, 1 - p, unc or _near(1 - p, g.tau, g.band), trace)
         elif g.op in POOLED:
             # one count distribution for all four: `and` is "all of them", `or` "at least one"
             ps, unc = _pooled(g, answers, results, trace)
@@ -281,7 +300,7 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
                 trace.append(f"at least {k} of {len(ps)} under independence -> p={p:.2f} (expected {sum(ps):.2f})")
             else:
                 trace.append(f"{g.op} under independence -> p={p:.2f}")
-            results[gid] = _settle(g, p >= g.tau, p, unc or abs(p - g.tau) < g.band, trace)
+            results[gid] = _settle(g, p >= g.tau, p, unc or _near(p, g.tau, g.band), trace)
         elif g.op == "majority":
             votes: dict[str, list[float]] = {}
             for ref in g.inputs or []:
@@ -326,7 +345,7 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             s = float(a["score"])
             cuts = g.cutpoints or []
             bucket = sum(1 for c in cuts if s >= c)
-            near = any(abs(s - c) < g.band for c in cuts)
+            near = any(_near(s, c, g.band) for c in cuts)
             trace.append(f"{g.input} score={s:.2f} cutpoints={cuts} -> bucket {bucket}" + (" (near a cutpoint)" if near else ""))
             # The bucket is a function of the expected score, so it reads 1 and the others 0; summing
             # level mass per bucket can read another bucket likelier (proofs/Pick.lean, levelMassReading_fails).
@@ -337,5 +356,23 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             (pa, ta, ua), (pb, tb, ub) = _noul_p(answers, results, ref_a), _noul_p(answers, results, ref_b)
             gap = {"same": abs(pa - pb), "complement": abs(pa + pb - 1.0), "implies": max(0.0, pa - pb)}[g.relation]
             trace += [ta, tb, f"{g.relation}: violation {gap:.2f} (band {g.band})"]
-            results[gid] = _settle(g, gap <= g.band, 1.0 - gap, ua or ub or gap > g.band, trace)
+            results[gid] = _settle(g, gap <= g.band + EPS, 1.0 - gap, ua or ub or gap > g.band + EPS, trace)
+        elif g.op == "route":
+            # First rule that holds wins. A rule too close to call stops the route: falling through to
+            # a lower rule would act on a guess about the higher one.
+            action, unc = g.otherwise, False
+            for i, (name, ref) in enumerate(g.rules or [], 1):
+                p, t, u = _noul_p(answers, results, ref)
+                if u:
+                    unc = True
+                    trace.append(f"rule {i} {name!r}: too close to call ({t})")
+                    break
+                if p >= 0.5:
+                    action = name
+                    trace.append(f"rule {i} {name!r} holds -> {name}")
+                    break
+                trace.append(f"rule {i} {name!r} does not hold")
+            else:
+                trace.append(f"no rule holds -> {g.otherwise!r}")
+            results[gid] = _settle(g, action, None, unc, trace)
     return results

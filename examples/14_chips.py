@@ -35,7 +35,15 @@ money = Q("topic")["refund"] | Q("topic")["billing"]
 c.gate("money", money >= 0.5)
 customer = c.mount(heat, "customer", {"hostile": "customer_hostile", "money": G("money"), "pii": "pii"}, params={"who": "the customer"})
 agent = c.mount(heat, "agent", {"hostile": "agent_hostile", "money": G("money"), "pii": "pii"}, params={"who": "the agent"})
-c.gate("supervisor", (customer["hot"] | agent["hot"]) >= 0.5, on_uncertain="escalate")
+# The last step: one action for the conversation, first rule that holds.
+c.route(
+    "action",
+    [
+        ("supervisor joins", agent["hot"]),  # our side is escalating it: step in
+        ("senior agent", customer["hot"]),
+    ],
+    otherwise="carry on",
+)
 
 print("\nquestions sent to the model in one request:", list(c.questions))
 print("  customer.threat:", c.questions["customer.threat"]["instructions"])
@@ -51,9 +59,10 @@ answers = {
     "agent.threat": {"type": "noul", "noul": 0.02},
 }
 results = c.evaluate(answers)
-for name in ("money", "customer.hot", "agent.hot", "supervisor"):
+for name in ("money", "customer.hot", "agent.hot"):
     r = results[name]
     print(f"{name:<13} -> {r['value']!s:<6} p={r['p']:.2f}  {r['outcome']}")
+print(f"{'action':<13} -> {results['action']['value']}   ({'; '.join(results['action']['trace'])})")
 
 # 5. A chip is plain JSON: commit it, publish it in a package, load it elsewhere.
 blob = json.dumps(heat.to_dict())
@@ -64,4 +73,4 @@ print(f"\n{len(blob)} bytes of JSON; loads back as {type(again).__name__} {again
 print("\n" + c.describe(results, answers))
 
 # 7. The diagram draws each mounted chip as a box.
-print("\n" + c.to_mermaid(results=results, answers=answers, plain=True))
+print("\n" + c.to_mermaid(results=results, answers=answers, plain=True, state="Conversation"))

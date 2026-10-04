@@ -43,6 +43,7 @@ from decision_circuits.dsl import (
     majority,
     order,
     render_mermaid,
+    route,
     to_mermaid,
     verify,
 )
@@ -105,6 +106,7 @@ __all__ = [
     "order",
     "render_mermaid",
     "result_key",
+    "route",
     "set_to",
     "to_jsonable",
     "to_mermaid",

@@ -60,6 +60,7 @@ class _Writer:
             n = len(c.questions)
             if n:
                 lines += [f"The model answers {n} question{'s' if n != 1 else ''} about the state, in one request; the gates below decide in code.", ""]
+            lines += self.outcome_summary()
         lines += self.section(None, depth=2)
         return "\n".join(lines).rstrip() + "\n"
 
@@ -79,6 +80,32 @@ class _Writer:
             if (inner.rpartition(".")[0] or None) == ns:  # the chips mounted directly in this one
                 out += self.chip_block(inner, depth)
         return out
+
+    def outcome_summary(self) -> list[str]:
+        """After a run: where the circuit's own routes sent the state, first."""
+        out = []
+        for g in self.c.gates:
+            r = self.results.get(g.name)
+            if r is None or not isinstance(g.body, Categorical) or g.body.op != "route" or mount_owner(self.c, g.name):
+                continue
+            if r.get("outcome") in ("decided", "default"):
+                why = next((t for t in r.get("trace", []) if t.endswith(f"-> {r['value']}") or "no rule holds" in t), "")
+                rule = why.split(" ", 2)[1] if why.startswith("rule ") else None
+                out.append(f"**Outcome ({g.name}):** **{r['value']}**" + (f", by rule {rule}." if rule else ", since no rule held."))
+            else:
+                from decision_circuits.chips import _refs
+
+                line = next((t for t in r.get("trace", []) if "too close to call" in t), "")
+                n = int(line.split()[1]) if line.startswith("rule ") else 0
+                action, cond = g.body.rules[n - 1] if 0 < n <= len(g.body.rules or []) else (None, None)
+                unsure = [
+                    f"`{ref}` ({self.results[ref]['p']:.0%})" if self.results[ref].get("p") is not None else f"`{ref}`"
+                    for ref in (_refs(cond) if cond is not None else [])
+                    if ref in self.results and self.results[ref].get("uncertain")
+                ]
+                cause = f"{' and '.join(unsure)} too close to call" if unsure else "too close to call"
+                out.append(f"**Outcome ({g.name}):** ⚠ **escalated to a person**: rule {n} (**{action}**) hinges on {cause}.")
+        return [*out, ""] if out else []
 
     def chip_block(self, ns: str, depth: int) -> list[str]:
         self.here = None
@@ -151,6 +178,15 @@ class _Writer:
         refs = b.inputs if b.inputs is not None else [b.input or ""]
         listed = [f"  - {self.ref(r)}" for r in refs]
         pooled_multi = b.inputs is None and self.qtype(b.input) == "multi"
+        if b.op == "route":
+            rules = [f"  {i}. **{action}** if {self.say(cond)}" for i, (action, cond) in enumerate(b.rules or [], 1)]
+            held = "it escalates to a person" if g.on_uncertain_ == "escalate" else self.policy(g)
+            return [
+                "picks one action: the first of these that holds.",
+                *rules,
+                f"  - otherwise **{b.otherwise}**",
+                f"  - *If a rule it needs is too close to call, {held} rather than trying the next one.*",
+            ]
         if b.op == "argmax":
             return [f"picks the most likely answer to {self.ref(b.input or '')}.{conf}"]
         if b.op == "majority":
