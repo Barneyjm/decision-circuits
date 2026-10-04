@@ -317,3 +317,87 @@ def test_openai_tool_arguments_are_parsed():
     tg = circuit_tool_guardrail(guard_circuit(), be, gate="block")
     asyncio.run(tg.run(ToolInputGuardrailData(context=SimpleNamespace(tool_name="read_file", tool_arguments='{"path": "a"}'), agent=SimpleNamespace(name="a"))))
     assert be.states[-1]["tool_call"]["args"] == {"path": "a"}
+
+
+# --- chips and routes as the deciding gate ----------------------------------------
+
+
+def chip_route_circuit() -> Circuit:
+    """The guard as a chip, and the decision as a route whose actions are the SDK's verbs."""
+    from decision_circuits import Chip, route
+
+    danger = Chip("danger", inputs=["risky", "authorized"], outputs=["out"])
+    danger.gate("out", (Q("risky") & ~Q("authorized")) >= 0.5, band=0.15, on_uncertain="escalate")
+    c = Circuit()
+    c.noul("risky", "Would executing `tool_call` be risky?")
+    c.noul("authorized", "Did the user explicitly ask for this?")
+    d = c.mount(danger, "danger", {"risky": "risky", "authorized": "authorized"})
+    c.gate("decision", route([("block", d["out"])], otherwise="allow"), on_uncertain="escalate")
+    return c
+
+
+def test_policy_reads_a_route_action_and_a_chip_output():
+    be = ScriptedBackend(TABLE)
+    by_route = CircuitPolicy(chip_route_circuit(), be, gate="decision")
+    assert by_route.judge(tool_state("delete_file", {})).action == "block"
+    assert by_route.judge(tool_state("read_file", {})).action == "allow"  # the route said "allow": no mapping needed
+    assert by_route.judge(tool_state("send_email", {})).action == "ask"  # the route escalated
+    by_chip = CircuitPolicy(chip_route_circuit(), be, gate="danger.out")  # a mounted chip's output pin
+    assert by_chip.judge(tool_state("delete_file", {})).action == "block"
+    assert by_chip.judge(tool_state("read_file", {})).action == "allow"
+
+    from decision_circuits import G
+
+    named = chip_route_circuit()
+    named.gates.pop()
+    named.route("decision", [("refuse", G("danger.out"))], otherwise="go ahead")
+    p = CircuitPolicy(named, be, gate="decision", actions={"refuse": "block", "go ahead": "allow"})
+    assert p.judge(tool_state("delete_file", {})).action == "block" and p.judge(tool_state("read_file", {})).action == "allow"
+    unmapped = CircuitPolicy(named, be, gate="decision")
+    assert unmapped.judge(tool_state("read_file", {})).action == "block"  # an action with no mapping is never allowed
+
+
+def test_langchain_tool_guard_with_a_chip_and_a_route():
+    pytest.importorskip("langchain.agents")
+    from langchain_core.messages import ToolMessage
+
+    from decision_circuits.integrations.langchain import CircuitToolGuard
+
+    guard = CircuitToolGuard(chip_route_circuit(), ScriptedBackend(TABLE), gate="decision")
+    agent, executed = _make_agent(guard, [("read_file", {"path": "a"}), ("delete_file", {"path": "b"})])
+    out = agent.invoke({"messages": [("user", "clean up")]})
+    assert executed == ["read_file:a"]
+    blocked = next(m for m in out["messages"] if isinstance(m, ToolMessage) and m.name == "delete_file")
+    assert blocked.status == "error" and "gate `decision` -> 'block'" in blocked.content
+
+
+def test_openai_agents_tool_guardrail_with_a_chip_and_a_route():
+    pytest.importorskip("agents")
+    from types import SimpleNamespace
+
+    from agents.tool_guardrails import ToolInputGuardrailData
+
+    from decision_circuits.integrations.openai_agents import circuit_tool_guardrail
+
+    tg = circuit_tool_guardrail(chip_route_circuit(), ScriptedBackend(TABLE), gate="decision")
+
+    def run(name):
+        ctx = SimpleNamespace(tool_name=name, tool_arguments="{}")
+        return asyncio.run(tg.run(ToolInputGuardrailData(context=ctx, agent=SimpleNamespace(name="a")))).behavior
+
+    assert run("read_file")["type"] == "allow"
+    assert run("delete_file")["type"] == "reject_content"
+    assert "human approval" in run("send_email")["message"]
+
+
+def test_claude_agent_sdk_hook_with_a_chip_and_a_route():
+    pytest.importorskip("claude_agent_sdk")
+    from decision_circuits.integrations.claude_agent_sdk import circuit_pre_tool_use
+
+    hook = circuit_pre_tool_use(chip_route_circuit(), ScriptedBackend(TABLE), gate="decision")
+
+    def run(name):
+        out = asyncio.run(hook({"hook_event_name": "PreToolUse", "tool_name": name, "tool_input": {}, "permission_mode": "default"}, "tu1", None))
+        return out["hookSpecificOutput"]["permissionDecision"]
+
+    assert run("delete_file") == "deny" and run("send_email") == "ask" and run("read_file") == "allow"

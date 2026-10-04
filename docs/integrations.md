@@ -28,11 +28,29 @@ not (`"abstain"`, `"escalate"`).
 | `True` | `block` |
 | `False` | `allow` |
 | `"abstain"`, `"escalate"` | `ask` |
+| `"allow"`, `"block"`, `"ask"` | itself (a route's action) |
 | anything else | `block` (a route you did not list never silently allows) |
 
 So a categorical gate routes with `actions={"safe": "allow", "risky":
 "block", "unclear": "ask"}`, and a framework with no way to ask a human
 gets `actions={"abstain": "block", "escalate": "block"}`.
+
+The plainest guard is a route whose actions are the three verbs. It needs no `actions` map,
+and a rule too close to call escalates, which asks:
+
+```python
+c.route(
+    "decision",
+    [
+        ("block", G("destructive") & ~G("authorized")),
+        ("ask", G("sends_money")),
+    ],
+    otherwise="allow",
+)
+guard = CircuitToolGuard(c, jev, gate="decision")
+```
+
+A mounted chip's output is a gate like any other: `gate="danger.out"`.
 
 ## LangChain agents
 

@@ -25,6 +25,10 @@
   now **HUMAN (hostile)** even when an unrelated gate was unsure, where before any unsure gate
   sent everything to **HUMAN (model unsure)**. Both go to a person.
 - `examples/05_openai_agents_guardrails.py` says which key is missing instead of a traceback.
+- **Middleware reads routes and chips.** A route whose actions are `"allow"`, `"block"` and
+  `"ask"` drives `CircuitToolGuard`, the OpenAI Agents guardrails and the Claude Agent SDK hook
+  directly, with no `actions` map; an escalated route asks. A chip's output pin works as
+  `gate="ns.out"`. Before, a route action named "allow" fell through to the default and blocked.
 - **A probability on a band's edge is outside the band**, as documented. Float error made
   0.9 against 0.8 ± 0.1 read as inside (0.9 − 0.8 is 0.0999… in floats), so it abstained or
   escalated. The same fix applies to `order` cutpoints and the `consistent` band.

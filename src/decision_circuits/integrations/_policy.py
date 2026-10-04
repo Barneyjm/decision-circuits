@@ -15,6 +15,12 @@ bucket for order), or its outcome ("abstain", "escalate") when it did
 not. The defaults send uncertain results to a human; an SDK with no way
 to ask blocks them instead. A result with no entry is never allowed.
 
+A route can decide directly: name its actions "allow", "block" and "ask"
+and they mean what they say, no mapping needed (an escalated route asks).
+
+    c.route("decision", [("block", G("destructive")), ("ask", G("unsure"))], otherwise="allow")
+    CircuitToolGuard(c, backend, gate="decision")
+
 An SDK adapter is then a few lines: build the state the SDK gives you,
 call `policy.judge(state)`, map the action to the SDK's own result
 type. Nothing here imports an SDK.
@@ -78,12 +84,15 @@ class CircuitPolicy:
         """Look up a result key. `True`/`False` entries match only booleans,
         so an order-gate bucket of 1 or 0 never hits them (1 == True in
         Python) and falls through to `uncertain_fallback` like any other
-        unlisted value."""
+        unlisted value. A key that is itself "allow", "block" or "ask" (a
+        route's action) means that, unless `actions` maps it otherwise."""
         for k, action in reversed(self.actions):  # later (user) entries win
             if isinstance(k, bool) != isinstance(key, bool):
                 continue
             if k == key:
                 return action
+        if key in ("allow", "block", "ask"):
+            return key  # type: ignore[return-value]
         return self.uncertain_fallback
 
 
