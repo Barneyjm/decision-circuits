@@ -111,3 +111,18 @@ def test_describe_leads_with_the_outcome_and_names_what_was_unsure():
     assert "**general queue**, since no rule held." in c.describe(c.evaluate(none), none)
     unsure = {"urgent": noul(0.75), "outage": noul(0.95), "technical": noul(0.95)}
     assert "escalated to a person**: rule 1 (**page on-call**) hinges on `now` (75%) too close to call." in c.describe(c.evaluate(unsure), unsure)
+
+
+def test_after_a_run_what_said_no_greys_out_and_its_wires_fade():
+    c = triage()
+    answers = {"urgent": noul(0.2), "outage": noul(0.95), "technical": noul(0.95)}
+    m = c.to_mermaid(c.evaluate(answers), answers, plain=True)
+    assert "<b>urgent</b>" in m and ":::qno" in m.split("q_urgent[")[1].split("\n")[0]
+    assert ":::qyes" in m.split("q_outage[")[1].split("\n")[0]
+    lines = m.split("\n")
+    wires = [ln.strip() for ln in lines if "-->" in ln]
+    faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
+    assert "q_urgent --> g_now" in {wires[i] for i in faded}  # the no from urgent
+    assert any(wires[i].endswith("|1. page on-call| g_action") for i in faded)  # the rule not taken
+    assert not any(wires[i].endswith("|2. technical queue| g_action") for i in faded)  # the rule taken
+    assert "linkStyle" not in c.to_mermaid(plain=True)  # no run, nothing to fade

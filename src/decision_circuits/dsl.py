@@ -788,6 +788,8 @@ def render_mermaid(
         *([] if plain else [init]),
         f"flowchart {direction}",
         "  classDef q fill:#FFFFFF,stroke:#1264A3,stroke-width:1.5px,color:#1B1F24;",
+        "  classDef qyes fill:#EEF7F1,stroke:#1264A3,stroke-width:1.5px,color:#1B1F24;",
+        "  classDef qno fill:#F4F5F7,stroke:#AEB6BF,stroke-width:1.5px,color:#7A848F;",
         "  classDef logic fill:#F7F8F6,stroke:#5F6B78,stroke-width:1.5px,color:#1B1F24;",
         "  classDef yes fill:#DDF3E4,stroke:#2E7D4F,stroke-width:2.5px,color:#0F3D22;",
         "  classDef no fill:#EEF0F2,stroke:#98A2AD,stroke-width:2px,color:#3B4550;",
@@ -812,7 +814,10 @@ def render_mermaid(
             label = f"{head}<br/><b>→ {_mermaid_safe(answer_summary(q, answers[qid]))}</b>"
         else:
             label = f"{head}<br/>{q['type']}" if plain else f"{head}<br/><span style='color:#5F6B78'>{q['type']}</span>"
-        return f'    {qnode(qid)}["{label}"]:::q'
+        cls = "q"
+        if answers and qid in answers and q["type"] == "noul":  # a yes lights up, a no greys out
+            cls = "qyes" if answers[qid]["noul"] >= 0.5 else "qno"
+        return f'    {qnode(qid)}["{label}"]:::{cls}'
 
     for qid, q in circuit.questions.items():
         if not owner(qid):
@@ -843,18 +848,48 @@ def render_mermaid(
         terminal = not gid.startswith("_") and not consumers[gid]
         (decisions if terminal else logic).append(gid)
 
-    def edge_lines(gid: str, spec: dict[str, Any]) -> list[str]:
+    def carries(base: str, opt: str) -> bool | None:
+        """Whether a wire carried a yes on this run: a noul answered yes, the picked option, a gate
+        that decided yes or the value read. None when it can't be said (no run, a helper, unsure)."""
+        if answers and base in answers:
+            a = answers[base]
+            kind = a.get("type")
+            if kind == "noul" and not opt:
+                return float(a["noul"]) >= 0.5
+            if kind in ("choice", "score") and opt:
+                probs = a.get("probabilities") or {}
+                return bool(probs) and max(probs, key=probs.__getitem__) == opt
+            if kind == "multi" and opt:
+                return opt in a.get("selected", [])
+            return None
+        r = (results or {}).get(base)
+        if not r or r.get("outcome") != "decided":
+            return None
+        v = r.get("value")
+        if not opt:
+            return v if isinstance(v, bool) else None
+        return v is True if opt == "True" else v is False if opt == "False" else str(v) == opt
+
+    def edge_lines(gid: str, spec: dict[str, Any]) -> list[tuple[str, bool | None]]:
+        """(Mermaid line, whether the wire carried a yes on the run) per input of a gate."""
         out = []
         rule_of = {ref: f"{i}. {action}" for i, (action, ref) in enumerate(spec.get("rules", []), 1)}
+        route_r = (results or {}).get(gid) if spec["op"] == "route" else None
         for ref in spec_refs(spec):
             lab = "check" if spec.get("check") == ref else ""
             base, _, opt = ref.partition(":")
+            live = carries(base, opt)
+            if ref in rule_of and route_r and route_r.get("outcome") == "decided":
+                live = rule_of[ref].split(". ", 1)[1] == str(route_r.get("value"))  # only the rule taken carried
             if opt == "True" and base in compiled:  # a gate read as its decision: the wire says nothing more
                 opt = ""
             if base in folded:
                 base, flab = folded[base]
                 base, _, opt = base.partition(":")
                 lab = flab + (" · " + lab if lab else "")
+                if ref not in rule_of:
+                    src = carries(base, opt)  # a folded NOT carries the opposite; a folded threshold can't be read here
+                    live = (not src if src is not None else None) if flab == "NOT" else None
             if opt:
                 q = circuit.questions.get(base)
                 shown = f"level {opt}" if (q and q["type"] == "score") else opt
@@ -867,7 +902,7 @@ def render_mermaid(
                 pin = next((p for p, t in circuit.mounts[dest]["pins"].items() if t == ref or t == ref.partition(":")[0]), None)
                 if pin and pin != ref.partition(":")[0]:
                     lab = f"{pin}: {lab}" if lab else pin
-            out.append(f"  {node} --{'>' if not lab else f'>|{lab}|'} {gnode(gid)}")
+            out.append((f"  {node} --{'>' if not lab else f'>|{lab}|'} {gnode(gid)}", live))
         return out
 
     def route_line(gid: str, spec: dict[str, Any]) -> str:
@@ -970,10 +1005,14 @@ def render_mermaid(
                 L.append("  " + node_line(gid, compiled[gid], True))
         L.append("  end")
         L.append("  class OUT col")
-    edges = [f"  STATE --> {qnode(qid)}" for qid in circuit.questions] if state else []
+    wired: list[tuple[str, bool | None]] = [(f"  STATE --> {qnode(qid)}", None) for qid in circuit.questions] if state else []
     for gid in logic + decisions:
-        edges += edge_lines(gid, compiled[gid])
+        wired += edge_lines(gid, compiled[gid])
+    edges = [line for line, _ in wired]
     L += edges
+    dim = [str(i) for i, (_, live) in enumerate(wired) if live is False]
+    if dim:  # wires that carried a no on this run fade, so the live path reads at a glance
+        L.append(f"  linkStyle {','.join(dim)} stroke:#C9CED4,stroke-width:1px,stroke-dasharray:4 3")
     # the wire into each route's chosen action, drawn heavy
     for gid, spec in compiled.items():
         r = (results or {}).get(gid)
