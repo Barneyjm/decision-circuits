@@ -669,13 +669,31 @@ def question_text(q: Mapping[str, Any]) -> str:
     return ""
 
 
-def answer_summary(q: Mapping[str, Any], a: Mapping[str, Any]) -> str:
-    """One answer in a few words: "yes 89%", "billing 80%", "level 2.4 of 3"."""
+def answer_outcomes(q: Mapping[str, Any], a: Mapping[str, Any]) -> tuple[str, list[str]]:
+    """What an answer landed on, and the outcomes it didn't: ("no 89%", ["yes 11%"]),
+    ("refund 80%", ["replacement 15%", "info 5%"]). A yes/no question shows both sides, a
+    pick-one every option, so the outcomes that weren't taken are on the page too."""
     kind = q["type"]
     if kind == "noul":
-        return f"yes {a['noul']:.0%}"
+        p = float(a["noul"])
+        yes, no = f"yes {p:.0%}", f"no {1 - p:.0%}"
+        return (yes, [no]) if p >= 0.5 else (no, [yes])
     if kind == "choice":
-        return f"{a['choice']} {a['probabilities'][a['choice']]:.0%}"
+        probs = {k: float(v) for k, v in a["probabilities"].items()}
+        order = sorted(probs, key=lambda k: -probs[k])
+        return f"{order[0]} {probs[order[0]]:.0%}", [f"{k} {probs[k]:.0%}" for k in order[1:]]
+    return answer_summary(q, a), []
+
+
+def answer_summary(q: Mapping[str, Any], a: Mapping[str, Any]) -> str:
+    """One answer in a few words: "no 89%", "billing 80%", "level 2.4 of 3"."""
+    kind = q["type"]
+    if kind == "noul":
+        p = float(a["noul"])
+        return f"yes {p:.0%}" if p >= 0.5 else f"no {1 - p:.0%}"
+    if kind == "choice":
+        top = max(a["probabilities"], key=a["probabilities"].__getitem__)
+        return f"{top} {a['probabilities'][top]:.0%}"
     if kind == "multi":
         return ", ".join(a["selected"]) or "none apply"
     if kind == "rank":
@@ -817,7 +835,11 @@ def render_mermaid(
             asked = "<br/>".join(_mermaid_safe(line) for line in _wrap(question_text(q), 26, 4))
             head += f"<br/>{asked}" if plain else f"<br/><span style='color:#3B4550;font-size:12px'>{asked}</span>"
         if answers and qid in answers:
-            label = f"{head}<br/><b>→ {_mermaid_safe(answer_summary(q, answers[qid]))}</b>"
+            main, others = answer_outcomes(q, answers[qid])
+            label = f"{head}<br/><b>→ {_mermaid_safe(main)}</b>"
+            if others:  # the outcomes it didn't land on
+                rest = "<br/>".join(_mermaid_safe(x) for x in _wrap(" · ".join(others), 30, 2))
+                label += f"<br/>{rest}" if plain else f"<br/><span style='color:#5F6B78'>{rest}</span>"
         else:
             label = f"{head}<br/>{q['type']}" if plain else f"{head}<br/><span style='color:#5F6B78'>{q['type']}</span>"
         cls = "q"

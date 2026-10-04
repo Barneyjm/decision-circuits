@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from decision_circuits.dsl import And, Categorical, G, GateDef, Not, Or, Q, Threshold, answer_summary, mount_owner, question_text
+from decision_circuits.dsl import And, Categorical, G, GateDef, Not, Or, Q, Threshold, answer_outcomes, mount_owner, question_text
 
 if TYPE_CHECKING:
     from decision_circuits.dsl import Circuit
@@ -131,7 +131,8 @@ class _Writer:
         if options:
             line += f" *[{options}]*"
         if qid in self.answers:
-            line += f" → **{answer_summary(q, self.answers[qid])}**"
+            main, others = answer_outcomes(q, self.answers[qid])
+            line += f" → **{main}**" + (f" ({', '.join(others)})" if others else "")
         return line
 
     @staticmethod

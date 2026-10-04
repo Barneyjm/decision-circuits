@@ -173,3 +173,19 @@ def test_a_rule_that_was_never_reached_has_its_wires_faded_and_not_reads_inverte
     faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
     assert {"g_tech -->|NOT| g_action__r2", "g_tech --> g_action__r3"} <= {wires[i] for i in faded}  # rule 1 held: 2 and 3 never ran
     assert "g_now -->|yes| g_action__r1" in wires and "g_now -->|yes| g_action__r1" not in {wires[i] for i in faded}
+
+
+def test_a_question_shows_what_it_landed_on_and_the_outcomes_it_did_not():
+    c = Circuit()
+    c.noul("story", "Does the story add up?")
+    c.choice("ask", "What do they want?", {"refund": None, "replacement": None, "info": None})
+    c.gate("g", Q("story") >= 0.5)
+    answers = {
+        "story": noul(0.11),
+        "ask": {"type": "choice", "choice": "refund", "probabilities": {"refund": 0.8, "replacement": 0.15, "info": 0.05}, "confidence": 0.4},
+    }
+    m = c.to_mermaid(c.evaluate(answers), answers, plain=True)
+    assert "<b>→ no 89%</b><br/>yes 11%" in m  # a no reads as no, with its other side
+    assert "<b>→ refund 80%</b><br/>replacement 15% · info 5%" in m
+    text = c.describe(c.evaluate(answers), answers)
+    assert "→ **no 89%** (yes 11%)" in text and "→ **refund 80%** (replacement 15%, info 5%)" in text
