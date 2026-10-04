@@ -79,9 +79,9 @@ def test_params_fill_the_question_text_per_mount():
     assert c.questions["cust.q"]["instructions"] == "Does the customer threaten a chargeback? Answer {strictly}."
     assert c.questions["agent.q"]["criteria"]["true"] == "the agent says chargeback"
     assert side.questions["q"]["instructions"].startswith("Does {who}")  # the chip itself is untouched
-    with pytest.raises(ValueError, match=r"takes params \['who'\]"):
+    with pytest.raises(ValueError, match=r"needs settings \['who'\]"):
         c.mount(side, "x")
-    with pytest.raises(ValueError, match="takes params"):
+    with pytest.raises(ValueError, match=r"has no settings \['extra'\]"):
         c.mount(side, "y", params={"who": "a", "extra": "b"})
     assert Circuit.from_dict(json.loads(json.dumps(side.to_dict()))).params == ["who"]
 

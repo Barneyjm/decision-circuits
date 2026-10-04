@@ -23,7 +23,7 @@ circuit decides the same way whichever backend answered it.
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _version
 
-from decision_circuits.chips import Chip
+from decision_circuits.chips import Chip, Pin
 from decision_circuits.dsl import (
     And,
     Categorical,
@@ -33,6 +33,7 @@ from decision_circuits.dsl import (
     GateDef,
     Not,
     Or,
+    P,
     Q,
     RunOutput,
     Threshold,
@@ -87,6 +88,8 @@ __all__ = [
     "Media",
     "Not",
     "Or",
+    "P",
+    "Pin",
     "Q",
     "Question",
     "RunOutput",

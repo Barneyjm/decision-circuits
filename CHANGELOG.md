@@ -10,6 +10,14 @@
   mount leaves the host unchanged. `chip.evaluate` runs one offline with shorthand pin
   values, and `add_test` / `test` keep test vectors with the chip (also from JSONL).
   `examples/14_chips.py`.
+- **Chips plug into any circuit.** `Pin(name, type=..., options=..., ask=...)` declares what an
+  input pin takes (a yes/no probability, a pick-one with the options it needs, a score), and
+  `mount` refuses a wire of the wrong kind, naming the pin. A pin with `ask` is optional: wire
+  it when the host knows the answer, leave it and the chip asks the model itself. `params` are
+  settings with defaults: `{name}` in question text, and `P("name")` in the logic (a
+  threshold, an `at_least` count, a confidence floor, a choice's options, a route's action),
+  so one chip serves a lenient desk and a strict one. A chip evaluates, runs, describes and
+  draws with its defaults; mounting fills in the host's.
 - **Circuits and chips serialize.** `to_dict` / `Circuit.from_dict` round-trip a circuit as
   JSON (format `decision-circuits/1`), keeping gate expressions rather than compiled helpers.
   A chip's JSON carries its pins, version, tests and the question types it requires.

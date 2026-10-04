@@ -63,6 +63,22 @@ class RunOutput(TypedDict):
 # ---------------------------------------------------------------- expressions
 
 
+@dataclass(frozen=True)
+class P:
+    """A chip setting, filled in when the chip is mounted: `Q("risk") >= P("strictness")`,
+    `at_least(P("hold_at"), ...)`, a route action, a choice's options. Declared with a default in
+    `Chip(params={...})`; `{name}` in question text is the same setting as words."""
+
+    name: str
+
+    def __format__(self, spec: str) -> str:  # a datasheet prints the setting's name
+        return "{" + self.name + "}"
+
+
+def _num(x: Any) -> Any:
+    return x if isinstance(x, P) else float(x)
+
+
 class Expr:
     """Base for probability-valued expressions."""
 
@@ -79,11 +95,11 @@ class Expr:
         """`expr >= tau` builds a Threshold node; it does not compare.
         `bool(Q("pii") >= 0.7)` is always True. Use `.at(tau)` where an
         operator would read as a runtime comparison."""
-        return Threshold(self, float(tau))
+        return Threshold(self, _num(tau))
 
     def at(self, tau: float) -> Threshold:
         """Named form of `>=`: `Q("pii").at(0.7)`."""
-        return Threshold(self, float(tau))
+        return Threshold(self, _num(tau))
 
 
 def _as_expr(x: Any) -> Expr:
@@ -192,7 +208,7 @@ def verify(choice_id: str, check: Expr | str, tau: float = 0.6, min_confidence: 
 
 
 def order(score_id: str, cutpoints: list[float]) -> Categorical:
-    return Categorical("order", input=score_id, cutpoints=list(cutpoints))
+    return Categorical("order", input=score_id, cutpoints=cutpoints if isinstance(cutpoints, P) else list(cutpoints))
 
 
 def at_least(k: int, *refs: str | Q | G, tau: float = 0.5) -> Categorical:
@@ -345,7 +361,12 @@ class Circuit:
         """Plain JSON-able data; `Circuit.from_dict` reads it back. Gates keep their
         expression trees (not the compiled helpers), so a loaded circuit can still be mounted,
         edited and rendered."""
-        d: dict[str, Any] = {"format": FORMAT, "model": self.model, "questions": dict(self.questions), "gates": [_gate_to_dict(g) for g in self.gates]}
+        d: dict[str, Any] = {
+            "format": FORMAT,
+            "model": self.model,
+            "questions": encode_params(dict(self.questions)),
+            "gates": [_gate_to_dict(g) for g in self.gates],
+        }
         if self.mounts:
             d["mounts"] = self.mounts
         return d
@@ -534,6 +555,27 @@ FORMAT = "decision-circuits/1"
 _CAT_DEFAULTS = {f.name: f.default for f in fields(Categorical)}
 
 
+def encode_params(x: Any) -> Any:
+    """Plain data with every `P` as {"param": name}."""
+    if isinstance(x, P):
+        return {"param": x.name}
+    if isinstance(x, Mapping):
+        return {k: encode_params(v) for k, v in x.items()}
+    if isinstance(x, list | tuple):
+        return [encode_params(v) for v in x]
+    return x
+
+
+def decode_params(x: Any) -> Any:
+    if isinstance(x, Mapping):
+        if set(x) == {"param"}:
+            return P(x["param"])
+        return {k: decode_params(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [decode_params(v) for v in x]
+    return x
+
+
 def expr_to_dict(e: Expr | Categorical) -> dict[str, Any]:
     """An expression as plain data: {"q": ref}, {"g": ref}, {"not": e}, {"and": [e, ...]},
     {"or": [...]}, {"at": tau, "of": e}, or a categorical gate {"op": ..., its fields}."""
@@ -546,17 +588,17 @@ def expr_to_dict(e: Expr | Categorical) -> dict[str, Any]:
     if isinstance(e, And | Or):
         return {"and" if isinstance(e, And) else "or": [expr_to_dict(p) for p in e.parts]}
     if isinstance(e, Threshold):
-        return {"at": e.tau, "of": expr_to_dict(e.inner)}
+        return {"at": encode_params(e.tau), "of": expr_to_dict(e.inner)}
     if isinstance(e, Categorical):
         d: dict[str, Any] = {"op": e.op}
         for name, default in _CAT_DEFAULTS.items():
             v = getattr(e, name)
             if name in ("op", "rules") or v == default:
                 continue
-            d[name] = expr_to_dict(v) if name == "check" else v
+            d[name] = expr_to_dict(v) if name == "check" else encode_params(v)
         if e.rules is not None:
-            d["rules"] = [{"action": a, "when": expr_to_dict(c)} for a, c in e.rules]
-            d["otherwise"] = e.otherwise
+            d["rules"] = [{"action": encode_params(a), "when": expr_to_dict(c)} for a, c in e.rules]
+            d["otherwise"] = encode_params(e.otherwise)
         return d
     raise TypeError(f"cannot serialize {e!r}")
 
@@ -572,16 +614,16 @@ def expr_from_dict(d: Mapping[str, Any]) -> Expr | Categorical:
         parts = [_expr(p) for p in d.get("and", d.get("or"))]
         return And(parts) if "and" in d else Or(parts)
     if "at" in d:
-        return Threshold(_expr(d["of"]), float(d["at"]))
+        return Threshold(_expr(d["of"]), _num(decode_params(d["at"])))
     if "op" in d:
         unknown = set(d) - set(_CAT_DEFAULTS)
         if unknown:
             raise ValueError(f"unknown fields {sorted(unknown)} in a {d['op']!r} gate")
-        kw = dict(d)
+        kw = {k: (v if k in ("check", "rules") else decode_params(v)) for k, v in d.items()}
         if "check" in kw:
             kw["check"] = _expr(kw["check"])
         if "rules" in kw:
-            kw["rules"] = [(r["action"], _expr(r["when"])) for r in kw["rules"]]
+            kw["rules"] = [(decode_params(r["action"]), _expr(r["when"])) for r in kw["rules"]]
         return Categorical(**kw)
     raise ValueError(f"not an expression: {dict(d)!r}")
 
@@ -594,17 +636,19 @@ def _expr(d: Mapping[str, Any]) -> Expr:
 
 
 def _gate_to_dict(g: GateDef) -> dict[str, Any]:
-    d: dict[str, Any] = {"name": g.name, "body": expr_to_dict(g.body), "on_uncertain": g.on_uncertain_, "band": g.band_}
+    d: dict[str, Any] = {"name": g.name, "body": expr_to_dict(g.body), "on_uncertain": g.on_uncertain_, "band": encode_params(g.band_)}
     if g.on_uncertain_ == "default":
-        d["default"] = g.default_
+        d["default"] = encode_params(g.default_)
     return d
 
 
 def _load_into(c: Circuit, d: Mapping[str, Any]) -> None:
     c.model = d.get("model")
-    c.questions = {k: dict(v) for k, v in (d.get("questions") or {}).items()}
+    c.questions = {k: decode_params(dict(v)) for k, v in (d.get("questions") or {}).items()}
     c.gates = [
-        GateDef(g["name"], expr_from_dict(g["body"]), g.get("on_uncertain", "abstain"), g.get("default"), float(g.get("band", 0.1)))
+        GateDef(
+            g["name"], expr_from_dict(g["body"]), g.get("on_uncertain", "abstain"), decode_params(g.get("default")), _num(decode_params(g.get("band", 0.1)))
+        )
         for g in d.get("gates") or []
     ]
     c.mounts = {k: dict(v) for k, v in (d.get("mounts") or {}).items()}
