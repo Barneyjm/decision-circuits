@@ -175,6 +175,30 @@ c.gate("says_what", ~Q("ask")["none"] >= 0.5)
 field, a list element or a sentence of the state, or at "none". See
 `examples/13_what_v2_reads.py`.
 
+## Chips
+
+Package a sub-circuit with named pins, test it on its own, and mount it as many times as you
+need:
+
+```python
+from decision_circuits import Chip, G, at_least
+
+heat = Chip("heat", inputs=["hostile", "money", "pii"], outputs=["hot"], params=["who"])
+heat.noul("threat", "Does {who} threaten legal action, a chargeback or a public complaint?")
+heat.gate("hot", at_least(2, "hostile", "money", "pii", "threat"), on_uncertain="escalate")
+heat.add_test({"hostile": 0.9, "money": 0.9, "pii": 0.1, "threat": 0.2}, {"hot": True})
+
+pins = {"money": G("money"), "pii": "pii"}
+customer = c.mount(heat, "customer", {**pins, "hostile": "customer_hostile"}, params={"who": "the customer"})
+agent = c.mount(heat, "agent", {**pins, "hostile": "agent_hostile"}, params={"who": "the agent"})
+c.gate("supervisor", (customer["hot"] | agent["hot"]) >= 0.5)
+```
+
+`params` fill `{who}` per mount, so each copy asks about its own part of the state. A chip is
+plain JSON (`to_dict` / `Circuit.from_dict`) carrying its pins, its tests and the
+question types it needs. See [docs/concepts.md](docs/concepts.md#chips) and
+`examples/14_chips.py`.
+
 ## Tracing
 
 With `pip install "decision-circuits[otel]"` and any OpenTelemetry SDK and exporter
@@ -234,6 +258,7 @@ Numbered, each self-contained, in [`examples/`](examples/):
 9. the refund desk answered by Claude, stated versus sampled probabilities
 10. the refund desk answered through OpenAI-compatible logprobs (OpenAI, Fireworks, vLLM)
 11. **the article's water-utility call center**: the two-parser, negative-checker circuit from *Attaining LLM Certainty with AI Decision Circuits*, on its original 100 calls, with the article's confidence tiers and cost model
+14. **chips**: one sub-circuit with pins, tested on its own, mounted twice (offline)
 
 ## Docs
 

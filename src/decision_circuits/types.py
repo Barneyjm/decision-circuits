@@ -132,13 +132,13 @@ def option_keys(question: Mapping[str, Any]) -> list[str]:
 V1_TYPES = ("noul", "choice", "score")
 
 
-def require_types(questions: Mapping[str, Any], supported: Sequence[str], backend: str) -> None:
+def require_types(questions: Mapping[str, Any], supported: Sequence[str], backend: str, hint: str = "a circuit v2 model (SystemOne)") -> None:
     """Refuse up front, by name, a question this backend cannot answer, rather than answering
     something else (a multi read as a pick-one score, say)."""
     bad = {qid: q["type"] for qid, q in questions.items() if q["type"] not in supported}
     if bad:
         listed = ", ".join(f"{qid!r} is {t}" for qid, t in bad.items())
-        raise ValueError(f"{backend} answers {', '.join(supported)} questions; {listed}. multi, locate, rank and match need a circuit v2 model (SystemOne)")
+        raise ValueError(f"{backend} answers {', '.join(supported)} questions; {listed}. multi, locate, rank and match need {hint}")
 
 
 def answer_distributions(answer: Mapping[str, Any]) -> dict[str, dict[str, float]]:

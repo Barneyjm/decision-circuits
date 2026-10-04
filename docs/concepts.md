@@ -115,4 +115,65 @@ input and operation, meant to be logged next to the decision.
 `c.to_mermaid()` renders the circuit as a Mermaid flowchart in three
 columns: inputs, logic, decisions. Pass `results=` and `answers=` from a
 run to color the nodes by outcome. It renders on GitHub and in any
-Mermaid tool.
+Mermaid tool. Each mounted chip is drawn as its own box.
+
+## Chips
+
+A chip is a sub-circuit packaged with pins, like an integrated circuit: input pins it reads,
+output pins (gates) it drives, and its own questions and gates in between.
+
+```python
+from decision_circuits import Chip, G, at_least
+
+heat = Chip("heat", inputs=["hostile", "money", "pii"], outputs=["hot"], params=["who"], version="1.0")
+heat.noul("threat", "Does {who} threaten legal action, a chargeback or a public complaint?")
+heat.gate("signs", at_least(2, "hostile", "money", "pii", "threat"))
+heat.gate("hot", G("signs") >= 0.6, on_uncertain="escalate")
+```
+
+Inside the chip an input pin is referenced like a question. `c.mount(chip, ns, pins)` wires
+it into a host circuit:
+
+```python
+pins = c.mount(heat, "customer", {"hostile": "customer_hostile", "money": G("money"), "pii": "pii"}, params={"who": "the customer"})
+c.gate("supervisor", pins["hot"] >= 0.5)
+```
+
+- A pin can be wired to a host question, a host gate (`G("money")`), or one option of either
+  (`Q("topic")["refund"]`).
+- The chip's questions and gates are copied in as `ns.<name>` (`customer.threat`,
+  `customer.hot`), so the model answers them in the same request as the host's, and a chip
+  mounted twice is two independent copies.
+- Params fill `{name}` placeholders in the chip's question text, once per mount. Without
+  them, two copies of a chip ask the same question about the same state and get the same
+  answer; with `{"who": "the customer"}` and `{"who": "the agent"}` each asks about its own
+  part. Every declared param must be given.
+- `mount` returns the output pins as `G` references. It refuses an unwired or unknown pin, a
+  namespace already in use, and a reference inside the chip to something it does not own;
+  a refused mount leaves the host unchanged.
+- Chips nest: a chip can mount other chips.
+
+Mounting compiles to the same flat gates you could have written by hand, so evaluation,
+tracing and backends do not change.
+
+**Testing a chip on its own.** `chip.evaluate(values)` runs it with no model: pins and the
+chip's own questions take a number (a noul's P(yes)), a dict of option to probability (a
+choice), or a wire-format answer. Test vectors ship with the chip:
+
+```python
+heat.add_test({"hostile": 0.9, "money": 0.9, "pii": 0.1, "threat": 0.2}, {"hot": True})
+heat.add_test({"hostile": 0.7, "money": 0.5, "pii": 0.1, "threat": 0.3}, {"hot": "escalate"})
+assert heat.test() == []  # or heat.test("cases.jsonl")
+```
+
+An expectation is what `result_key` gives: the value when decided, else the outcome.
+
+**Sharing a chip.** `chip.to_dict()` is plain JSON with a `chip` block: name, version, pins, params,
+the tests, and `requires`, the question types it asks. `Circuit.from_dict` reads it back
+as a `Chip`. Ship chips in a package or a git repo like any other code. Circuits serialize
+the same way, mounts included.
+
+**Question types.** `circuit.question_types` lists what a backend must answer. `SystemOne`
+pointed at TypeSafe's API refuses `multi`, `locate`, `rank` and `match` before sending,
+since it answers `noul`, `choice` and `score`; pass `question_types=` to set another
+server's list.

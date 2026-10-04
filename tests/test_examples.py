@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
-OFFLINE = ["01_first_circuit.py", "03_your_own_backend.py", "07_your_own_integration.py", "08_refund_desk.py"]
+OFFLINE = ["01_first_circuit.py", "03_your_own_backend.py", "07_your_own_integration.py", "08_refund_desk.py", "14_chips.py"]
 
 
 @pytest.mark.parametrize("name", OFFLINE)

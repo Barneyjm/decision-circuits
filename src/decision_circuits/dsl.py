@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from decision_circuits import tracing
@@ -48,6 +48,7 @@ from decision_circuits.gates import Gate, GateResultDict, evaluate_gates
 from decision_circuits.types import Answers, Backend, answer_distributions
 
 if TYPE_CHECKING:
+    from decision_circuits.chips import Chip
     from decision_circuits.interventions import Interventions
 
 
@@ -238,6 +239,7 @@ class Circuit:
     questions: dict[str, dict[str, Any]] = field(default_factory=dict)
     gates: list[GateDef] = field(default_factory=list)
     model: str | None = None  # None: the backend picks
+    mounts: dict[str, dict[str, Any]] = field(default_factory=dict)  # namespace -> {chip, pins, outputs}; see `mount`
 
     # questions ---------------------------------------------------------
     def noul(self, qid: str, instructions: Any, true: str | None = None, false: str | None = None, **extra: Any) -> Circuit:
@@ -291,6 +293,50 @@ class Circuit:
             g.band(band)
         self.gates.append(g)
         return g
+
+    # chips -------------------------------------------------------------
+    def mount(self, chip: Chip, ns: str, pins: Mapping[str, str | Q | G] | None = None, params: Mapping[str, str] | None = None) -> dict[str, G]:
+        """Wire a `Chip` into this circuit under namespace `ns`: its questions and gates are
+        copied in as `ns.<name>`, each input pin reads the host reference it is wired to, and
+        the chip's output pins come back as `G` references:
+
+            esc = c.mount(escalation, "esc", {"angry": "angry", "dept": "dept"})
+            c.gate("page_oncall", esc["out"] >= 0.5)
+
+        `params` fill the chip's `{param}` placeholders in its question text, so each copy
+        can ask about its own part of the state. Mounting the same chip twice under two
+        namespaces gives two independent copies."""
+        from decision_circuits.chips import mount
+
+        return mount(self, chip, ns, pins or {}, params)
+
+    @property
+    def question_types(self) -> list[str]:
+        """The question types this circuit asks, sorted: what a backend has to answer."""
+        return sorted({q["type"] for q in self.questions.values()})
+
+    # serialization -----------------------------------------------------
+    def to_dict(self) -> dict[str, Any]:
+        """Plain JSON-able data; `Circuit.from_dict` reads it back. Gates keep their
+        expression trees (not the compiled helpers), so a loaded circuit can still be mounted,
+        edited and rendered."""
+        d: dict[str, Any] = {"format": FORMAT, "model": self.model, "questions": dict(self.questions), "gates": [_gate_to_dict(g) for g in self.gates]}
+        if self.mounts:
+            d["mounts"] = self.mounts
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> Circuit:
+        """Read `to_dict` output. A dict with a `chip` block comes back as a `Chip`."""
+        if d.get("format", FORMAT) != FORMAT:
+            raise ValueError(f"unknown circuit format {d.get('format')!r}; this version reads {FORMAT!r}")
+        if "chip" in d and cls is Circuit:
+            from decision_circuits.chips import Chip
+
+            return Chip.from_dict(d)
+        c = cls()
+        _load_into(c, d)
+        return c
 
     # rendering ---------------------------------------------------------
     def to_mermaid(self, results: dict[str, Any] | None = None, answers: dict[str, Any] | None = None, direction: str = "LR", plain: bool = False) -> str:
@@ -419,6 +465,82 @@ class Circuit:
         return ablate(self, backend, state, **kw)
 
 
+# ---------------------------------------------------------------- serialization
+
+FORMAT = "decision-circuits/1"
+_CAT_DEFAULTS = {f.name: f.default for f in fields(Categorical)}
+
+
+def expr_to_dict(e: Expr | Categorical) -> dict[str, Any]:
+    """An expression as plain data: {"q": ref}, {"g": ref}, {"not": e}, {"and": [e, ...]},
+    {"or": [...]}, {"at": tau, "of": e}, or a categorical gate {"op": ..., its fields}."""
+    if isinstance(e, Q):
+        return {"q": e.ref}
+    if isinstance(e, G):
+        return {"g": e.ref}
+    if isinstance(e, Not):
+        return {"not": expr_to_dict(e.inner)}
+    if isinstance(e, And | Or):
+        return {"and" if isinstance(e, And) else "or": [expr_to_dict(p) for p in e.parts]}
+    if isinstance(e, Threshold):
+        return {"at": e.tau, "of": expr_to_dict(e.inner)}
+    if isinstance(e, Categorical):
+        d: dict[str, Any] = {"op": e.op}
+        for name, default in _CAT_DEFAULTS.items():
+            v = getattr(e, name)
+            if name != "op" and v != default:
+                d[name] = expr_to_dict(v) if name == "check" else v
+        return d
+    raise TypeError(f"cannot serialize {e!r}")
+
+
+def expr_from_dict(d: Mapping[str, Any]) -> Expr | Categorical:
+    if "q" in d:
+        return Q(d["q"])
+    if "g" in d:
+        return G(d["g"])
+    if "not" in d:
+        return Not(_expr(d["not"]))
+    if "and" in d or "or" in d:
+        parts = [_expr(p) for p in d.get("and", d.get("or"))]
+        return And(parts) if "and" in d else Or(parts)
+    if "at" in d:
+        return Threshold(_expr(d["of"]), float(d["at"]))
+    if "op" in d:
+        unknown = set(d) - set(_CAT_DEFAULTS)
+        if unknown:
+            raise ValueError(f"unknown fields {sorted(unknown)} in a {d['op']!r} gate")
+        kw = dict(d)
+        if "check" in kw:
+            kw["check"] = _expr(kw["check"])
+        return Categorical(**kw)
+    raise ValueError(f"not an expression: {dict(d)!r}")
+
+
+def _expr(d: Mapping[str, Any]) -> Expr:
+    e = expr_from_dict(d)
+    if not isinstance(e, Expr):
+        raise TypeError(f"a {d.get('op')!r} gate cannot sit inside an expression")
+    return e
+
+
+def _gate_to_dict(g: GateDef) -> dict[str, Any]:
+    d: dict[str, Any] = {"name": g.name, "body": expr_to_dict(g.body), "on_uncertain": g.on_uncertain_, "band": g.band_}
+    if g.on_uncertain_ == "default":
+        d["default"] = g.default_
+    return d
+
+
+def _load_into(c: Circuit, d: Mapping[str, Any]) -> None:
+    c.model = d.get("model")
+    c.questions = {k: dict(v) for k, v in (d.get("questions") or {}).items()}
+    c.gates = [
+        GateDef(g["name"], expr_from_dict(g["body"]), g.get("on_uncertain", "abstain"), g.get("default"), float(g.get("band", 0.1)))
+        for g in d.get("gates") or []
+    ]
+    c.mounts = {k: dict(v) for k, v in (d.get("mounts") or {}).items()}
+
+
 def _record(span: Any, backend: Any, out: RunOutput) -> None:
     """A run's result on its span: the response ids, an event per answer and per gate, and
     the gates that went to a person or held back. Never the state."""
@@ -469,7 +591,9 @@ def render_mermaid(
     questions, a logic column of gates, and a decisions column for the
     gates nothing else consumes. Threshold and NOT helpers are folded
     into edge labels rather than drawn as nodes. Only decisions are
-    coloured: green yes / grey no / amber abstained or escalated."""
+    coloured: green yes / grey no / amber abstained or escalated. Each
+    mounted chip is drawn as its own box, with wires into it labelled by
+    the pin they land on."""
     compiled = circuit.compile()
 
     # which gates feed other gates (their base name before ':')
@@ -495,10 +619,20 @@ def render_mermaid(
             folded[gid] = (src_ref, lab)
 
     def qnode(qid: str) -> str:
-        return f"q_{qid}"
+        return "q_" + qid.replace(".", "__")
 
     def gnode(gid: str) -> str:
-        return "g_" + gid.replace("-", "_")
+        return "g_" + gid.replace("-", "_").replace(".", "__")
+
+    # mounted chips are drawn as boxes: each node belongs to the top-level chip it came from
+    def owner(name: str) -> str | None:
+        head, dot, _ = name.lstrip("_").partition(".")
+        return head if dot and head in circuit.mounts else None
+
+    def shown(name: str) -> str:
+        """A node's name inside its chip's box: without the namespace."""
+        own = owner(name)
+        return name[len(own) + 1 :] if own and not name.startswith("_") else name
 
     init = (
         "%%{init: {'theme': 'base', 'flowchart': {'nodeSpacing': 40, 'rankSpacing': 120, 'curve': 'basis', 'useMaxWidth': false, 'htmlLabels': true}, "
@@ -513,12 +647,14 @@ def render_mermaid(
         "  classDef no fill:#EEF0F2,stroke:#98A2AD,stroke-width:2px,color:#3B4550;",
         "  classDef hold fill:#FFF1CC,stroke:#9A6B00,stroke-width:2.5px,color:#4A3300;",
         "  classDef col fill:none,stroke:#D9DEE3,stroke-dasharray:3 3,color:#5F6B78;",
+        "  classDef chip fill:#F2F4F7,stroke:#1B1F24,stroke-width:2px,color:#1B1F24;",
     ]
 
     # --- inputs
     L.append('  subgraph IN["Inputs"]')
     L.append("    direction TB")
-    for qid, q in circuit.questions.items():
+
+    def qnode_line(qid: str, q: dict[str, Any]) -> str:
         kind = q["type"]
         if answers and qid in answers:
             a = answers[qid]
@@ -536,10 +672,14 @@ def render_mermaid(
                 val = f"none {a['none']:.0%}" if a["none"] >= 0.5 or not a["located"] else f"{a['located'][0]['path']} {a['located'][0]['probability']:.0%}"
             else:
                 val = f"{a['score']:.1f} / {len(q['criteria']) - 1}"
-            label = f"<b>{qid}</b><br/>{val}"
+            label = f"<b>{shown(qid)}</b><br/>{val}"
         else:
-            label = f"<b>{qid}</b><br/>{kind}" if plain else f"<b>{qid}</b><br/><span style='color:#5F6B78'>{kind}</span>"
-        L.append(f'    {qnode(qid)}["{label}"]:::q')
+            label = f"<b>{shown(qid)}</b><br/>{kind}" if plain else f"<b>{shown(qid)}</b><br/><span style='color:#5F6B78'>{kind}</span>"
+        return f'    {qnode(qid)}["{label}"]:::q'
+
+    for qid, q in circuit.questions.items():
+        if not owner(qid):
+            L.append(qnode_line(qid, q))
     L.append("  end")
     L.append("  class IN col")
 
@@ -582,6 +722,11 @@ def render_mermaid(
                 shown = f"level {opt}" if (q and q["type"] == "score") else opt
                 lab = (f"{shown} " + lab).strip()
             node = gnode(base) if base in compiled else qnode(base)
+            dest = owner(gid)
+            if dest and owner(ref) != dest:  # a wire into a chip: name the pin it lands on
+                pin = next((p for p, t in circuit.mounts[dest]["pins"].items() if t == ref or t == ref.partition(":")[0]), None)
+                if pin and pin != ref.partition(":")[0]:
+                    lab = f"{pin}: {lab}" if lab else pin
             out.append(f"  {node} --{'>' if not lab else f'>|{lab}|'} {gnode(gid)}")
         return out
 
@@ -598,8 +743,10 @@ def render_mermaid(
             head += f"<br/>conf ≥ {spec['min_confidence']:g}" if plain else f"<br/><span style='color:#5F6B78'>conf ≥ {spec['min_confidence']:g}</span>"
         if op in ("and", "or") and not terminal and spec.get("tau", 0.5) != 0.5:
             head += f" ≥ {spec['tau']:g}"
+        if op == "threshold" and not terminal and not gid.startswith("_"):
+            head += f" {spec['tau']:g}"
         if terminal:
-            label = f"<b>{gid.replace('_', ' ').title()}</b><br/>{head}"
+            label = f"<b>{shown(gid).replace('_', ' ').title()}</b><br/>{head}"
             if op in ("and", "or", "threshold", "not"):
                 label += f"{'' if op == 'threshold' else ' ≥'} {spec.get('tau', 0.5):g}"  # a threshold's head is already "≥"
             cls = "logic"
@@ -616,7 +763,7 @@ def render_mermaid(
                     verdict, cls = f"✓ {val}", "yes"
                 label += f"<br/><b>{verdict}</b>" + (f" · {pr:.0%}" if pr is not None else "")
             return f'  {gnode(gid)}["{label}"]:::{cls}'
-        label = f"<b>{gid.replace('_', ' ')}</b><br/>{head}" if not gid.startswith("_") else head
+        label = f"<b>{shown(gid).replace('_', ' ')}</b><br/>{head}" if not gid.startswith("_") else head
         if results and gid in results:
             r = results[gid]
             if r.get("outcome", "decided") != "decided":
@@ -628,17 +775,29 @@ def render_mermaid(
         lo, hi = SHAPES.get(op, ("[", "]"))
         return f'  {gnode(gid)}{lo}"{label}"{hi}:::logic'
 
-    if logic:
+    for ns, m in circuit.mounts.items():
+        if "." in ns:  # a chip inside a chip is drawn inside its parent's box
+            continue
+        L.append(f'  subgraph M_{ns}["{ns} · {m["chip"]}"]')
+        L.append("    direction TB")
+        L += [qnode_line(qid, q) for qid, q in circuit.questions.items() if owner(qid) == ns]
+        L += ["  " + node_line(gid, compiled[gid], gid in decisions) for gid in logic + decisions if owner(gid) == ns]
+        L.append("  end")
+        L.append(f"  class M_{ns} chip")
+    if any(not owner(g) for g in logic):
         L.append('  subgraph LOGIC["Logic"]')
         L.append("    direction TB")
         for gid in logic:
+            if owner(gid):
+                continue
             L.append("  " + node_line(gid, compiled[gid], False))
         L.append("  end")
         L.append("  class LOGIC col")
     L.append('  subgraph OUT["Decisions"]')
     L.append("    direction TB")
     for gid in decisions:
-        L.append("  " + node_line(gid, compiled[gid], True))
+        if not owner(gid):
+            L.append("  " + node_line(gid, compiled[gid], True))
     L.append("  end")
     L.append("  class OUT col")
     for gid in logic + decisions:

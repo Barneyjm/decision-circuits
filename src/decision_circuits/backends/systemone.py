@@ -15,8 +15,9 @@ from __future__ import annotations
 import json
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 try:
@@ -39,7 +40,7 @@ def _retry_after(headers: Any) -> float | None:
 
 
 from decision_circuits import tracing
-from decision_circuits.types import Answers, to_jsonable
+from decision_circuits.types import V1_TYPES, Answers, require_types, to_jsonable
 
 
 class SystemOneError(RuntimeError):
@@ -60,16 +61,23 @@ class SystemOne:
         headers: Mapping[str, str] | None = None,
         retry_for: float = 240.0,
         retry_wait: float = 5.0,
+        question_types: Sequence[str] | None = None,
     ):
         """`timeout` is per request; `retry_for` is how long to keep retrying
         a 429/502/503/504/524/529 (a hosted model spinning up from zero takes about
-        a minute) before raising. 0 disables retries."""
+        a minute) before raising. 0 disables retries. `question_types` are the
+        types the server answers; a question of another type is refused before
+        the request. Defaults to noul, choice and score for TypeSafe's API (all it
+        documents) and to no check for other servers."""
         self.url = url
         self.model = model
         self.client = client
         self.timeout = timeout
         self.retry_for = retry_for
         self.retry_wait = retry_wait
+        if question_types is None and urllib.parse.urlsplit(url).hostname == "api.typesafe.ai":
+            question_types = V1_TYPES
+        self.question_types = tuple(question_types) if question_types is not None else None
         self.headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT, **(headers or {})}
         if api_key:
             self.headers["Authorization"] = f"Bearer {api_key}"
@@ -110,6 +118,8 @@ class SystemOne:
             return 504, {"detail": str(e)}, None
 
     def answer(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Answers:
+        if self.question_types is not None:
+            require_types(questions, self.question_types, f"SystemOne at {urllib.parse.urlsplit(self.url).hostname}", hint="a circuit v2 server")
         status, body = self._post({"state": to_jsonable(state), "model": model or self.model, "questions": dict(questions)})
         if status >= 400 or "answers" not in body:
             raise SystemOneError(status, body)

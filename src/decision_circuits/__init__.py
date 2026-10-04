@@ -23,6 +23,7 @@ circuit decides the same way whichever backend answered it.
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _version
 
+from decision_circuits.chips import Chip
 from decision_circuits.dsl import (
     And,
     Categorical,
@@ -72,6 +73,7 @@ __all__ = [
     "Audio",
     "Backend",
     "Categorical",
+    "Chip",
     "Circuit",
     "Expr",
     "G",

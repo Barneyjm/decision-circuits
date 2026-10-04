@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.0 (2026-10-04)
+
+- **Chips.** `Chip` is a sub-circuit with declared input and output pins. `Circuit.mount(chip,
+  ns, pins)` wires it into a host: pins connect to host questions, gates or single options;
+  the chip's questions and gates are copied in as `ns.<name>`; the output pins come back as
+  `G` references. `params` fill `{name}` placeholders in the chip's question text per mount,
+  so two copies can ask about two parts of one state. Chips nest, and a refused
+  mount leaves the host unchanged. `chip.evaluate` runs one offline with shorthand pin
+  values, and `add_test` / `test` keep test vectors with the chip (also from JSONL).
+  `examples/14_chips.py`.
+- **Circuits and chips serialize.** `to_dict` / `Circuit.from_dict` round-trip a circuit as
+  JSON (format `decision-circuits/1`), keeping gate expressions rather than compiled helpers.
+  A chip's JSON carries its pins, version, tests and the question types it requires.
+- `circuit.question_types` lists the question types a backend has to answer. `SystemOne`
+  pointed at `api.typesafe.ai` refuses `multi`, `locate`, `rank` and `match` before the
+  request, since TypeSafe answers `noul`, `choice` and `score`; `question_types=` overrides.
+- `to_mermaid` draws each mounted chip as a box, labels a wire into a chip with its pin, and
+  shows the tau on a named threshold gate that feeds another gate.
+
 ## 0.5.6 (2026-10-04)
 
 - **`SystemOne` retries a 529.** TypeSafe's API answers `529 Overloaded` under heavy load and
