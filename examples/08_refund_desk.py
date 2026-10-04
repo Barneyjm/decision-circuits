@@ -59,6 +59,19 @@ c.gate("hostile", Q("tone")[2] >= 0.5, band=0.1, on_uncertain="escalate")
 c.gate("auto_refund", (G("eligible") & ~G("risky") & Q("small_amount")) >= 0.7, on_uncertain="escalate")
 c.gate("route", argmax("reason", min_confidence=0.3))
 
+# The last step: one queue per ticket, from the first rule that holds. A rule too close to
+# call stops the route and goes to a person rather than falling through on a guess.
+c.route(
+    "action",
+    [
+        ("HUMAN (hostile)", G("hostile")),
+        ("AUTO REFUND", G("auto_refund") & G("reason_checked")),
+        ("AGENT REVIEW", G("eligible") & ~G("risky")),
+        ("FRAUD QUEUE", G("risky")),
+    ],
+    otherwise="DENY (ineligible)",
+)
+
 
 # ------------------------------------------------------- code facts as answers
 def facts(order: dict[str, Any], today: date) -> Answers:
@@ -82,18 +95,9 @@ class WithFacts:
 
 # ----------------------------------------------------------- the decision
 def decide(g: dict[str, Any]) -> str:
-    """The last step is plain code over the gate results."""
-    if any(r["outcome"] == "escalate" for r in g.values()):
-        return "HUMAN (model unsure)"
-    if g["hostile"]["value"]:
-        return "HUMAN (hostile)"
-    if g["auto_refund"]["value"] and g["reason_checked"]["outcome"] == "decided":
-        return "AUTO REFUND"
-    if g["eligible"]["value"] and not g["risky"]["value"]:
-        return "AGENT REVIEW"
-    if g["risky"]["value"]:
-        return "FRAUD QUEUE"
-    return "DENY (ineligible)"
+    """The queue a ticket lands in: the route's action, or a person when it escalated."""
+    action = g["action"]
+    return action["value"] if action["outcome"] == "decided" else "HUMAN (model unsure)"
 
 
 # ------------------------------------------------------------- some tickets
@@ -161,8 +165,8 @@ def run_desk(model_backend: Any, label: str, diagram: bool = True) -> None:
             f"checked={g['reason_checked']['outcome']:<9} hostile={g['hostile']['value']!s:<5} auto={g['auto_refund']['value']!s:<5}"
         )
         print(f"  => {decide(g)}")
-    if diagram:
-        print("\n" + c.to_mermaid(plain=True))
+    if diagram:  # the last ticket's run, drawn: its path through the route to its queue
+        print("\n" + c.to_mermaid(out["gates"], out["answers"], plain=True, state="Ticket"))
 
 
 if __name__ == "__main__":

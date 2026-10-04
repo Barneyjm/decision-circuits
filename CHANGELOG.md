@@ -20,6 +20,11 @@
   step: one action from the first rule that holds. In a rule a gate counts as its decision.
   A rule too close to call stops the route and escalates instead of falling through on a guess.
   `route(...)` is the same as a gate body. It survives JSON and mounting.
+- `examples/08_refund_desk.py` routes with `c.route` instead of plain code after the circuit, so
+  its diagram ends in its five queues. One ticket changes queue: a decidedly hostile ticket is
+  now **HUMAN (hostile)** even when an unrelated gate was unsure, where before any unsure gate
+  sent everything to **HUMAN (model unsure)**. Both go to a person.
+- `examples/05_openai_agents_guardrails.py` says which key is missing instead of a traceback.
 - **A probability on a band's edge is outside the band**, as documented. Float error made
   0.9 against 0.8 ± 0.1 read as inside (0.9 − 0.8 is 0.0999… in floats), so it abstained or
   escalated. The same fix applies to `order` cutpoints and the `consistent` band.

@@ -913,6 +913,10 @@ def render_mermaid(
         if not owner(base) and uses.count(base) == 2 and all(c in absorbed for c in consumers[base])  # its rule's two mentions, nothing else
     }
     logic = [gid for gid in logic if gid not in in_ladder]
+    # Branch straight from a gate only where that keeps the path in one place: a gate drawn in
+    # the ladder, or a chip's output. A gate other parts of the circuit also read stays in the
+    # Checks column, and its rule gets a diamond in the ladder instead of a detour back to it.
+    branch_at = {k: base for k, base in branch_at.items() if base in in_ladder or owner(base)}
 
     def rule_node(gid: str, i: int) -> str:
         return gnode(branch_at[(gid, i)]) if (gid, i) in branch_at else f"{gnode(gid)}__r{i}"
@@ -1212,7 +1216,10 @@ def render_mermaid(
             "M_" + ns.replace(".", "__") for ns in circuit.mounts if "." not in ns and any(owner(q) and owner(q).split(".")[0] == ns for q in circuit.questions)
         ]
         wired += [(f"  STATE --> {b}", None) for b in boxes]
-    for gid in logic + decisions:
+        # Invisible links keep every question one step from the state, so the Asked column lines
+        # up; without them Mermaid ranks questions by what they feed and wires cut through boxes.
+        wired += [(f"  STATE ~~~ {qnode(q)}", None) for q in circuit.questions]
+    for gid in logic + decisions + sorted(in_ladder):  # a gate drawn in the ladder keeps its own inputs
         wired += edge_lines(gid, compiled[gid])
     path_start = len(wired)
     for gid in ladder_of:

@@ -110,7 +110,7 @@ def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_stat
     assert 'g_action__r1{"<b>1.</b> now AND down?"}:::passed' in ran  # checked, said no: on the path
     assert 'g_action__a1(["page on-call"]):::faded' in ran
     assert "g_action__r1 ---> g_action__a1" in ran  # a branch not taken carries no label
-    wires = [ln.strip() for ln in ran.split("\n") if "-->" in ln]
+    wires = [ln.strip() for ln in ran.split("\n") if "-->" in ln or "~~~" in ln]
     heavy = next(ln for ln in ran.split("\n") if "stroke-width:3.5px" in ln).split()[1].split(",")
     assert {wires[int(i)] for i in heavy} == {"g_action__r1 -->|no| g_tech", "g_tech -->|yes| g_action__a2"}  # the way through
     assert "STATE" not in c.to_mermaid(plain=True, state=None)
@@ -118,7 +118,7 @@ def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_stat
     unsure = {"urgent": noul(0.75), "outage": noul(0.95), "technical": noul(0.95)}
     held = c.to_mermaid(c.evaluate(unsure), unsure, plain=True)
     assert 'g_action__esc(["⚠ a person"]):::hold' in held and "g_action__r1 --->|too close to call| g_action__esc" in held
-    held_wires = [ln.strip() for ln in held.split("\n") if "-->" in ln]
+    held_wires = [ln.strip() for ln in held.split("\n") if "-->" in ln or "~~~" in ln]
     amber = next(ln for ln in held.split("\n") if ln.strip().startswith("linkStyle") and "stroke:#9A6B00" in ln).split()[1].split(",")
     assert [held_wires[int(i)] for i in amber] == ["g_action__r1 --->|too close to call| g_action__esc"]
 
@@ -142,7 +142,7 @@ def test_what_ran_and_said_no_stays_solid_and_only_what_never_ran_is_dashed():
     assert ":::qno" in m.split("q_urgent[")[1].split("\n")[0]
     assert ":::qyes" in m.split("q_outage[")[1].split("\n")[0]
     lines = m.split("\n")
-    wires = [ln.strip() for ln in lines if "-->" in ln]
+    wires = [ln.strip() for ln in lines if "-->" in ln or "~~~" in ln]
 
     def styled(marker: str) -> set[str]:
         return {wires[int(i)] for ln in lines if ln.strip().startswith("linkStyle") and marker in ln for i in ln.split()[1].split(",")}
@@ -177,10 +177,11 @@ def test_a_rule_that_was_never_reached_has_its_wires_faded_and_not_reads_inverte
     m = c.to_mermaid(c.evaluate(answers), answers, plain=True)
     assert "g_tech -->|NOT| g_action__r2" in m and "<b>2.</b> NOT tech?" in m
     lines = m.split("\n")
-    wires = [ln.strip() for ln in lines if "-->" in ln]
+    wires = [ln.strip() for ln in lines if "-->" in ln or "~~~" in ln]
     faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
     assert "g_tech -->|NOT| g_action__r2" in {wires[i] for i in faded}  # rule 1 held: rule 2 never ran
-    assert "g_action__r1{" not in m and "g_action__r3{" not in m  # single-gate rules branch from the gate
+    assert "g_action__r1{" not in m  # `now` feeds only rule 1: the rule branches from the gate
+    assert 'g_action__r3{"<b>3.</b> tech?"}' in m  # `tech` is shared with rule 2: a diamond in the ladder
     assert "g_now ---->|yes| g_action__a1" in wires and "g_now ---->|yes| g_action__a1" not in {wires[i] for i in faded}
 
 
@@ -212,9 +213,21 @@ def test_a_gate_that_only_feeds_one_rule_is_drawn_in_the_ladder():
     action = m.split('subgraph DECIDE["Decide"]')[1].split("  end")[0]
     logic = m.split('subgraph LOGIC["Checks"]')[1].split("  end")[0]
     assert "g_only_here" in action and "g_only_here" not in logic  # moved to its rule's place
+    assert "q_b --> g_only_here" in m  # and keeps the wire from what it reads
     assert "g_shared" in logic and "g_shared[" not in action and "g_shared{" not in action  # used elsewhere: stays
-    assert "g_shared -->|no| g_only_here" in m and "g_only_here -->|no| g_action__else" in m
+    assert "g_action__r1 -->|no| g_only_here" in m and "g_only_here -->|no| g_action__else" in m  # shared: a diamond
     answers = {"a": noul(0.9), "b": noul(0.9)}  # rule 1 holds: the route never reaches `only_here`
     ran = c.to_mermaid(c.evaluate(answers), answers, plain=True)
     line = next(ln for ln in ran.split("\n") if ln.strip().startswith("g_only_here"))
     assert line.endswith(":::faded")  # a ladder step never reached fades, whatever the gate said
+
+
+def test_a_shared_gate_keeps_its_place_and_its_rule_gets_a_diamond():
+    c = Circuit()
+    c.noul("a", "?")
+    c.gate("risky", Q("a") >= 0.5)
+    c.gate("also_reads_it", ~G("risky") >= 0.5)
+    c.route("action", [("review", G("risky"))], otherwise="ok")
+    m = c.to_mermaid(plain=True)
+    assert 'g_action__r1{"<b>1.</b> risky?"}' in m and "g_risky --> g_action__r1" in m  # a diamond in the ladder
+    assert "g_risky -->|no|" not in m  # no ladder branches from the shared gate itself

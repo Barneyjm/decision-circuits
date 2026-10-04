@@ -18,12 +18,17 @@ which is how "block" and "ask" come back to the agent.
 
 import asyncio
 import os
+import sys
 
 from agents import Agent, InputGuardrailTripwireTriggered, Runner, function_tool
 
 from decision_circuits import Circuit, Q
 from decision_circuits.backends import SystemOne
 from decision_circuits.integrations.openai_agents import circuit_input_guardrail, circuit_tool_guardrail
+
+for key in ("OPENAI_API_KEY", "TYPESAFE_API_KEY"):
+    if not os.environ.get(key):
+        sys.exit(f"set {key}")
 
 backend = SystemOne(api_key=os.environ["TYPESAFE_API_KEY"])
 
