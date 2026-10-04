@@ -826,7 +826,7 @@ def render_mermaid(
         L.append(f'  STATE(["<b>{_mermaid_safe(state)}</b>"]):::state')
 
     # --- inputs
-    L.append('  subgraph IN["Inputs"]')
+    L.append('  subgraph IN["Asked"]')
     L.append("    direction TB")
 
     def qnode_line(qid: str, q: dict[str, Any]) -> str:
@@ -851,7 +851,7 @@ def render_mermaid(
         if not owner(qid):
             L.append(qnode_line(qid, q))
     L.append("  end")
-    L.append("  class IN col")
+    L.append("  style IN fill:none,stroke:#D9DEE3,stroke-dasharray:3 3,color:#5F6B78")
 
     # --- logic and decisions
     OP_LABEL = {
@@ -976,12 +976,8 @@ def render_mermaid(
                     live: bool | str | None = None
                     if status[i - 1] == "skipped":
                         live = SKIP
-                    elif status[i - 1] is not None:
-                        # The rule was checked: this wire decided its answer, yes or no, so it is
-                        # drawn solid and says what it carried.
-                        said = carries(base, opt)
-                        if said is not None:
-                            lab = f"{lab}: {'yes' if said else 'no'}" if lab else ("yes" if said else "no")
+                    # A rule that was checked: its wires decided its answer and stay solid; the box
+                    # each comes from already says yes or no, so the wire doesn't repeat it.
                     node = gnode(base) if base in compiled else qnode(base)
                     out.append((f"  {node} --{'>' if not lab else f'>|{lab}|'} {gnode(gid)}__r{i}", live))
             return out
@@ -1041,6 +1037,13 @@ def render_mermaid(
         taken = r.get("value") if r and r.get("outcome") in ("decided", "default") else None
         ran = r is not None
         nodes, edges = [], []
+        n = len(rules)
+
+        def arrow(i: int) -> str:
+            """A link long enough that every outcome lands in the same column (rule i sits i-1
+            ranks right of rule 1; its outcome needs n-i+1 more)."""
+            return "-" * (n - i + 2) + ">"
+
         # every rule the route checked is on the path: a no passes through (outlined), a yes stops
         # there (filled); only rules it never reached fade
         cls_rule = {"held": "yes", "no": "passed", "unsure": "hold", "skipped": "faded", None: "logic"}
@@ -1053,11 +1056,12 @@ def render_mermaid(
                 nodes.append(f'  {here}{{"<b>{i}.</b> {question}"}}:::{cls_rule[st[i - 1]]}')
             took = ran and st[i - 1] == "held"
             nodes.append(f'  {g}__a{i}(["{"✓ " if took else ""}{name}"]):::{"yes" if took else "faded" if ran else "act"}')
-            edges.append((f"  {here} -->|yes| {g}__a{i}", (True if took else SKIP) if ran else None))
+            yes_label = "|yes|" if took or not ran else ""  # a branch not taken is faded and needs no label
+            edges.append((f"  {here} {arrow(i)}{yes_label} {g}__a{i}", (True if took else SKIP) if ran else None))
             nxt = rule_node(gid, i + 1) if i < len(rules) else f"{g}__else"
             edges.append((f"  {here} -->|no| {nxt}", (True if st[i - 1] == "no" else SKIP) if ran else None))
             if st[i - 1] == "unsure":
-                edges.append((f"  {here} -->|too close to call| {g}__esc", True))
+                edges.append((f"  {here} {arrow(i)}|too close to call| {g}__esc", True))
         fell = ran and all(x == "no" for x in st)
         other = _mermaid_safe(str(spec.get("otherwise")))
         nodes.append(f'  {g}__else(["{"✓ " if fell else ""}{other}"]):::{"yes" if fell else "faded" if ran else "act"}')
@@ -1094,13 +1098,13 @@ def render_mermaid(
         if op in ("argmax", "majority", "verify") and spec.get("min_confidence"):
             head += f"<br/>conf ≥ {spec['min_confidence']:g}" if plain else f"<br/><span style='color:#5F6B78'>conf ≥ {spec['min_confidence']:g}</span>"
         if op in ("and", "or") and not terminal and spec.get("tau", 0.5) != 0.5:
-            head += f" ≥ {spec['tau']:g}"
+            head += f" ≥ {spec['tau']:.0%}"
         if op == "threshold" and not terminal and not gid.startswith("_"):
-            head += f" {spec['tau']:g}"
+            head += f" {spec['tau']:.0%}"
         if terminal:
             label = f"<b>{shown(gid).replace('_', ' ').title()}</b><br/>{head}"
             if op in ("and", "or", "threshold", "not"):
-                label += f"{'' if op == 'threshold' else ' ≥'} {spec.get('tau', 0.5):g}"  # a threshold's head is already "≥"
+                label += f"{'' if op == 'threshold' else ' ≥'} {spec.get('tau', 0.5):.0%}"  # a threshold's head is already "≥"
             cls = "logic"
             if results and gid in results:
                 r = results[gid]
@@ -1108,14 +1112,16 @@ def render_mermaid(
                 if outc != "decided":
                     verdict, cls = f"⚠ {outc.upper()}", "hold"
                 elif val is True:
-                    verdict, cls = "✓ YES", "yes"
+                    verdict, cls = "✓ yes", "yes"
                 elif val is False:
-                    verdict, cls = "✗ NO", "no"
+                    verdict, cls = "✗ no", "no"
                 else:
                     verdict, cls = f"✓ {val}", "yes"
-                label += f"<br/><b>{verdict}</b>" + (f" · {pr:.0%}" if pr is not None else "")
+                label += f"<br/><b>{verdict}</b>" + (f" ({pr:.0%})" if pr is not None else "")
             return f'  {gnode(gid)}["{label}"]:::{cls}'
-        label = f"<b>{shown(gid).replace('_', ' ')}</b><br/>{head}" if not gid.startswith("_") else head
+        nums = sorted(i for (_, i), gate in branch_at.items() if gate == gid)  # a gate a route branches from shows its rule number
+        num = f"{'/'.join(map(str, nums))}. " if nums else ""
+        label = f"<b>{num}{shown(gid).replace('_', ' ')}</b><br/>{head}" if not gid.startswith("_") else head
         cls = "logic"
         if results and gid in results:
             r = results[gid]
@@ -1125,7 +1131,7 @@ def render_mermaid(
             elif op in ("argmax", "majority", "verify", "order"):
                 label += f"<br/>→ <b>{r.get('value')}</b>" + (f" · {r['p']:.0%}" if r.get("p") is not None else "")
             elif r.get("p") is not None:
-                label += f"<br/>{'✓' if r.get('value') is True else '✗'} {r['p']:.0%}"
+                label += f"<br/><b>{'✓ yes' if r.get('value') is True else '✗ no'}</b> ({r['p']:.0%})"
             if r.get("value") is True:  # the path the run took lights up; what didn't hold greys out
                 cls = "yes"
             elif r.get("value") is False:
@@ -1133,6 +1139,8 @@ def render_mermaid(
         on_path = [rule_status(rg, len(compiled[rg]["rules"]))[i - 1] for (rg, i), gate in branch_at.items() if gate == gid]
         if "no" in on_path:  # a route passed through this gate on its no: it is on the path
             cls = "passed"
+        elif gid in in_ladder and on_path and all(x == "skipped" for x in on_path):
+            cls = "faded"  # a ladder step the route never reached, like the diamonds around it
         lo, hi = SHAPES.get(op, ("[", "]"))
         return f'  {gnode(gid)}{lo}"{label}"{hi}:::{cls}'
 
@@ -1158,35 +1166,52 @@ def render_mermaid(
         for inner in circuit.mounts:
             if inner.startswith(ns + ".") and "." not in inner[len(ns) + 1 :]:
                 out += chip_box(inner)
-        return [*out, "  end", f"  class {sid} chip"]
+        return [*out, "  end", f"  style {sid} fill:#F2F4F7,stroke:#1B1F24,stroke-width:2px,color:#1B1F24"]  # style, not class: survives being an edge target
 
     for ns in circuit.mounts:
         if "." not in ns:
             L += chip_box(ns)
     if any(not owner(g) for g in logic):
-        L.append('  subgraph LOGIC["Logic"]')
+        L.append('  subgraph LOGIC["Checks"]')
         L.append("    direction TB")
         for gid in logic:
             if owner(gid):
                 continue
             L.append("  " + node_line(gid, compiled[gid], False))
         L.append("  end")
-        L.append("  class LOGIC col")
-    if any(not owner(g) for g in decisions) or not circuit.mounts:
-        only_routes = all(compiled[g]["op"] == "route" for g in decisions if not owner(g))
-        L.append(f'  subgraph OUT["{"Action" if only_routes and decisions else "Decisions"}"]')
+        L.append("  style LOGIC fill:none,stroke:#D9DEE3,stroke-dasharray:3 3,color:#5F6B78")
+    if any(not owner(g) and g not in ladder_of for g in decisions) or not (circuit.mounts or ladder_of):
+        L.append('  subgraph OUT["Decisions"]')
         L.append("    direction TB")
         for gid in decisions:
             if owner(gid):
                 continue
             if gid in ladder_of:
-                L += ["  " + n for n in ladder(gid, compiled[gid])[0]]
-                L += ["  " + node_line(base, compiled[base], False) for (rg, _), base in sorted(branch_at.items()) if rg == gid and base in in_ladder]
-            else:
-                L.append("  " + node_line(gid, compiled[gid], True))
+                continue  # drawn below, as its Decide and Outcome columns
+            L.append("  " + node_line(gid, compiled[gid], True))
         L.append("  end")
-        L.append("  class OUT col")
-    wired: list[tuple[str, bool | str | None]] = [(f"  STATE --> {qnode(qid)}", None) for qid in circuit.questions] if state else []
+        L.append("  style OUT fill:none,stroke:#D9DEE3,stroke-dasharray:3 3,color:#5F6B78")
+    host_ladders = [gid for gid in decisions if gid in ladder_of and not owner(gid)]
+    if host_ladders:
+        steps, ends = [], []
+        for gid in host_ladders:
+            for node in ladder(gid, compiled[gid])[0]:
+                (ends if any(f"{gnode(gid)}{k}" in node.split("(")[0] for k in ("__a", "__else", "__esc")) else steps).append(node)
+            steps += [node_line(base, compiled[base], False) for (rg, _), base in sorted(branch_at.items()) if rg == gid and base in in_ladder]
+        L += ['  subgraph DECIDE["Decide"]', *["  " + x for x in steps], "  end", "  style DECIDE fill:none,stroke:#D9DEE3,stroke-dasharray:3 3,color:#5F6B78"]
+        L += [
+            '  subgraph OUTCOME["Outcome"]',
+            *["  " + x for x in ends],
+            "  end",
+            "  style OUTCOME fill:none,stroke:#D9DEE3,stroke-dasharray:3 3,color:#5F6B78",
+        ]
+    wired: list[tuple[str, bool | str | None]] = []
+    if state:  # one arrow into each box of questions, not one per question
+        boxes = ["IN"] if any(not owner(q) for q in circuit.questions) else []
+        boxes += [
+            "M_" + ns.replace(".", "__") for ns in circuit.mounts if "." not in ns and any(owner(q) and owner(q).split(".")[0] == ns for q in circuit.questions)
+        ]
+        wired += [(f"  STATE --> {b}", None) for b in boxes]
     for gid in logic + decisions:
         wired += edge_lines(gid, compiled[gid])
     path_start = len(wired)
@@ -1202,9 +1227,13 @@ def render_mermaid(
     never = [str(i) for i, (_, live) in enumerate(wired) if live == SKIP]
     if never:
         L.append(f"  linkStyle {','.join(never)} stroke:#D5DAE0,stroke-width:1px,stroke-dasharray:4 3")
-    path = [str(i) for i in range(path_start, len(wired)) if wired[i][1] is True]
-    if path:  # the way through each route's ladder to its action, drawn heavy
-        L.append(f"  linkStyle {','.join(path)} stroke:#2E7D4F,stroke-width:3.5px")
+    path = [i for i in range(path_start, len(wired)) if wired[i][1] is True]
+    unsure = [str(i) for i in path if "|too close to call|" in wired[i][0]]
+    decided = [str(i) for i in path if "|too close to call|" not in wired[i][0]]
+    if decided:  # the way through each route's ladder to its action, drawn heavy
+        L.append(f"  linkStyle {','.join(decided)} stroke:#2E7D4F,stroke-width:3.5px")
+    if unsure:  # the hand-off to a person, heavy amber: it went somewhere, but nothing was decided
+        L.append(f"  linkStyle {','.join(unsure)} stroke:#9A6B00,stroke-width:3.5px")
     return "\n".join(L)
 
 

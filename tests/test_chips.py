@@ -214,9 +214,9 @@ def test_mermaid_draws_each_chip_as_a_box_with_its_pins():
     assert "q_esc__threat" in m and "<b>threat</b>" in m
     assert "q_angry -->|pii| g_esc__hot" in m  # crossed wires are labelled with the pin
     assert "q_dept -->|dept: billing| g_esc__hot" not in m and "q_dept -->|billing| g_esc__hot" in m
-    assert "<b>Out</b><br/>≥ 0.6" in m  # a decision nothing consumes, drawn inside its chip
+    assert "<b>Out</b><br/>≥ 60%" in m  # a decision nothing consumes, drawn inside its chip
     c.gate("page", G("esc.out") >= 0.5)
-    assert "<b>out</b><br/>≥ 0.6" in c.to_mermaid(plain=True)  # consumed: a logic node, its tau shown
+    assert "<b>out</b><br/>≥ 60%" in c.to_mermaid(plain=True)  # consumed: a logic node, its tau shown
 
 
 def test_question_types_and_typesafe_refuses_what_it_does_not_answer():

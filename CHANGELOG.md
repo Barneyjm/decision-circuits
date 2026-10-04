@@ -26,6 +26,11 @@
 - **`describe()`**: a circuit or chip in plain English, as Markdown. It covers each question in
   its own words, what each gate decides and when it holds back, and how each chip is wired.
   Given a run's results, it also says what happened. On an unmounted chip it is the datasheet.
+- `to_mermaid` lays a circuit out in columns, Asked → Checks → Decide → Outcome, with every
+  action stacked on the right in rule order. A rule that reads one gate branches from that
+  gate (numbered), and a diamond is kept only for rules that combine. Gates and answers lead
+  with their outcome ("✗ no (4%)") and thresholds read in percent. An escalation path is
+  heavy amber.
 - `to_mermaid` reads as one process: a state node (`state=`, None to leave it out), and a
   route drawn as its yes/no ladder. Each rule is a diamond, **yes** leads to its action and
   **no** to the next rule, and an escalation branches to a person. After a run, every gate is

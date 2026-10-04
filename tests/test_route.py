@@ -91,20 +91,25 @@ def test_a_probability_on_the_band_edge_is_outside_the_band():
 def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_state():
     c = triage()
     m = c.to_mermaid(plain=True, state="Ticket")
-    assert 'STATE(["<b>Ticket</b>"]):::state' in m and "STATE --> q_urgent" in m
-    assert 'subgraph OUT["Action"]' in m
+    assert 'STATE(["<b>Ticket</b>"]):::state' in m and "STATE --> IN" in m and "STATE --> q_" not in m  # one arrow into the column
+    assert 'subgraph DECIDE["Decide"]' in m and 'subgraph OUTCOME["Outcome"]' in m
+    outcome = m.split('subgraph OUTCOME["Outcome"]')[1].split("  end")[0]
+    assert all(f'g_action__{k}(["' in outcome for k in ("a1", "a2", "else"))  # every action in the right-hand column
     assert 'g_action__r1{"<b>1.</b> now AND down?"}' in m and 'g_action__a1(["page on-call"])' in m  # asks the condition
     assert "g_now --> g_action__r1" in m and "g_down --> g_action__r1" in m  # wired straight in (no run: no values)
     assert "AND" not in m.replace("now AND down", "")  # no loose junction box for the rule's logic
     # rule 2 reads one gate, so it branches from that gate: no diamond asking "tech?" again
-    for wire in ("g_action__r1 -->|yes| g_action__a1", "g_action__r1 -->|no| g_tech", "g_tech -->|yes| g_action__a2", "g_tech -->|no| g_action__else"):
+    # yes links are long enough that every action lands in the same column
+    for wire in ("g_action__r1 --->|yes| g_action__a1", "g_action__r1 -->|no| g_tech", "g_tech -->|yes| g_action__a2", "g_tech -->|no| g_action__else"):
         assert wire in m
     assert "g_action__r2" not in m
     assert 'g_action__else(["general queue"])' in m
     answers = {"urgent": noul(0.2), "outage": noul(0.95), "technical": noul(0.95)}
     ran = c.to_mermaid(c.evaluate(answers), answers, plain=True)
     assert 'g_action__a2(["✓ technical queue"]):::yes' in ran
-    assert 'g_action__r1{"<b>1.</b> now AND down?"}:::passed' in ran  # checked, said no: on the path and 'g_action__a1(["page on-call"]):::faded' in ran
+    assert 'g_action__r1{"<b>1.</b> now AND down?"}:::passed' in ran  # checked, said no: on the path
+    assert 'g_action__a1(["page on-call"]):::faded' in ran
+    assert "g_action__r1 ---> g_action__a1" in ran  # a branch not taken carries no label
     wires = [ln.strip() for ln in ran.split("\n") if "-->" in ln]
     heavy = next(ln for ln in ran.split("\n") if "stroke-width:3.5px" in ln).split()[1].split(",")
     assert {wires[int(i)] for i in heavy} == {"g_action__r1 -->|no| g_tech", "g_tech -->|yes| g_action__a2"}  # the way through
@@ -112,7 +117,10 @@ def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_stat
 
     unsure = {"urgent": noul(0.75), "outage": noul(0.95), "technical": noul(0.95)}
     held = c.to_mermaid(c.evaluate(unsure), unsure, plain=True)
-    assert 'g_action__esc(["⚠ a person"]):::hold' in held and "g_action__r1 -->|too close to call| g_action__esc" in held
+    assert 'g_action__esc(["⚠ a person"]):::hold' in held and "g_action__r1 --->|too close to call| g_action__esc" in held
+    held_wires = [ln.strip() for ln in held.split("\n") if "-->" in ln]
+    amber = next(ln for ln in held.split("\n") if ln.strip().startswith("linkStyle") and "stroke:#9A6B00" in ln).split()[1].split(",")
+    assert [held_wires[int(i)] for i in amber] == ["g_action__r1 --->|too close to call| g_action__esc"]
 
 
 def test_describe_leads_with_the_outcome_and_names_what_was_unsure():
@@ -142,10 +150,10 @@ def test_what_ran_and_said_no_stays_solid_and_only_what_never_ran_is_dashed():
     said_no = styled("stroke:#AEB6BF")  # ran, carried a no: solid
     never = styled("dasharray")  # never ran: dashed
     assert "q_urgent --> g_now" in said_no
-    # into a rule the route checked: solid and dark, labelled with what it carried
-    assert "g_now -->|no| g_action__r1" in wires and "g_now -->|no| g_action__r1" not in said_no | never
+    # into a rule the route checked: solid and dark; the box it comes from already says no
+    assert "g_now --> g_action__r1" in wires and "g_now --> g_action__r1" not in said_no | never
     assert "g_tech -->|yes| g_action__a2" in wires
-    assert never == {"g_action__r1 -->|yes| g_action__a1", "g_tech -->|no| g_action__else"}  # branches not taken
+    assert never == {"g_action__r1 ---> g_action__a1", "g_tech -->|no| g_action__else"}  # branches not taken
     assert "g_tech -->|yes| g_action__a2" not in said_no | never  # the branch taken
     assert "linkStyle" not in c.to_mermaid(plain=True)  # no run, nothing styled
 
@@ -173,7 +181,7 @@ def test_a_rule_that_was_never_reached_has_its_wires_faded_and_not_reads_inverte
     faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
     assert "g_tech -->|NOT| g_action__r2" in {wires[i] for i in faded}  # rule 1 held: rule 2 never ran
     assert "g_action__r1{" not in m and "g_action__r3{" not in m  # single-gate rules branch from the gate
-    assert "g_now -->|yes| g_action__a1" in wires and "g_now -->|yes| g_action__a1" not in {wires[i] for i in faded}
+    assert "g_now ---->|yes| g_action__a1" in wires and "g_now ---->|yes| g_action__a1" not in {wires[i] for i in faded}
 
 
 def test_a_question_shows_what_it_landed_on_and_the_outcomes_it_did_not():
@@ -201,8 +209,12 @@ def test_a_gate_that_only_feeds_one_rule_is_drawn_in_the_ladder():
     c.gate("elsewhere", G("shared") >= 0.5)  # something else reads `shared`
     c.route("action", [("x", G("shared")), ("y", G("only_here"))], otherwise="z")
     m = c.to_mermaid(plain=True)
-    action = m.split('subgraph OUT["')[1].split("  end")[0]
-    logic = m.split('subgraph LOGIC["Logic"]')[1].split("  end")[0]
+    action = m.split('subgraph DECIDE["Decide"]')[1].split("  end")[0]
+    logic = m.split('subgraph LOGIC["Checks"]')[1].split("  end")[0]
     assert "g_only_here" in action and "g_only_here" not in logic  # moved to its rule's place
     assert "g_shared" in logic and "g_shared[" not in action and "g_shared{" not in action  # used elsewhere: stays
     assert "g_shared -->|no| g_only_here" in m and "g_only_here -->|no| g_action__else" in m
+    answers = {"a": noul(0.9), "b": noul(0.9)}  # rule 1 holds: the route never reaches `only_here`
+    ran = c.to_mermaid(c.evaluate(answers), answers, plain=True)
+    line = next(ln for ln in ran.split("\n") if ln.strip().startswith("g_only_here"))
+    assert line.endswith(":::faded")  # a ladder step never reached fades, whatever the gate said

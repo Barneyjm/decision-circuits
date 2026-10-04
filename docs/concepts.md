@@ -144,11 +144,16 @@ input and operation, meant to be logged next to the decision.
 `c.to_mermaid()` renders the circuit as a Mermaid flowchart in three
 columns: inputs, logic, decisions. Pass `results=` and `answers=` from a
 run to color the nodes by outcome. It renders on GitHub and in any
-Mermaid tool. It reads left to right as one process: the state (`state="Conversation"`
-names it), the questions asked about it with their wording (`text=False` for a compact
-diagram), the gates, and the action. After a run every gate is coloured by what it decided
-and a yes/no question answered no greys out, wires that carried a no fade, and the way
-through the route to the chosen action is drawn heavy.
+Mermaid tool. It reads left to right in columns: the state (`state="Conversation"` names
+it), **Asked** (each question with its wording, `text=False` for a compact diagram),
+**Checks** (the gates), **Decide** (the route's ladder) and **Outcome**, every possible
+action stacked in rule order on the right. After a run:
+
+- green is what held and the way through, grey is what ran and said no, amber is too close
+  to call, and dashed is what never ran (rules the route didn't reach, branches not taken);
+- each answer leads with the outcome it landed on ("no 89%", then "yes 11%");
+- the path to the chosen action is one heavy line, green when decided and amber when it was
+  handed to a person.
 Each mounted chip is its own box.
 
 ## In plain English
