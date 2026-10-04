@@ -93,14 +93,16 @@ def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_stat
     m = c.to_mermaid(plain=True, state="Ticket")
     assert 'STATE(["<b>Ticket</b>"]):::state' in m and "STATE --> q_urgent" in m
     assert 'subgraph OUT["Action"]' in m
-    assert 'g_action__r1{"<b>1.</b> page on-call?"}' in m and 'g_action__a1(["page on-call"])' in m
+    assert 'g_action__r1{"<b>1. page on-call?</b><br/>now AND down"}' in m and 'g_action__a1(["page on-call"])' in m
+    assert "g_now --> g_action__r1" in m and "g_down --> g_action__r1" in m  # wired straight in
+    assert "AND" not in m.replace("now AND down", "")  # no loose junction box for the rule's logic
     for wire in ("g_action__r1 -->|yes| g_action__a1", "g_action__r1 -->|no| g_action__r2", "g_action__r2 -->|no| g_action__else"):
         assert wire in m
     assert 'g_action__else(["general queue"])' in m
     answers = {"urgent": noul(0.2), "outage": noul(0.95), "technical": noul(0.95)}
     ran = c.to_mermaid(c.evaluate(answers), answers, plain=True)
     assert 'g_action__a2(["✓ technical queue"]):::yes' in ran
-    assert 'g_action__r1{"<b>1.</b> page on-call?"}:::no' in ran and 'g_action__a1(["page on-call"]):::faded' in ran
+    assert 'g_action__r1{"<b>1. page on-call?</b><br/>now AND down"}:::no' in ran and 'g_action__a1(["page on-call"]):::faded' in ran
     wires = [ln.strip() for ln in ran.split("\n") if "-->" in ln]
     heavy = next(ln for ln in ran.split("\n") if "stroke-width:3.5px" in ln).split()[1].split(",")
     assert {wires[int(i)] for i in heavy} == {"g_action__r1 -->|no| g_action__r2", "g_action__r2 -->|yes| g_action__a2"}  # the way through
@@ -136,3 +138,17 @@ def test_after_a_run_what_said_no_greys_out_and_its_wires_fade():
     assert "g_action__r1 -->|yes| g_action__a1" in {wires[i] for i in faded}  # the action not taken
     assert "g_action__r2 -->|yes| g_action__a2" not in {wires[i] for i in faded}  # the action taken
     assert "linkStyle" not in c.to_mermaid(plain=True)  # no run, nothing to fade
+
+
+def test_a_rule_that_was_never_reached_has_its_wires_faded_and_not_reads_inverted():
+    c = triage()
+    c.gates.pop()  # replace the route with one that has a NOT and a third rule
+    c.route("action", [("page", G("now")), ("quiet", ~G("tech")), ("tech", G("tech"))], otherwise="none")
+    answers = {"urgent": noul(0.95), "outage": noul(0.1), "technical": noul(0.95)}
+    m = c.to_mermaid(c.evaluate(answers), answers, plain=True)
+    assert "g_tech -->|NOT| g_action__r2" in m and "<b>2. quiet?</b><br/>NOT tech" in m
+    lines = m.split("\n")
+    wires = [ln.strip() for ln in lines if "-->" in ln]
+    faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
+    assert {"g_tech -->|NOT| g_action__r2", "g_tech --> g_action__r3"} <= {wires[i] for i in faded}  # rule 1 held: 2 and 3 never ran
+    assert "g_now --> g_action__r1" not in {wires[i] for i in faded}

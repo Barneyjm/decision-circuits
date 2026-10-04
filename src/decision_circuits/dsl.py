@@ -851,6 +851,40 @@ def render_mermaid(
         (decisions if terminal else logic).append(gid)
     ladder_of = {gid for gid in decisions if compiled[gid]["op"] == "route"}  # a route nothing reads is drawn as its ladder
 
+    # A ladder rule's AND / OR / NOT is drawn inside its diamond, not as loose junctions: each
+    # rule is wired straight from the gates and answers it reads.
+    absorbed: set[str] = set()
+
+    def rule_leaves(ref: str, negated: bool = False) -> list[tuple[str, bool]]:
+        base = ref.partition(":")[0]
+        if not (base.startswith("_") and base in compiled):
+            return [(ref, negated)]
+        absorbed.add(base)
+        spec = compiled[base]
+        if spec["op"] == "not":
+            return rule_leaves(spec["input"], not negated)
+        return [leaf for r in spec_refs(spec) for leaf in rule_leaves(r, negated)]
+
+    rule_inputs = {gid: [rule_leaves(ref) for _, ref in compiled[gid]["rules"]] for gid in ladder_of}
+    logic = [gid for gid in logic if gid not in absorbed]
+    gate_defs = {g.name: g for g in circuit.gates}
+
+    def cond_text(e: Any) -> str:
+        """A rule's condition in a few words: "wants refund AND has reason"."""
+        if isinstance(e, Q | G):
+            base, _, opt = e.ref.partition(":")
+            name = shown(base).replace("_", " ")
+            return name if opt in ("", "True") else f"NOT {name}" if opt == "False" else f"{name}: {opt}"
+        if isinstance(e, Not):
+            inner = cond_text(e.inner)
+            return f"NOT ({inner})" if isinstance(e.inner, And | Or) else f"NOT {inner}"
+        if isinstance(e, And | Or):
+            word = " AND " if isinstance(e, And) else " OR "
+            return word.join(f"({cond_text(p)})" if isinstance(p, And | Or) else cond_text(p) for p in e.parts)
+        if isinstance(e, Threshold):
+            return f"{cond_text(e.inner)} ≥ {e.tau:g}"
+        return "?"
+
     def carries(base: str, opt: str) -> bool | None:
         """Whether a wire carried a yes on this run: a noul answered yes, the picked option, a gate
         that decided yes or the value read. None when it can't be said (no run, a helper, unsure)."""
@@ -880,6 +914,18 @@ def render_mermaid(
         rule_no = {ref: i for i, (_, ref) in enumerate(spec.get("rules", []), 1)}
         route_r = (results or {}).get(gid) if spec["op"] == "route" else None
         status = rule_status(gid, len(spec.get("rules", []))) if gid in ladder_of else []
+        if gid in ladder_of:  # each rule's diamond, wired straight from what its condition reads
+            for i, leaves in enumerate(rule_inputs[gid], 1):
+                for leaf, negated in leaves:
+                    base, _, opt = leaf.partition(":")
+                    live = None if status[i - 1] is None else False if status[i - 1] == "skipped" else carries(base, opt)
+                    if negated and live is not None and status[i - 1] != "skipped":
+                        live = not live
+                    shown_opt = "" if opt in ("", "True") else opt
+                    lab = " ".join(x for x in ("NOT" if negated else "", shown_opt) if x)
+                    node = gnode(base) if base in compiled else qnode(base)
+                    out.append((f"  {node} --{'>' if not lab else f'>|{lab}|'} {gnode(gid)}__r{i}", live))
+            return out
         for ref in spec_refs(spec):
             lab = "check" if spec.get("check") == ref else ""
             base, _, opt = ref.partition(":")
@@ -939,7 +985,8 @@ def render_mermaid(
         cls_rule = {"held": "yes", "no": "no", "unsure": "hold", "skipped": "faded", None: "logic"}
         for i, (action, _) in enumerate(rules, 1):
             name = _mermaid_safe(str(action))
-            nodes.append(f'  {g}__r{i}{{"<b>{i}.</b> {name}?"}}:::{cls_rule[st[i - 1]]}')
+            cond = "<br/>".join(_mermaid_safe(x) for x in _wrap(cond_text(gate_defs[gid].body.rules[i - 1][1]), 24, 4)) if gid in gate_defs else ""
+            nodes.append(f'  {g}__r{i}{{"<b>{i}. {name}?</b>{"<br/>" + cond if cond else ""}"}}:::{cls_rule[st[i - 1]]}')
             took = ran and st[i - 1] == "held"
             nodes.append(f'  {g}__a{i}(["{"✓ " if took else ""}{name}"]):::{"yes" if took else "faded" if ran else "act"}')
             edges.append((f"  {g}__r{i} -->|yes| {g}__a{i}", took if ran else None))
