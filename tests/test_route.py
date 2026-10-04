@@ -127,19 +127,35 @@ def test_describe_leads_with_the_outcome_and_names_what_was_unsure():
     assert "escalated to a person**: rule 1 (**page on-call**) hinges on `now` (75%) too close to call." in c.describe(c.evaluate(unsure), unsure)
 
 
-def test_after_a_run_what_said_no_greys_out_and_its_wires_fade():
+def test_what_ran_and_said_no_stays_solid_and_only_what_never_ran_is_dashed():
     c = triage()
     answers = {"urgent": noul(0.2), "outage": noul(0.95), "technical": noul(0.95)}
     m = c.to_mermaid(c.evaluate(answers), answers, plain=True)
-    assert "<b>urgent</b>" in m and ":::qno" in m.split("q_urgent[")[1].split("\n")[0]
+    assert ":::qno" in m.split("q_urgent[")[1].split("\n")[0]
     assert ":::qyes" in m.split("q_outage[")[1].split("\n")[0]
     lines = m.split("\n")
     wires = [ln.strip() for ln in lines if "-->" in ln]
-    faded = {int(i) for ln in lines if ln.strip().startswith("linkStyle") and "dasharray" in ln for i in ln.split()[1].split(",")}
-    assert "q_urgent --> g_now" in {wires[i] for i in faded}  # the no from urgent
-    assert "g_action__r1 -->|yes| g_action__a1" in {wires[i] for i in faded}  # the action not taken
-    assert "g_action__r2 -->|yes| g_action__a2" not in {wires[i] for i in faded}  # the action taken
-    assert "linkStyle" not in c.to_mermaid(plain=True)  # no run, nothing to fade
+
+    def styled(marker: str) -> set[str]:
+        return {wires[int(i)] for ln in lines if ln.strip().startswith("linkStyle") and marker in ln for i in ln.split()[1].split(",")}
+
+    said_no = styled("stroke:#AEB6BF")  # ran, carried a no: solid
+    never = styled("dasharray")  # never ran: dashed
+    assert "q_urgent --> g_now" in said_no and "g_now --> g_action__r1" in said_no
+    assert never == {"g_action__r1 -->|yes| g_action__a1", "g_action__r2 -->|no| g_action__else"}  # branches not taken
+    assert "g_action__r2 -->|yes| g_action__a2" not in said_no | never  # the branch taken
+    assert "linkStyle" not in c.to_mermaid(plain=True)  # no run, nothing styled
+
+
+def test_a_chip_box_shows_what_the_chip_decided():
+    chip = Chip("strict", inputs=["x"], outputs=["yes"])
+    chip.gate("yes", Q("x") >= 0.8)
+    c = Circuit()
+    c.noul("a", "?")
+    c.mount(chip, "s", {"x": "a"})
+    answers = {"a": noul(0.05)}
+    assert 'subgraph M_s["s · strict → yes: no (5%)"]' in c.to_mermaid(c.evaluate(answers), answers, plain=True)
+    assert 'subgraph M_s["s · strict"]' in c.to_mermaid(plain=True)
 
 
 def test_a_rule_that_was_never_reached_has_its_wires_faded_and_not_reads_inverted():
