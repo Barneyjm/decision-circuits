@@ -102,7 +102,9 @@ def test_the_diagram_draws_a_route_as_its_yes_no_ladder_and_starts_from_the_stat
     answers = {"urgent": noul(0.2), "outage": noul(0.95), "technical": noul(0.95)}
     ran = c.to_mermaid(c.evaluate(answers), answers, plain=True)
     assert 'g_action__a2(["✓ technical queue"]):::yes' in ran
-    assert 'g_action__r1{"<b>1. page on-call?</b><br/>now AND down"}:::no' in ran and 'g_action__a1(["page on-call"]):::faded' in ran
+    assert (
+        'g_action__r1{"<b>1. page on-call?</b><br/>now AND down"}:::passed' in ran
+    )  # checked, said no: on the path and 'g_action__a1(["page on-call"]):::faded' in ran
     wires = [ln.strip() for ln in ran.split("\n") if "-->" in ln]
     heavy = next(ln for ln in ran.split("\n") if "stroke-width:3.5px" in ln).split()[1].split(",")
     assert {wires[int(i)] for i in heavy} == {"g_action__r1 -->|no| g_action__r2", "g_action__r2 -->|yes| g_action__a2"}  # the way through

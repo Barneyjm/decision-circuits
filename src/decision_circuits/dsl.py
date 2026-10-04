@@ -799,6 +799,7 @@ def render_mermaid(
         "  classDef state fill:#1B1F24,stroke:#1B1F24,color:#FFFFFF;",
         "  classDef act fill:#FFFFFF,stroke:#1B1F24,stroke-width:1.5px,color:#1B1F24;",
         "  classDef faded fill:#F4F5F7,stroke:#C9CED4,stroke-width:1px,color:#9AA3AD;",
+        "  classDef passed fill:#FFFFFF,stroke:#2E7D4F,stroke-width:2.5px,color:#1B1F24;",
     ]
     if state:
         L.append(f'  STATE(["<b>{_mermaid_safe(state)}</b>"]):::state')
@@ -982,7 +983,9 @@ def render_mermaid(
         taken = r.get("value") if r and r.get("outcome") in ("decided", "default") else None
         ran = r is not None
         nodes, edges = [], []
-        cls_rule = {"held": "yes", "no": "no", "unsure": "hold", "skipped": "faded", None: "logic"}
+        # every rule the route checked is on the path: a no passes through (outlined), a yes stops
+        # there (filled); only rules it never reached fade
+        cls_rule = {"held": "yes", "no": "passed", "unsure": "hold", "skipped": "faded", None: "logic"}
         for i, (action, _) in enumerate(rules, 1):
             name = _mermaid_safe(str(action))
             cond = "<br/>".join(_mermaid_safe(x) for x in _wrap(cond_text(gate_defs[gid].body.rules[i - 1][1]), 24, 4)) if gid in gate_defs else ""
