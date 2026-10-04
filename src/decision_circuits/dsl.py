@@ -892,6 +892,31 @@ def render_mermaid(
         return [leaf for r in spec_refs(spec) for leaf in rule_leaves(r, negated)]
 
     rule_inputs = {gid: [rule_leaves(ref) for _, ref in compiled[gid]["rules"]] for gid in ladder_of}
+
+    # A rule that reads one gate's decision branches from that gate: the gate already answered,
+    # so a diamond asking it again would only repeat it. Diamonds are kept for rules that combine.
+    branch_at: dict[tuple[str, int], str] = {}
+    for gid in ladder_of:
+        for i, leaves in enumerate(rule_inputs[gid], 1):
+            if len(leaves) == 1:
+                ((leaf, negated),) = leaves
+                base, _, opt = leaf.partition(":")
+                if not negated and opt in ("", "True") and base in compiled and not base.startswith("_") and compiled[base]["op"] != "route":
+                    branch_at[(gid, i)] = base
+
+    # A host gate that exists only to feed one rule is drawn in the ladder at that rule's place,
+    # so the path doesn't dive back into the Logic column and out again.
+    uses = [b for b in branch_at.values()] + [leaf.partition(":")[0] for gid in ladder_of for leaves in rule_inputs[gid] for leaf, _ in leaves]
+    in_ladder = {
+        base
+        for base in set(branch_at.values())
+        if not owner(base) and uses.count(base) == 2 and all(c in absorbed for c in consumers[base])  # its rule's two mentions, nothing else
+    }
+    logic = [gid for gid in logic if gid not in in_ladder]
+
+    def rule_node(gid: str, i: int) -> str:
+        return gnode(branch_at[(gid, i)]) if (gid, i) in branch_at else f"{gnode(gid)}__r{i}"
+
     logic = [gid for gid in logic if gid not in absorbed]
     gate_defs = {g.name: g for g in circuit.gates}
 
@@ -942,6 +967,8 @@ def render_mermaid(
         status = rule_status(gid, len(spec.get("rules", []))) if gid in ladder_of else []
         if gid in ladder_of:  # each rule's diamond, wired straight from what its condition reads
             for i, leaves in enumerate(rule_inputs[gid], 1):
+                if (gid, i) in branch_at:  # the gate is the decision point itself: no wire into it
+                    continue
                 for leaf, negated in leaves:
                     base, _, opt = leaf.partition(":")
                     shown_opt = "" if opt in ("", "True") else opt
@@ -1019,17 +1046,18 @@ def render_mermaid(
         cls_rule = {"held": "yes", "no": "passed", "unsure": "hold", "skipped": "faded", None: "logic"}
         for i, (action, _) in enumerate(rules, 1):
             name = _mermaid_safe(str(action))
-            # the diamond asks the rule's condition; the action is where its yes leads
-            asks = cond_text(gate_defs[gid].body.rules[i - 1][1]) if gid in gate_defs else str(action)
-            question = "<br/>".join(_mermaid_safe(x) for x in _wrap(f"{asks}?", 24, 4))
-            nodes.append(f'  {g}__r{i}{{"<b>{i}.</b> {question}"}}:::{cls_rule[st[i - 1]]}')
+            here = rule_node(gid, i)
+            if (gid, i) not in branch_at:  # a combining rule gets a diamond asking its condition
+                asks = cond_text(gate_defs[gid].body.rules[i - 1][1]) if gid in gate_defs else str(action)
+                question = "<br/>".join(_mermaid_safe(x) for x in _wrap(f"{asks}?", 24, 4))
+                nodes.append(f'  {here}{{"<b>{i}.</b> {question}"}}:::{cls_rule[st[i - 1]]}')
             took = ran and st[i - 1] == "held"
             nodes.append(f'  {g}__a{i}(["{"✓ " if took else ""}{name}"]):::{"yes" if took else "faded" if ran else "act"}')
-            edges.append((f"  {g}__r{i} -->|yes| {g}__a{i}", (True if took else SKIP) if ran else None))
-            nxt = f"{g}__r{i + 1}" if i < len(rules) else f"{g}__else"
-            edges.append((f"  {g}__r{i} -->|no| {nxt}", (True if st[i - 1] == "no" else SKIP) if ran else None))
+            edges.append((f"  {here} -->|yes| {g}__a{i}", (True if took else SKIP) if ran else None))
+            nxt = rule_node(gid, i + 1) if i < len(rules) else f"{g}__else"
+            edges.append((f"  {here} -->|no| {nxt}", (True if st[i - 1] == "no" else SKIP) if ran else None))
             if st[i - 1] == "unsure":
-                edges.append((f"  {g}__r{i} -->|too close to call| {g}__esc", True))
+                edges.append((f"  {here} -->|too close to call| {g}__esc", True))
         fell = ran and all(x == "no" for x in st)
         other = _mermaid_safe(str(spec.get("otherwise")))
         nodes.append(f'  {g}__else(["{"✓ " if fell else ""}{other}"]):::{"yes" if fell else "faded" if ran else "act"}')
@@ -1102,6 +1130,9 @@ def render_mermaid(
                 cls = "yes"
             elif r.get("value") is False:
                 cls = "no"
+        on_path = [rule_status(rg, len(compiled[rg]["rules"]))[i - 1] for (rg, i), gate in branch_at.items() if gate == gid]
+        if "no" in on_path:  # a route passed through this gate on its no: it is on the path
+            cls = "passed"
         lo, hi = SHAPES.get(op, ("[", "]"))
         return f'  {gnode(gid)}{lo}"{label}"{hi}:::{cls}'
 
@@ -1150,6 +1181,7 @@ def render_mermaid(
                 continue
             if gid in ladder_of:
                 L += ["  " + n for n in ladder(gid, compiled[gid])[0]]
+                L += ["  " + node_line(base, compiled[base], False) for (rg, _), base in sorted(branch_at.items()) if rg == gid and base in in_ladder]
             else:
                 L.append("  " + node_line(gid, compiled[gid], True))
         L.append("  end")
