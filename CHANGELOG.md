@@ -29,6 +29,12 @@
   `"ask"` drives `CircuitToolGuard`, the OpenAI Agents guardrails and the Claude Agent SDK hook
   directly, with no `actions` map; an escalated route asks. A chip's output pin works as
   `gate="ns.out"`. Before, a route action named "allow" fell through to the default and blocked.
+- **An uncertain input counts only when it could change the result.** An AND with a decided
+  no, or an OR with a decided yes, is decided whatever its uncertain inputs turn out to be;
+  likewise `at_least`. Before, any uncertain input made the gate uncertain, so a guard like
+  "harmful AND NOT requested" escalated a harmless call just because "requested" was close to
+  call. The trace says "the uncertain inputs cannot change it". A property test checks that a
+  gate settled this way decides the same at every corner of its uncertain inputs.
 - **A probability on a band's edge is outside the band**, as documented. Float error made
   0.9 against 0.8 ± 0.1 read as inside (0.9 − 0.8 is 0.0999… in floats), so it abstained or
   escalated. The same fix applies to `order` cutpoints and the `consistent` band.

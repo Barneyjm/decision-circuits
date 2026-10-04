@@ -49,7 +49,9 @@ Every gate has `on_uncertain`: "abstain" | "escalate" | "default" (with
 `default` value). A gate is uncertain when the probability it acts on
 is within `band` of tau, exclusive (band defaults to 0.1), or when an
 argmax/verify confidence check fails. Uncertainty is surfaced, never
-silently resolved.
+silently resolved. An uncertain input to and / or / at_least counts only
+when it could change the result: AND with a decided no is no, OR with a
+decided yes is yes, whatever the uncertain input turns out to be.
 """
 
 from __future__ import annotations
@@ -218,21 +220,31 @@ def _noul_p(answers: dict[str, Any], results: dict[str, GateResult], ref: str) -
     return float(a["noul"]), f"{ref} p={a['noul']:.2f}", False
 
 
-def _pooled(g: Gate, answers: dict[str, Any], results: dict[str, GateResult], trace: list[str]) -> tuple[list[float], bool]:
-    """Probabilities behind a pooled gate: its `inputs`, or every option of its multi `input`."""
+def _pooled(g: Gate, answers: dict[str, Any], results: dict[str, GateResult], trace: list[str]) -> tuple[list[float], list[bool]]:
+    """Probabilities behind a pooled gate, its `inputs` or every option of its multi `input`, and
+    which of them came from an upstream gate that was uncertain."""
     refs = g.inputs
     if not refs:
         a = answers.get(g.input or "")
         if not a or a["type"] != "multi":
             raise ValueError(f"gate op {g.op!r} reads `inputs`, or a multi as `input`; {g.input!r} is neither")
         refs = [f"{g.input}:{opt}" for opt in a["probabilities"]]
-    ps, unc = [], False
+    ps, unc = [], []
     for ref in refs:
         p, t, u = _noul_p(answers, results, ref)
         ps.append(p)
-        unc = unc or u
+        unc.append(u)
         trace.append(t)
     return ps, unc
+
+
+def _settled_anyway(ps: list[float], unc: list[bool], k: int, tau: float, band: float) -> bool:
+    """Whether "at least k of these hold" decides the same way whatever the uncertain inputs turn
+    out to be. P(at least k) only rises as any input does, so it is enough to try them all at 0
+    and all at 1: AND with a decided no, or OR with a decided yes, is settled by that input alone."""
+    lo = sum(_count_dist([0.0 if u else p for p, u in zip(ps, unc, strict=True)])[k:])
+    hi = sum(_count_dist([1.0 if u else p for p, u in zip(ps, unc, strict=True)])[k:])
+    return (lo >= tau and not _near(lo, tau, band)) or (hi < tau and not _near(hi, tau, band))
 
 
 def _count_dist(ps: list[float]) -> list[float]:
@@ -286,13 +298,13 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
             results[gid] = _settle(g, (1 - p) >= g.tau, 1 - p, unc or _near(1 - p, g.tau, g.band), trace)
         elif g.op in POOLED:
             # one count distribution for all four: `and` is "all of them", `or` "at least one"
-            ps, unc = _pooled(g, answers, results, trace)
+            ps, unc_in = _pooled(g, answers, results, trace)
             dist = _count_dist(ps)
             if g.op == "count":
                 n = max(range(len(dist)), key=dist.__getitem__)
                 trace.append(f"count of {len(ps)} under independence -> {n} p={dist[n]:.2f} (expected {sum(ps):.2f})")
                 probs = {str(j): q for j, q in enumerate(dist)}
-                results[gid] = _settle(g, n, dist[n], unc or dist[n] < g.min_confidence, trace, confidence=dist[n], probabilities=probs)
+                results[gid] = _settle(g, n, dist[n], any(unc_in) or dist[n] < g.min_confidence, trace, confidence=dist[n], probabilities=probs)
                 continue
             k = {"and": len(ps), "or": 1}.get(g.op, g.k)
             p = sum(dist[k:])
@@ -300,6 +312,10 @@ def evaluate_gates(gates: dict[str, Gate], answers: dict[str, Any]) -> dict[str,
                 trace.append(f"at least {k} of {len(ps)} under independence -> p={p:.2f} (expected {sum(ps):.2f})")
             else:
                 trace.append(f"{g.op} under independence -> p={p:.2f}")
+            unc = any(unc_in)
+            if unc and _settled_anyway(ps, unc_in, k, g.tau, g.band):
+                unc = False
+                trace.append("the uncertain inputs cannot change it")
             results[gid] = _settle(g, p >= g.tau, p, unc or _near(p, g.tau, g.band), trace)
         elif g.op == "majority":
             votes: dict[str, list[float]] = {}

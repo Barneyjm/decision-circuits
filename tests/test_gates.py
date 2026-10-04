@@ -171,3 +171,30 @@ def test_pooled_gates_need_a_set():
         g(op="count")
     with pytest.raises(ValueError):
         evaluate_gates({"x": g(op="or", input="angry")}, POOL)
+
+
+def test_an_and_with_a_decided_no_is_no_whatever_the_unsure_side_says():
+    from decision_circuits import Circuit, G, Q
+
+    c = Circuit()
+    c.noul("harmful", "?")
+    c.noul("asked", "?")
+    c.gate("harm", Q("harmful") >= 0.6, on_uncertain="escalate")
+    c.gate("requested", Q("asked") >= 0.7, on_uncertain="escalate")
+    c.gate("block", (G("harm") & ~G("requested")) >= 0.5, on_uncertain="escalate")
+    c.gate("either", (G("harm") | G("requested")) >= 0.5, on_uncertain="escalate")
+    c.route("decision", [("block", G("harm") & ~G("requested"))], otherwise="allow")
+
+    def run(harmful, asked):
+        return c.evaluate({"harmful": {"type": "noul", "noul": harmful}, "asked": {"type": "noul", "noul": asked}})
+
+    r = run(0.02, 0.61)  # harm is a decided no; requested is too close to call
+    assert r["requested"]["outcome"] == "escalate"
+    assert r["block"]["outcome"] == "decided" and r["block"]["value"] is False
+    assert "the uncertain inputs cannot change it" in " ".join(r["block"]["trace"])
+    assert r["decision"]["value"] == "allow"  # was an escalation before
+    assert r["either"]["outcome"] == "escalate"  # OR with a no and an unsure: the unsure side decides
+    r = run(0.95, 0.61)  # harm is a decided yes: now the unsure side matters
+    assert r["block"]["outcome"] == "escalate" and r["decision"]["outcome"] == "escalate"
+    r = run(0.95, 0.95)
+    assert r["either"]["outcome"] == "decided" and r["either"]["value"] is True

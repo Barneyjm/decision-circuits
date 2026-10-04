@@ -130,3 +130,43 @@ def test_order_pick_dominates(weights, cuts):
 def test_decided_booleans_dominate(p, tau):
     r = evaluate_gates({"t": Gate(op="threshold", input="x", tau=tau, band=0.0)}, {"x": {"type": "noul", "noul": p}})["t"]
     assert dominates(r)
+
+
+# An uncertain input counts only when it could change the result --------------------------------
+
+
+def _settled(op: str, ps: list[float], unc: list[bool], tau: float, band: float, k: int = 1):
+    """Evaluate a pooled gate over gates whose uncertainty is given, returning (value, outcome)."""
+    gates, answers = {}, {}
+    for i, (p, u) in enumerate(zip(ps, unc, strict=True)):
+        answers[f"q{i}"] = {"type": "noul", "noul": p}
+        # an upstream threshold that is uncertain exactly when asked to be: tau at p, wide band
+        gates[f"g{i}"] = Gate(op="threshold", input=f"q{i}", tau=p if u else 0.0, band=0.5 if u else 0.0)
+    spec = {"op": op, "inputs": [f"g{i}" for i in range(len(ps))], "tau": tau, "band": band}
+    if op == "at_least":
+        spec["k"] = k
+    gates["top"] = Gate(**spec)
+    r = evaluate_gates(gates, answers)["top"]
+    return r.value, r.outcome
+
+
+@settings(max_examples=300)
+@given(
+    st.sampled_from(["and", "or", "at_least"]),
+    st.lists(st.tuples(prob, st.booleans()), min_size=1, max_size=5),
+    st.floats(min_value=0.05, max_value=0.95),
+    st.floats(min_value=0.0, max_value=0.2),
+    st.integers(min_value=1, max_value=5),
+)
+def test_a_decided_pooled_gate_holds_whatever_its_uncertain_inputs_turn_out_to_be(op, pairs, tau, band, k):
+    ps, unc = [p for p, _ in pairs], [u for _, u in pairs]
+    value, outcome = _settled(op, ps, unc, tau, band, min(k, len(ps)))
+    if outcome != "decided" or not any(unc):
+        return
+    # it decided despite uncertain inputs: every corner of those inputs gives the same decision
+    want = {"and": len(ps), "or": 1}.get(op, min(k, len(ps)))
+    for corner in itertools.product((0.0, 1.0), repeat=sum(unc)):
+        it = iter(corner)
+        filled = [next(it) if u else p for p, u in zip(ps, unc, strict=True)]
+        q = sum(_count_dist(filled)[want:])
+        assert (q >= tau) == value
