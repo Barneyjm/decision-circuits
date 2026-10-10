@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (2026-10-04)
+## 0.6.0 (2026-10-10)
 
 - **Chips.** `Chip` is a sub-circuit with declared input and output pins. `Circuit.mount(chip,
   ns, pins)` wires it into a host: pins connect to host questions, gates or single options;
