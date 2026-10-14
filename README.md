@@ -106,6 +106,7 @@ talks to any server speaking the System One contract:
 | `SystemOne("https://api.typesafe.ai/v1/systemone", api_key, model="jev-latest")` | none | TypeSafe's Jev |
 | `SystemOne("https://api.decisioncircuits.com/v1/systemone", api_key)` | none | the hosted circuit family: `circuit-1.7b`, `circuit-8b`, `circuit-vl-4b` (images), `circuit-audio-7b` (sound); free keys at [decisioncircuits.com](https://decisioncircuits.com/#api) |
 | `SystemOne("http://localhost:8901/v1/systemone", api_key)` | none | [circuit](https://github.com/Barneyjm/circuit), the same open-weights models run yourself |
+| `ScaleDown(api_key)` | none | ScaleDown's Jev-compatible Decisions API (`classify-1`): noul, choice and score; it reads text only, so a structured state is sent as JSON text |
 
 A backend is any object with `answer(state, questions, *, model=None)`,
 so wrapping one (a cache, code-owned facts, a fallback) is a dozen

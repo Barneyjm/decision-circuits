@@ -80,8 +80,17 @@ class SystemOne:
         self.question_types = tuple(question_types) if question_types is not None else None
         self.headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT, **(headers or {})}
         if api_key:
-            self.headers["Authorization"] = f"Bearer {api_key}"
+            self.headers.update(self._auth(api_key))
         self.last_response: dict[str, Any] | None = None  # full body of the last call (usage, model)
+
+    def _auth(self, api_key: str) -> dict[str, str]:
+        return {"Authorization": f"Bearer {api_key}"}
+
+    def _provider(self, host: str | None) -> str:
+        return "typesafe" if host and host.endswith("typesafe.ai") else "system_one"
+
+    def _body(self, state: Any, questions: Mapping[str, Any], model: str) -> dict[str, Any]:
+        return {"state": to_jsonable(state), "model": model, "questions": dict(questions)}
 
     def _post(self, body: dict[str, Any], call: tracing.ModelCall | None = None) -> tuple[int, dict[str, Any]]:
         deadline = time.monotonic() + self.retry_for
@@ -121,12 +130,11 @@ class SystemOne:
 
     def answer(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Answers:
         if self.question_types is not None:
-            require_types(questions, self.question_types, f"SystemOne at {urllib.parse.urlsplit(self.url).hostname}", hint="a circuit v2 server")
+            require_types(questions, self.question_types, f"{type(self).__name__} at {urllib.parse.urlsplit(self.url).hostname}", hint="a circuit v2 server")
         model = model or self.model
         host = urllib.parse.urlsplit(self.url).hostname
-        provider = "typesafe" if host and host.endswith("typesafe.ai") else "system_one"
-        with tracing.model_call(provider, "answer", model, host) as call:
-            status, body = self._post({"state": to_jsonable(state), "model": model, "questions": dict(questions)}, call)
+        with tracing.model_call(self._provider(host), "answer", model, host) as call:
+            status, body = self._post(self._body(state, questions, model), call)
             if status >= 400 or "answers" not in body:
                 call.failed(str(status))
                 raise SystemOneError(status, body)

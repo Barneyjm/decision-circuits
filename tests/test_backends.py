@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from decision_circuits import Circuit, Q, answer_from_probabilities, argmax, normalized_confidence
-from decision_circuits.backends import SystemOne, SystemOneError
+from decision_circuits.backends import ScaleDown, SystemOne, SystemOneError
 from decision_circuits.backends.anthropic import TOOL_NAME, Anthropic, render_prompt
 from decision_circuits.backends.openai import OpenAILogprobs, render_question
 from decision_circuits.langgraph import as_node, route_on
@@ -79,6 +79,34 @@ def test_systemone_backend_with_injected_client():
     assert ans["urgent"]["noul"] == 0.8 and be.last_response["usage"]["input_tokens"] == 5
     _url, body, headers = calls[0]
     assert headers["Authorization"] == "Bearer k" and body["model"] == "jev-latest" and "gates" not in body
+
+
+def test_scaledown_sends_text_described_options_and_its_own_key():
+    calls = []
+
+    class C:
+        def post(self, url, json=None, headers=None):
+            calls.append((url, json, headers))
+            return _Resp(
+                200,
+                {
+                    "model": "classify-1",
+                    "answers": {
+                        "dept": {"type": "choice", "choice": "billing", "probabilities": {"billing": 0.9, "technical": 0.05, "other": 0.05}, "confidence": 0.9}
+                    },
+                },
+            )
+
+    be = ScaleDown(api_key="k", client=C())
+    be.answer({"ticket": "Charged twice", "order": {"prior_refunds_12mo": 6}}, {"dept": QUESTIONS["dept"]})
+    url, body, headers = calls[0]
+    assert url == "https://api.scaledown.xyz/v1/scaledown" and headers["x-api-key"] == "k" and "Authorization" not in headers
+    assert body["model"] == "classify-1" and set(body["state"]) == {"text"} and '"prior_refunds_12mo": 6' in body["state"]["text"]
+    assert body["questions"]["dept"]["criteria"]["other"] == "other"  # an option needs a description there
+    be.answer("plain words", {"dept": QUESTIONS["dept"]})
+    assert calls[1][1]["state"] == {"text": "plain words"}
+    with pytest.raises(ValueError, match="ScaleDown at api.scaledown.xyz answers noul, choice, score"):
+        be.answer("s", {"tags": {"type": "multi", "instructions": "?", "criteria": {"a": "x"}}})
 
 
 def test_systemone_backend_raises_on_error():

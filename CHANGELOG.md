@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **`ScaleDown` backend** for ScaleDown's Jev-compatible Decisions API
+  (`api.scaledown.xyz/v1/scaledown`, `classify-1`). It reads only `state.text`, so a structured
+  state goes as indented JSON text that keeps the field names questions point at; a choice
+  option without a description is described by its name; multi, locate, rank and match are
+  refused before the request. `SystemOne` gained `_auth` / `_body` / `_provider` hooks for
+  servers that differ only in those.
+
 ## 0.6.0 (2026-10-10)
 
 - **Chips.** `Chip` is a sub-circuit with declared input and output pins. `Circuit.mount(chip,
